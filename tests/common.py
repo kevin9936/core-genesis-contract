@@ -33,19 +33,28 @@ def get_candidate(operator=None):
     idx = CandidateHubMock[0].operateMap(operator)
     if idx == 0:
         return None
-    return CandidateHubMock[0].candidateSet(idx-1).dict()
+    return CandidateHubMock[0].candidateSet(idx - 1).dict()
 
 
-def turn_round(miners: list = None, tx_fee=100, round_count=1):
+def get_exchangerate():
+    return EarnMock[0].getExchangeRate()
+
+
+def turn_round(miners: list = None, tx_fee=100, round_count=1, trigger=None):
     if miners is None:
         miners = []
 
     tx = None
-
     for _ in range(round_count):
         for miner in miners:
             ValidatorSetMock[0].deposit(miner, {"value": tx_fee, "from": accounts[-1]})
         tx = CandidateHubMock[0].turnRound()
+        if trigger is True:
+            tx = EarnMock[0].afterTurnRound()
+            # print('__' * 50)
+            print(tx.events)
+            print('rate::', EarnMock[0].getExchangeRate())
+            print('*' * 50)
         chain.sleep(1)
 
     return tx
@@ -66,5 +75,3 @@ def register_relayer(relayer_address=None):
     if relayer_address is None:
         relayer_address = accounts[0]
     RelayerHubMock[0].register({'from': relayer_address, 'value': RelayerHubMock[0].requiredDeposit()})
-
-

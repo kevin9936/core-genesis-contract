@@ -4,7 +4,6 @@ import "../Earn.sol";
 
 contract EarnMock is Earn {
     function developmentInit() external {
-        uint256 a = 0;
     }
 
     function setContractAddress(address candidateHubAddress, address pledgeAgentAddress, address stCoreAddress) external {
@@ -12,4 +11,13 @@ contract EarnMock is Earn {
         PLEDGE_AGENT = pledgeAgentAddress;
         STCORE = stCoreAddress;
     }
+
+    function getExchangeRate() external view returns (uint256) {
+        return exchangeRate;
+    }
+    
+    function setAfterTurnRoundClaimReward(bool claim) external {
+        afterTurnRoundClaimReward = claim;
+    }
+    
 }

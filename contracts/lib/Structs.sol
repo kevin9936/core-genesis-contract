@@ -7,13 +7,6 @@ struct DelegateInfo {
 
     // Delegate earning
     uint256 earning;
-
-    // UnDelegate failed
-    // TODO: 这个变量可以删掉
-    bool unDelegateFailed;
-
-    // Claim failed
-    bool claimFailed;
 }
 
 struct DelegateAction {
@@ -26,7 +19,7 @@ struct DelegateAction {
 
 struct RedeemRecord {
     // Unique index redeem record
-    uint256 id;
+    uint256 identity;
 
     // Redeem action time
     uint256 redeemTime;
@@ -39,12 +32,4 @@ struct RedeemRecord {
 
     // Amount of st core
     uint256 stCore;
-}
-
-struct DelegateCapital {
-    // 上上一轮本金
-    uint256 beforeLast;
-
-    // 上一轮本金
-    uint256 last;
 }

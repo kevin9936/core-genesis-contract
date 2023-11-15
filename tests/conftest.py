@@ -92,6 +92,34 @@ def pledge_agent(accounts):
 
 
 @pytest.fixture(scope="module")
+def lib_set_up(accounts):
+    accounts[0].deploy(DelegateActionQueue)
+    accounts[0].deploy(IterableAddressDelegateMapping)
+
+
+def lib_aaa(accounts):
+    return accounts[0].deploy(IterableAddressDelegateMapping)
+
+
+@pytest.fixture(scope="module")
+def stcore(accounts):
+    c = accounts[0].deploy(STCore, 'STCore', 'CT')
+    # c.init()
+    # if is_development:
+    #     c.developmentInit()
+    return c
+
+
+@pytest.fixture(scope="module")
+def earn(accounts, lib_set_up, stcore):
+    c = EarnMock.deploy({"from": accounts[0]})
+    # c.init()
+    if is_development:
+        c.developmentInit()
+    return c
+
+
+@pytest.fixture(scope="module")
 def burn(accounts):
     c = accounts[0].deploy(Burn)
     c.init()
@@ -113,16 +141,16 @@ def test_lib_memory(accounts):
 
 @pytest.fixture(scope="module", autouse=True)
 def set_system_contract_address(
-    candidate_hub,
-    btc_light_client,
-    gov_hub,
-    relay_hub,
-    slash_indicator,
-    system_reward,
-    validator_set,
-    pledge_agent,
-    burn,
-    foundation
+        candidate_hub,
+        btc_light_client,
+        gov_hub,
+        relay_hub,
+        slash_indicator,
+        system_reward,
+        validator_set,
+        pledge_agent,
+        burn,
+        foundation
 ):
     args = [validator_set.address, slash_indicator.address, system_reward.address,
             btc_light_client.address, relay_hub.address, candidate_hub.address,
@@ -147,5 +175,3 @@ def set_system_contract_address(
 @pytest.fixture(scope="module")
 def min_init_delegate_value(pledge_agent):
     return pledge_agent.requiredCoinDeposit()
-
-

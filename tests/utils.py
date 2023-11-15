@@ -26,7 +26,7 @@ def expect_event(tx_receipt: TransactionReceipt, event_name, event_value: dict =
     # fetch event by idx
     event = tx_receipt.events[event_name][idx]
     for k, v in event_value.items():
-        assert event[k] == v
+        assert event[k] == v, f'k:{k} {event[k]} != {v}'
 
 
 def expect_event_not_emitted(tx_receipt: TransactionReceipt, event_name):
@@ -138,5 +138,12 @@ def encode_args_with_signature(function_signature: str, args: list) -> str:
 
 def expect_query(query_data, expect: dict):
     for k, v in expect.items():
+        ex = query_data[k]
+        assert ex == v, f'k:{k} {ex} != {v}'
+
+
+def expect_array(query_data, expect: list, idx=0):
+    query_data = query_data[idx]
+    for k, v in enumerate(expect):
         ex = query_data[k]
         assert ex == v, f'k:{k} {ex} != {v}'
