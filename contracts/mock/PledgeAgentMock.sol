@@ -55,17 +55,17 @@ contract PledgeAgentMock is PledgeAgent {
         return agentAddresses;
     }
 
-
-    function getBtcReceiptListLength() external view returns (uint) {
-        uint nonEmptyCount = 0;
-        for (uint i = 0; i < btcReceiptList.length; i++) {
-            BtcReceipt storage br = btcReceiptList[i];
-            if (br.endRound != 0 && br.agent != address(0)) {
-                nonEmptyCount++;
-            }
-        }
-        return nonEmptyCount;
-    }
+//
+//    function getBtcReceiptListLength() external view returns (uint) {
+//        uint nonEmptyCount = 0;
+//        for (uint i = 0; i < btcReceiptList.length; i++) {
+//            BtcReceipt storage br = btcReceiptList[i];
+//            if (br.endRound != 0 && br.agent != address(0)) {
+//                nonEmptyCount++;
+//            }
+//        }
+//        return nonEmptyCount;
+//    }
 
 
     function getDebtDepositMap(uint256 rRound, address delegator) external view returns (uint) {

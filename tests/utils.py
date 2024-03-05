@@ -153,7 +153,7 @@ def expect_query(query_data, expect: dict):
         assert ex == v, f'k:{k} {ex} != {v}'
 
 
-def get_transfer_op_return_data(chain_id, agent_address, delegate_address, lock_data,
+def get_transaction_op_return_data(chain_id, agent_address, delegate_address, lock_data,
                                 core_fee=1, version=1):
     if lock_data is not None and len(str(lock_data)) == 10:
         hex_result = hex(lock_data)[2:]
@@ -198,7 +198,7 @@ def reverse_by_bytes(value: str) -> str:
 def get_btc_tx(value, chain_id, validator, delegator, script_type='hash', lock_data=1736956800, core_fee=1, version=1):
     hex_result = hex(value)[2:]
     btc_coin = reverse_by_bytes(hex_result).ljust(16, '0')
-    op_return = get_transfer_op_return_data(chain_id, validator, delegator, lock_data, core_fee, version)
+    op_return = get_transaction_op_return_data(chain_id, validator, delegator, lock_data, core_fee, version)
     if script_type == 'key':
         script_pub_key = output_script_pub_key["script_public_key"]
     else:

@@ -78,23 +78,23 @@ def test_delegate_btc_with_lock_time_in_tx(pledge_agent, set_candidate):
     tx_id = get_transaction_txid(btc_tx)
     tx = pledge_agent.delegateBtc(btc_tx, 1, [], 0, lock_script, {"from": accounts[1]})
     expect_event(tx, 'delegatedBtc', {
-        'brIndex': 0,
+        'txid': tx_id,
         'script': '0x' + lock_script,
         'blockHeight': 1,
-        'txid': tx_id,
+        'outputIndex': 0
+
     })
     turn_round()
     agent_map = pledge_agent.agentsMap(operators[0])
-    assert pledge_agent.confirmedTxMap(tx_id) == 1
+    assert pledge_agent.btcReceiptMap(tx_id)['value'] == BTC_VALUE
     assert agent_map['totalBtc'] == btc_amount
     turn_round(consensuses)
-    expect_query(pledge_agent.btcReceiptList(0), {
+    expect_query(pledge_agent.btcReceiptMap(tx_id), {
         'agent': operators[0],
         'delegator': accounts[0],
         'value': btc_amount,
         'endRound': lock_time // ROUND_INTERVAL,
         'rewardIndex': 0,
-        'transferInIndex': 0,
         'feeReceiver': accounts[1],
         'fee': FEE
     })
@@ -119,19 +119,18 @@ def test_delegate_btc_with_lock_script_in_tx(pledge_agent, set_candidate):
     tx = pledge_agent.delegateBtc(btc_tx, 0, [], 0, lock_script, {"from": accounts[2]})
     turn_round()
     expect_event(tx, 'delegatedBtc', {
-        'brIndex': 0,
+        'txid': tx_id,
         'script': '0x' + lock_script,
         'blockHeight': 0,
-        'txid': tx_id,
+        'outputIndex': 0
     })
     agent_map = pledge_agent.agentsMap(operators[0])
-    expect_query(pledge_agent.btcReceiptList(0), {
+    expect_query(pledge_agent.btcReceiptMap(tx_id), {
         'agent': operators[0],
         'delegator': accounts[0],
         'value': btc_amount,
         'endRound': lock_time // ROUND_INTERVAL,
         'rewardIndex': 0,
-        'transferInIndex': 0,
         'feeReceiver': accounts[2],
         'fee': FEE
     })
@@ -140,7 +139,7 @@ def test_delegate_btc_with_lock_script_in_tx(pledge_agent, set_candidate):
     tracker1 = get_tracker(accounts[2])
     pledge_agent.claimBtcReward([tx_id])
     assert agent_map['totalBtc'] == btc_amount
-    assert pledge_agent.confirmedTxMap(tx_id) == 1
+    assert pledge_agent.btcReceiptMap(tx_id)['value'] == btc_amount
     assert tracker0.delta() == BLOCK_REWARD // 2 - FEE
     assert tracker1.delta() == FEE
 
@@ -152,19 +151,18 @@ def test_delegate_btc_success_public_key(pledge_agent, set_candidate):
     tx = pledge_agent.delegateBtc(btc_tx, 0, [], 0, lock_script)
     turn_round()
     expect_event(tx, 'delegatedBtc', {
-        'brIndex': 0,
+        'outputIndex': 0,
         'script': '0x' + lock_script,
         'blockHeight': 0,
         'txid': tx_id,
     })
     agent_map = pledge_agent.agentsMap(operators[0])
-    expect_query(pledge_agent.btcReceiptList(0), {
+    expect_query(pledge_agent.btcReceiptMap(tx_id), {
         'agent': operators[0],
         'delegator': accounts[0],
         'value': BTC_VALUE,
         'endRound': lock_time // ROUND_INTERVAL,
         'rewardIndex': 0,
-        'transferInIndex': 0,
         'feeReceiver': accounts[0],
         'fee': FEE
     })
@@ -182,20 +180,19 @@ def test_delegate_btc_success_public_hash(pledge_agent, set_candidate, delegate_
     tx = pledge_agent.delegateBtc(btc_tx, 0, [], 0, lock_script)
     turn_round()
     expect_event(tx, 'delegatedBtc', {
-        'brIndex': 0,
+        'outputIndex': 0,
         'script': '0x' + lock_script,
         'blockHeight': 0,
         'txid': tx_id_list[0],
     })
 
     agent_map = pledge_agent.agentsMap(operators[0])
-    expect_query(pledge_agent.btcReceiptList(0), {
+    expect_query(pledge_agent.btcReceiptMap(tx_id_list[0]), {
         'agent': operators[0],
         'delegator': accounts[0],
         'value': BTC_VALUE,
         'endRound': lock_time // ROUND_INTERVAL,
         'rewardIndex': 0,
-        'transferInIndex': 0,
         'feeReceiver': accounts[0],
         'fee': FEE
     })
@@ -239,20 +236,19 @@ def test_delegate_btc_with_witness_transaction_hash_script(pledge_agent, set_can
     tx = pledge_agent.delegateBtc(btc_tx, 0, [], 0, lock_script)
     turn_round()
     expect_event(tx, 'delegatedBtc', {
-        'brIndex': 0,
+        'outputIndex': 0,
         'script': '0x' + lock_script,
         'blockHeight': 0,
         'txid': tx_id,
     })
     agent_map = pledge_agent.agentsMap(operators[0])
-    btc_delegator = pledge_agent.btcReceiptList(0)
+    btc_delegator = pledge_agent.btcReceiptMap(tx_id)
     expect_query(btc_delegator, {
         'agent': operators[0],
         'delegator': accounts[0],
         'value': btc_amount,
         'endRound': lock_time // ROUND_INTERVAL,
         'rewardIndex': 0,
-        'transferInIndex': 0,
         'feeReceiver': accounts[0],
         'fee': FEE
     })
@@ -278,19 +274,18 @@ def test_delegate_btc_with_witness_transaction_key_script(pledge_agent, set_cand
     tx = pledge_agent.delegateBtc(btc_tx, 0, [], 0, lock_script)
     turn_round()
     expect_event(tx, 'delegatedBtc', {
-        'brIndex': 0,
+        'outputIndex': 0,
         'script': '0x' + lock_script,
         'blockHeight': 0,
         'txid': tx_id,
     })
-    btc_delegator = pledge_agent.btcReceiptList(0)
+    btc_delegator = pledge_agent.btcReceiptMap(tx_id)
     expect_query(btc_delegator, {
         'agent': operators[0],
         'delegator': accounts[0],
         'value': btc_amount,
         'endRound': lock_time // ROUND_INTERVAL,
         'rewardIndex': 0,
-        'transferInIndex': 0,
         'feeReceiver': accounts[0],
         'fee': FEE
     })
@@ -428,12 +423,86 @@ def test_revert_on_invalid_magic_value(pledge_agent, set_candidate, delegate_btc
         pledge_agent.delegateBtc(btc_tx, 0, [], 0, lock_script)
 
 
+def test_claim_rewards_with_max_delegate_btc(pledge_agent, set_candidate):
+    operators, consensuses = [], []
+    pledge_agent.setClaimRoundLimit(10)
+    for operator in accounts[10:22]:
+        operators.append(operator)
+        consensuses.append(register_candidate(operator=operator))
+    end_round = lock_time // ROUND_INTERVAL
+    set_last_round_tag(end_round - MIN_BTC_LOCK_ROUND - 1)
+    lock_script = get_lock_script(lock_time, public_key, lock_script_type)
+    tx_id_list = []
+    for index, operator in enumerate(operators):
+        btc_tx, tx_id = get_btc_tx(BTC_VALUE + index, chain_id, operator, accounts[0], lock_script_type, lock_script)
+        pledge_agent.delegateBtc(btc_tx, 0, [], 0, lock_script, {'from': accounts[1]})
+        tx_id_list.append(tx_id)
+    turn_round()
+    turn_round(consensuses, round_count=3)
+    tracker0 = get_tracker(accounts[0])
+    tracker1 = get_tracker(accounts[1])
+    pledge_agent.claimBtcReward(tx_id_list)
+    start_index = 0
+    for i in range(3):
+        del tx_id_list[0]
+        start_index += 1
+    assert tracker0.delta() == BLOCK_REWARD // 2 * 10 - FEE * 4
+    assert tracker1.delta() == FEE * 4
+    last_voucher = pledge_agent.btcReceiptMap(tx_id_list[0])
+    expect_query(last_voucher, {'agent': operators[start_index], 'rewardIndex': 1, 'value': BTC_VALUE + start_index})
+    pledge_agent.claimBtcReward(tx_id_list)
+    for i in range(3):
+        del tx_id_list[0]
+        start_index += 1
+    last_voucher = pledge_agent.btcReceiptMap(tx_id_list[0])
+    expect_query(last_voucher, {'agent': operators[start_index], 'rewardIndex': 2, 'value': BTC_VALUE + start_index})
+    pledge_agent.claimBtcReward(tx_id_list)
+    for i in range(4):
+        del tx_id_list[0]
+        start_index += 1
+    last_voucher = pledge_agent.btcReceiptMap(tx_id_list[0])
+    expect_query(last_voucher, {'agent': operators[start_index], 'rewardIndex': 0, 'value': BTC_VALUE + start_index})
+    pledge_agent.claimBtcReward(tx_id_list)
+    assert tracker0.delta() == BLOCK_REWARD // 2 * 26 - FEE * 8
+    assert tracker1.delta() == FEE * 8
+
+
+def test_claim_rewards_with_max_claim_limit(pledge_agent, delegate_btc_valid_tx):
+    operators, consensuses = [], []
+    pledge_agent.setClaimRoundLimit(2)
+    for operator in accounts[5:9]:
+        operators.append(operator)
+        consensuses.append(register_candidate(operator=operator))
+    end_round = lock_time // ROUND_INTERVAL
+    set_last_round_tag(end_round - MIN_BTC_LOCK_ROUND - 1)
+    lock_script, delegate_btc_tx0, tx_id_list = delegate_btc_valid_tx
+    pledge_agent.delegateBtc(delegate_btc_tx0, 0, [], 0, lock_script, {'from': accounts[1]})
+    delegate_btc_tx1, tx_id1 = get_btc_tx(BTC_VALUE + 1, chain_id, operators[1], accounts[0], lock_script_type,
+                                          lock_script)
+    pledge_agent.delegateBtc(delegate_btc_tx1, 0, [], 0, lock_script, {'from': accounts[1]})
+    tx_id_list.append(tx_id1)
+    turn_round()
+    turn_round(consensuses, round_count=2)
+    tracker0 = get_tracker(accounts[0])
+    pledge_agent.claimBtcReward(tx_id_list)
+    assert pledge_agent.btcReceiptMap(tx_id_list[0])['rewardIndex'] == 2
+    assert pledge_agent.btcReceiptMap(tx_id1)['rewardIndex'] == 0
+    turn_round(consensuses, round_count=1)
+    pledge_agent.setClaimRoundLimit(4)
+    pledge_agent.claimBtcReward(tx_id_list)
+    turn_round(consensuses, round_count=1)
+    assert tracker0.delta() == BLOCK_REWARD * 3 - FEE * 2
+    assert pledge_agent.btcReceiptMap(tx_id_list[0])['agent'] == ZERO_ADDRESS
+    assert pledge_agent.btcReceiptMap(tx_id1)['agent'] == ZERO_ADDRESS
+
+
 def test_collect_porter_fee_success(pledge_agent, set_candidate, delegate_btc_valid_tx):
     operators, consensuses = set_candidate
     lock_script, btc_tx, tx_id_list = delegate_btc_valid_tx
+    tx_id = tx_id_list[0]
     round_tag = get_current_round()
     pledge_agent.delegateBtc(btc_tx, round_tag, [], 0, lock_script, {'from': accounts[1]})
-    btc_delegator = pledge_agent.btcReceiptList(0)
+    btc_delegator = pledge_agent.btcReceiptMap(tx_id)
     expect_query(btc_delegator, {
         'feeReceiver': accounts[1],
         'fee': FEE
@@ -444,11 +513,11 @@ def test_collect_porter_fee_success(pledge_agent, set_candidate, delegate_btc_va
     tracker1 = get_tracker(accounts[1])
     tx = pledge_agent.claimBtcReward(tx_id_list)
     expect_event(tx, "transferredBtcFee", {
-        "brIndex": 0,
+        "txid": tx_id_list[0],
         "feeReceiver": accounts[1],
         "fee": FEE
     })
-    assert pledge_agent.btcReceiptList(0)['fee'] == 0
+    assert pledge_agent.btcReceiptMap(tx_id)['fee'] == 0
     tx = pledge_agent.claimBtcReward(tx_id_list)
     assert 'transferredBtcFee' not in tx.events
     assert tracker0.delta() == BLOCK_REWARD // 2 - FEE
@@ -459,12 +528,13 @@ def test_deduct_multiple_porter_fees_when_claiming_rewards(pledge_agent, set_can
     operators, consensuses = set_candidate
     lock_script, delegate_btc_tx0, tx_id_list = delegate_btc_valid_tx
     round_tag = get_current_round()
-    delegate_btc_tx1, tx_id = get_btc_tx(BTC_VALUE, chain_id, operators[0], accounts[0], lock_script_type)
-    tx_id_list.append(tx_id)
+    tx_id0 = tx_id_list[0]
+    delegate_btc_tx1, tx_id1 = get_btc_tx(BTC_VALUE, chain_id, operators[0], accounts[0], lock_script_type)
+    tx_id_list.append(tx_id1)
     pledge_agent.delegateBtc(delegate_btc_tx0, round_tag, [], 0, lock_script, {'from': accounts[1]})
     pledge_agent.delegateBtc(delegate_btc_tx1, round_tag, [], 0, lock_script, {'from': accounts[2]})
-    btc_delegator0 = pledge_agent.btcReceiptList(0)
-    btc_delegator1 = pledge_agent.btcReceiptList(1)
+    btc_delegator0 = pledge_agent.btcReceiptMap(tx_id0)
+    btc_delegator1 = pledge_agent.btcReceiptMap(tx_id1)
     expect_query(btc_delegator0, {
         'feeReceiver': accounts[1],
         'fee': FEE
@@ -481,16 +551,16 @@ def test_deduct_multiple_porter_fees_when_claiming_rewards(pledge_agent, set_can
     tx = pledge_agent.claimBtcReward(tx_id_list)
     assert "claimedReward" in tx.events
     expect_event(tx, "transferredBtcFee", {
-        "brIndex": 0,
+        "txid": tx_id0,
         "feeReceiver": accounts[1],
         "fee": FEE
     }, idx=0)
     expect_event(tx, "transferredBtcFee", {
-        "brIndex": 1,
+        "txid": tx_id1,
         "feeReceiver": accounts[2],
         "fee": FEE
     }, idx=1)
-    assert pledge_agent.btcReceiptList(0)['fee'] == pledge_agent.btcReceiptList(1)['fee'] == 0
+    assert pledge_agent.btcReceiptMap(tx_id0)['fee'] == pledge_agent.btcReceiptMap(tx_id1)['fee'] == 0
     assert tracker0.delta() == BLOCK_REWARD // 2 - FEE * 2
     assert tracker1.delta() == FEE
     assert tracker2.delta() == FEE
@@ -506,15 +576,21 @@ def test_claim_rewards_and_deduct_porter_fees_after_transfer(pledge_agent, set_c
     pledge_agent.delegateBtc(delegate_btc_tx0, 0, [], 0, lock_script, {'from': accounts[1]})
     pledge_agent.delegateCoin(operators[0], {"value": delegate_amount, "from": accounts[1]})
     turn_round()
-    assert pledge_agent.btcReceiptList(0)["endRound"] == end_round
+    assert pledge_agent.btcReceiptMap(tx_id_list[0])["endRound"] == end_round
     pledge_agent.transferBtc(tx_id_list[0], operators[1])
     turn_round(consensuses)
     tracker0 = get_tracker(accounts[0])
     tracker1 = get_tracker(accounts[1])
     pledge_agent.claimBtcReward(tx_id_list)
     pledge_agent.claimReward(operators, {'from': accounts[1]})
-    assert tracker0.delta() == total_reward // 2 - FEE
-    assert tracker1.delta() == total_reward - (total_reward // 2) + FEE
+    assert tracker0.delta() == 0
+    assert tracker1.delta() == total_reward - total_reward // 2
+    assert pledge_agent.btcReceiptMap(tx_id_list[0])["fee"] == FEE
+    turn_round(consensuses)
+    pledge_agent.claimReward(operators, {'from': accounts[1]})
+    pledge_agent.claimBtcReward(tx_id_list)
+    assert tracker0.delta() == total_reward - FEE
+    assert tracker1.delta() == total_reward + FEE
 
 
 def test_transfer_with_nonexistent_stake_certificate(pledge_agent, set_candidate, delegate_btc_valid_tx):
@@ -548,13 +624,12 @@ def test_transfer_btc_to_validator_with_lock_period_ending(pledge_agent, set_can
     with brownie.reverts("insufficient locking rounds"):
         pledge_agent.transferBtc(tx_id_list[0], operators[1])
     turn_round(consensuses, round_count=1)
-    assert pledge_agent.btcReceiptList(0)['agent'] == operators[0]
+    assert pledge_agent.btcReceiptMap(tx_id_list[0])['agent'] == operators[0]
     with brownie.reverts("insufficient locking rounds"):
         pledge_agent.transferBtc(tx_id_list[0], operators[1])
     pledge_agent.claimBtcReward(tx_id_list)
     # after the lockout period expires, the recorded data will be reset to zero.
-    assert pledge_agent.btcReceiptList(0)['agent'] == ZERO_ADDRESS
-    assert pledge_agent.getBtcReceiptListLength() == 0
+    assert pledge_agent.btcReceiptMap(tx_id_list[0])['agent'] == ZERO_ADDRESS
 
 
 def test_transfer_to_non_validator_target(pledge_agent, set_candidate, delegate_btc_valid_tx):
@@ -567,7 +642,7 @@ def test_transfer_to_non_validator_target(pledge_agent, set_candidate, delegate_
     error_msg = encode_args_with_signature("InactiveAgent(address)", [accounts[2].address])
     with brownie.reverts(f"typed error: {error_msg}"):
         pledge_agent.transferBtc(tx_id_list[0], accounts[2])
-    assert pledge_agent.getBtcReceiptListLength() == 1
+    assert pledge_agent.btcReceiptMap(tx_id_list[0])['value'] == BTC_VALUE
 
 
 def test_transfer_btc_between_different_validators(pledge_agent, candidate_hub, set_candidate, delegate_btc_valid_tx):
@@ -586,21 +661,73 @@ def test_transfer_btc_between_different_validators(pledge_agent, candidate_hub, 
     for index, addr in enumerate(addr_list):
         assert addr == operators[index]
     assert len(addr_list) == 3
-    assert pledge_agent.getBtcReceiptListLength() == 5
-    assert pledge_agent.getReward(operators[0], 0)[3] == BTC_VALUE * btcFactor
+    assert pledge_agent.getReward(operators[0], 0)[3] == 0
     turn_round(consensuses, round_count=2)
     tx = pledge_agent.claimBtcReward(tx_id_list)
     expect_event(tx, "claimedReward", {
-        "amount": BLOCK_REWARD - FEE,
+        "amount": BLOCK_REWARD // 2 - FEE,
         "success": True
     })
-    assert pledge_agent.btcReceiptList(0)['agent'] == operators[1]
-    assert pledge_agent.getBtcReceiptListLength() == 1
+    assert pledge_agent.btcReceiptMap(tx_id)['agent'] == operators[1]
     turn_round(consensuses)
     tx = pledge_agent.claimBtcReward(tx_id_list)
     expect_event(tx, "claimedReward", {
         "amount": BLOCK_REWARD // 2,
     })
+
+
+def test_claim_rewards_with_insufficient_porter_funds(pledge_agent, set_candidate, delegate_btc_valid_tx):
+    operators, consensuses = set_candidate
+    core_fee = 136
+    lock_script = get_lock_script(lock_time, public_key, lock_script_type)
+    round_tag = get_current_round()
+    delegate_btc_tx0, tx_id = get_btc_tx(BTC_VALUE, chain_id, operators[0], accounts[0], lock_script_type,
+                                         core_fee=core_fee)
+    pledge_agent.delegateBtc(delegate_btc_tx0, round_tag, [], 0, lock_script, {'from': accounts[1]})
+    turn_round()
+    turn_round(consensuses)
+    tracker0 = get_tracker(accounts[0])
+    tracker1 = get_tracker(accounts[1])
+    tx = pledge_agent.claimBtcReward([tx_id])
+    voucher = pledge_agent.btcReceiptMap(tx_id)
+    expect_event(tx, "transferredBtcFee", {
+        "txid": tx_id,
+        "feeReceiver": accounts[1],
+        "fee": BLOCK_REWARD // 2
+    })
+    remain_fee = FEE * core_fee - BLOCK_REWARD // 2
+    assert voucher['fee'] == remain_fee
+    assert "claimedReward" not in tx.events
+    assert tracker0.delta() == 0
+    assert tracker1.delta() == BLOCK_REWARD // 2
+    turn_round(consensuses)
+    pledge_agent.claimBtcReward([tx_id])
+    assert tracker0.delta() == BLOCK_REWARD // 2 - remain_fee
+    assert tracker1.delta() == remain_fee
+
+
+def test_deduct_porter_fees_for_multi_round_rewards_successfully(pledge_agent, set_candidate, delegate_btc_valid_tx):
+    operators, consensuses = set_candidate
+    core_fee = 255
+    lock_script = get_lock_script(lock_time, public_key, lock_script_type)
+    round_tag = get_current_round()
+    delegate_btc_tx0, tx_id = get_btc_tx(BTC_VALUE, chain_id, operators[0], accounts[0], lock_script_type, core_fee=255)
+    pledge_agent.delegateBtc(delegate_btc_tx0, round_tag, [], 0, lock_script, {'from': accounts[1]})
+    turn_round()
+    turn_round(consensuses, round_count=2)
+    tracker0 = get_tracker(accounts[0])
+    tracker1 = get_tracker(accounts[1])
+    tx = pledge_agent.claimBtcReward([tx_id])
+    expect_event(tx, "transferredBtcFee", {
+        "txid": tx_id,
+        "feeReceiver": accounts[1],
+        "fee": FEE * core_fee
+    })
+    voucher = pledge_agent.btcReceiptMap(tx_id)
+    assert voucher['fee'] == 0
+    assert "claimedReward" in tx.events
+    assert tracker0.delta() == BLOCK_REWARD - FEE * core_fee
+    assert tracker1.delta() == FEE * core_fee
 
 
 def test_duplicate_transfer_success(pledge_agent, set_candidate, delegate_btc_valid_tx):
@@ -632,154 +759,20 @@ def test_claim_rewards_success_with_max_stake_certificates(pledge_agent, set_can
     tx_id = tx_id_list[0]
     turn_round()
     for i in range(11):
-        before_transfer_agent = pledge_agent.btcReceiptList(0)['agent']
+        before_transfer_agent = pledge_agent.btcReceiptMap(tx_id)['agent']
+        assert pledge_agent.btcReceiptMap(tx_id)['agent'] == before_transfer_agent
         if i % 2 == 0:
             pledge_agent.transferBtc(tx_id, operators[1])
             agent = operators[1]
         else:
             pledge_agent.transferBtc(tx_id, operators[2])
             agent = operators[2]
-        assert pledge_agent.btcReceiptList(0)['agent'] == agent
-        assert pledge_agent.btcReceiptList(i + 1)['agent'] == before_transfer_agent
+        assert pledge_agent.btcReceiptMap(tx_id)['agent'] == agent
     turn_round(consensuses)
-    assert pledge_agent.getBtcReceiptListLength() == 12
+    tracker0 = get_tracker(accounts[0])
     tx = pledge_agent.claimBtcReward(tx_id_list)
-    expect_event(tx, "claimedReward", {
-        "amount": BLOCK_REWARD // 2 - FEE,
-        "success": True
-    })
-    assert pledge_agent.getBtcReceiptListLength() == 1
-
-
-def test_claim_rewards_with_max_delegate_btc(pledge_agent, set_candidate):
-    operators, consensuses = [], []
-    pledge_agent.setClaimRoundLimit(10)
-    for operator in accounts[10:22]:
-        operators.append(operator)
-        consensuses.append(register_candidate(operator=operator))
-    end_round = lock_time // ROUND_INTERVAL
-    set_last_round_tag(end_round - MIN_BTC_LOCK_ROUND - 1)
-    lock_script = get_lock_script(lock_time, public_key, lock_script_type)
-    tx_id_list = []
-    for index, operator in enumerate(operators):
-        btc_tx, tx_id = get_btc_tx(BTC_VALUE + index, chain_id, operator, accounts[0], lock_script_type, lock_script)
-        pledge_agent.delegateBtc(btc_tx, 0, [], 0, lock_script, {'from': accounts[1]})
-        tx_id_list.append(tx_id)
-    turn_round()
-    turn_round(consensuses, round_count=3)
-    tracker0 = get_tracker(accounts[0])
-    tracker1 = get_tracker(accounts[1])
-    pledge_agent.claimBtcReward(tx_id_list)
-    start_index = 0
-    for i in range(3):
-        del tx_id_list[0]
-        start_index += 1
-    assert tracker0.delta() == BLOCK_REWARD // 2 * 10 - FEE * 4
-    assert tracker1.delta() == FEE * 4
-    assert pledge_agent.getBtcReceiptListLength() == 9
-    last_voucher = pledge_agent.btcReceiptList(start_index)
-    expect_query(last_voucher, {'agent': operators[start_index], 'rewardIndex': 1, 'value': BTC_VALUE + start_index})
-    pledge_agent.claimBtcReward(tx_id_list)
-    for i in range(3):
-        del tx_id_list[0]
-        start_index += 1
-    assert pledge_agent.getBtcReceiptListLength() == 6
-    last_voucher = pledge_agent.btcReceiptList(start_index)
-    expect_query(last_voucher, {'agent': operators[start_index], 'rewardIndex': 2, 'value': BTC_VALUE + start_index})
-    pledge_agent.claimBtcReward(tx_id_list)
-    for i in range(4):
-        del tx_id_list[0]
-        start_index += 1
-    assert pledge_agent.getBtcReceiptListLength() == 2
-    last_voucher = pledge_agent.btcReceiptList(start_index)
-    expect_query(last_voucher, {'agent': operators[start_index], 'rewardIndex': 0, 'value': BTC_VALUE + start_index})
-    pledge_agent.claimBtcReward(tx_id_list)
-    assert tracker0.delta() == BLOCK_REWARD // 2 * 26 - FEE * 8
-    assert tracker1.delta() == FEE * 8
-    assert pledge_agent.getBtcReceiptListLength() == 0
-
-
-def test_claim_rewards_with_max_claim_limit(pledge_agent, delegate_btc_valid_tx):
-    operators, consensuses = [], []
-    pledge_agent.setClaimRoundLimit(2)
-    for operator in accounts[5:9]:
-        operators.append(operator)
-        consensuses.append(register_candidate(operator=operator))
-    end_round = lock_time // ROUND_INTERVAL
-    set_last_round_tag(end_round - MIN_BTC_LOCK_ROUND - 1)
-    lock_script, delegate_btc_tx0, tx_id_list = delegate_btc_valid_tx
-    pledge_agent.delegateBtc(delegate_btc_tx0, 0, [], 0, lock_script, {'from': accounts[1]})
-    delegate_btc_tx1, tx_id1 = get_btc_tx(BTC_VALUE + 1, chain_id, operators[1], accounts[0], lock_script_type,
-                                          lock_script)
-    pledge_agent.delegateBtc(delegate_btc_tx1, 0, [], 0, lock_script, {'from': accounts[1]})
-    tx_id_list.append(tx_id1)
-    turn_round()
-    turn_round(consensuses, round_count=2)
-    tracker0 = get_tracker(accounts[0])
-    pledge_agent.claimBtcReward(tx_id_list)
-    assert pledge_agent.btcReceiptList(0)['rewardIndex'] == 2
-    assert pledge_agent.btcReceiptList(1)['rewardIndex'] == 0
-    assert pledge_agent.getBtcReceiptListLength() == 2
-    turn_round(consensuses, round_count=1)
-    pledge_agent.setClaimRoundLimit(4)
-    pledge_agent.claimBtcReward(tx_id_list)
-    turn_round(consensuses, round_count=1)
-    assert tracker0.delta() == BLOCK_REWARD * 3 - FEE * 2
-    assert pledge_agent.getBtcReceiptListLength() == 0
-
-
-def test_claim_rewards_with_insufficient_porter_funds(pledge_agent, set_candidate, delegate_btc_valid_tx):
-    operators, consensuses = set_candidate
-    core_fee = 136
-    lock_script = get_lock_script(lock_time, public_key, lock_script_type)
-    round_tag = get_current_round()
-    delegate_btc_tx0, tx_id = get_btc_tx(BTC_VALUE, chain_id, operators[0], accounts[0], lock_script_type,
-                                         core_fee=core_fee)
-    pledge_agent.delegateBtc(delegate_btc_tx0, round_tag, [], 0, lock_script, {'from': accounts[1]})
-    turn_round()
-    turn_round(consensuses)
-    tracker0 = get_tracker(accounts[0])
-    tracker1 = get_tracker(accounts[1])
-    tx = pledge_agent.claimBtcReward([tx_id])
-    voucher = pledge_agent.btcReceiptList(0)
-    expect_event(tx, "transferredBtcFee", {
-        "brIndex": 0,
-        "feeReceiver": accounts[1],
-        "fee": BLOCK_REWARD // 2
-    })
-    remain_fee = FEE * core_fee - BLOCK_REWARD // 2
-    assert voucher['fee'] == remain_fee
-    assert "claimedReward" not in tx.events
+    assert 'claimedReward' not in tx.events
     assert tracker0.delta() == 0
-    assert tracker1.delta() == BLOCK_REWARD // 2
-    turn_round(consensuses)
-    pledge_agent.claimBtcReward([tx_id])
-    assert tracker0.delta() == BLOCK_REWARD // 2 - remain_fee
-    assert tracker1.delta() == remain_fee
-
-
-def test_deduct_porter_fees_for_multi_round_rewards_successfully(pledge_agent, set_candidate, delegate_btc_valid_tx):
-    operators, consensuses = set_candidate
-    core_fee = 255
-    lock_script = get_lock_script(lock_time, public_key, lock_script_type)
-    round_tag = get_current_round()
-    delegate_btc_tx0, tx_id = get_btc_tx(BTC_VALUE, chain_id, operators[0], accounts[0], lock_script_type, core_fee=255)
-    pledge_agent.delegateBtc(delegate_btc_tx0, round_tag, [], 0, lock_script, {'from': accounts[1]})
-    turn_round()
-    turn_round(consensuses, round_count=2)
-    tracker0 = get_tracker(accounts[0])
-    tracker1 = get_tracker(accounts[1])
-    tx = pledge_agent.claimBtcReward([tx_id])
-    expect_event(tx, "transferredBtcFee", {
-        "brIndex": 0,
-        "feeReceiver": accounts[1],
-        "fee": FEE * core_fee
-    })
-    voucher = pledge_agent.btcReceiptList(0)
-    assert voucher['fee'] == 0
-    assert "claimedReward" in tx.events
-    assert tracker0.delta() == BLOCK_REWARD - FEE * core_fee
-    assert tracker1.delta() == FEE * core_fee
 
 
 def test_revert_on_invalid_btc_transaction(pledge_agent, set_candidate):
@@ -889,11 +882,11 @@ def test_unable_to_claim_rewards_after_end_round(pledge_agent, set_candidate, de
     tracker0 = get_tracker(accounts[0])
     pledge_agent.claimBtcReward(tx_id_list)
     assert tracker0.delta() == BLOCK_REWARD * 1.5
-    voucher = pledge_agent.btcReceiptList(0)
+    voucher = pledge_agent.btcReceiptMap(tx_id_list[0])
     assert voucher['delegator'] == ZERO_ADDRESS
     turn_round(consensuses)
     #  Unable to claim, as the expired data is removed from the btcReceiptList, resulting in the message 'not the delegator of this btc receipt'
-    with brownie.reverts("not the delegator of this btc receipt"):
+    with brownie.reverts("btc tx not found"):
         pledge_agent.claimBtcReward(tx_id_list)
 
 
@@ -1075,13 +1068,12 @@ def test_transfer_btc_success(pledge_agent, set_candidate, delegate_btc_valid_tx
     pledge_agent.delegateBtc(delegate_btc_tx0, 0, [], 0, lock_script)
     pledge_agent.delegateCoin(operators[0], {"value": delegate_amount, "from": accounts[1]})
     turn_round()
-    voucher = pledge_agent.btcReceiptList(0)
+    voucher = pledge_agent.btcReceiptMap(tx_id_list[0])
     assert voucher["endRound"] == end_round
     tx = pledge_agent.transferBtc(tx_id_list[0], operators[1])
+    pledge_agent.transferCoin(operators[0], operators[2], {'from': accounts[1]})
     expect_event(tx, 'transferredBtc', {
         'txid': tx_id_list[0],
-        'brIndex': 0,
-        'inBrIndex': 1,
         'sourceAgent': operators[0],
         'targetAgent': operators[1],
         'delegator': accounts[0],
@@ -1093,11 +1085,11 @@ def test_transfer_btc_success(pledge_agent, set_candidate, delegate_btc_valid_tx
     tracker1 = get_tracker(accounts[1])
     pledge_agent.claimBtcReward(tx_id_list)
     pledge_agent.claimReward(operators, {'from': accounts[1]})
-    assert tracker0.delta() == total_reward * 2 + total_reward // 2
+    assert tracker0.delta() == total_reward * 2
     assert tracker1.delta() == total_reward * 3 + total_reward - (total_reward // 2)
 
 
-def test_rewards_for_transfer_in_current_round(pledge_agent, set_candidate, delegate_btc_valid_tx):
+def test_transfer_btc_when_no_rewards_in_current_round(pledge_agent, set_candidate, delegate_btc_valid_tx):
     end_round = lock_time // ROUND_INTERVAL
     total_reward = BLOCK_REWARD // 2
     delegate_amount = 20000
@@ -1108,21 +1100,17 @@ def test_rewards_for_transfer_in_current_round(pledge_agent, set_candidate, dele
     pledge_agent.delegateCoin(operators[0], {"value": delegate_amount, "from": accounts[1]})
     turn_round()
     pledge_agent.transferBtc(tx_id_list[0], operators[1])
-    voucher0 = pledge_agent.btcReceiptList(0)
-    voucher1 = pledge_agent.btcReceiptList(1)
-    assert voucher1["endRound"] == get_current_round() + 1
+    voucher0 = pledge_agent.btcReceiptMap(tx_id_list[0])
     assert voucher0["endRound"] == end_round
     turn_round(consensuses, round_count=1)
     tracker0 = get_tracker(accounts[0])
     tracker1 = get_tracker(accounts[1])
     pledge_agent.claimBtcReward(tx_id_list)
     pledge_agent.claimReward(operators, {'from': accounts[1]})
-    assert tracker0.delta() == total_reward // 2
+    assert tracker0.delta() == 0
     assert tracker1.delta() == total_reward - total_reward // 2
-    voucher0 = pledge_agent.btcReceiptList(0)
-    voucher1 = pledge_agent.btcReceiptList(1)
+    voucher0 = pledge_agent.btcReceiptMap(tx_id_list[0])
     assert voucher0["endRound"] == end_round
-    assert voucher1["endRound"] == 0
     assert pledge_agent.agentsMap(operators[0])["btc"] == pledge_agent.agentsMap(operators[0])["totalBtc"] == 0
     assert pledge_agent.agentsMap(operators[1])["btc"] == pledge_agent.agentsMap(operators[1])["totalBtc"] == BTC_VALUE
 
@@ -1150,7 +1138,7 @@ def test_claim_rewards_with_fee_deduction_success(pledge_agent, set_candidate, d
     tracker1 = get_tracker(accounts[1])
     tx = pledge_agent.claimBtcReward(tx_id_list)
     expect_event(tx, 'transferredBtcFee', {
-        'brIndex': 0,
+        'txid': tx_id_list[0],
         'fee': FEE,
         'feeReceiver': accounts[1]
     })
@@ -1179,7 +1167,7 @@ def test_claim_rewards_with_different_fees_success(pledge_agent, set_candidate, 
     tx = pledge_agent.claimBtcReward([tx_id0])
     if fee > 0:
         expect_event(tx, 'transferredBtcFee', {
-            'brIndex': 0,
+            'txid': tx_id0,
             'fee': fee * pledge_agent.FEE_FACTOR(),
             'feeReceiver': accounts[1]
         })
@@ -1196,8 +1184,7 @@ def test_insufficient_rewards_to_pay_porter_fee(pledge_agent, set_candidate):
     operators, consensuses = set_candidate
     set_last_round_tag(end_round - MIN_BTC_LOCK_ROUND - 1)
     lock_script = get_lock_script(lock_time, public_key, lock_script_type)
-    delegate_btc_tx0, _ = get_btc_tx(BTC_VALUE, chain_id, operators[0], accounts[0], lock_script_type, core_fee=fee)
-    tx_id = get_transaction_txid(delegate_btc_tx0)
+    delegate_btc_tx0, tx_id = get_btc_tx(BTC_VALUE, chain_id, operators[0], accounts[0], lock_script_type, core_fee=fee)
     pledge_agent.delegateBtc(delegate_btc_tx0, 0, [], 0, lock_script, {"from": accounts[1]})
     pledge_agent.delegateCoin(operators[0], {"value": delegate_amount, "from": accounts[1]})
     turn_round()
@@ -1207,18 +1194,18 @@ def test_insufficient_rewards_to_pay_porter_fee(pledge_agent, set_candidate):
     tx = pledge_agent.claimBtcReward([tx_id])
     received_fee = BLOCK_REWARD // 4
     expect_event(tx, 'transferredBtcFee', {
-        'brIndex': 0,
+        'txid': tx_id,
         'fee': received_fee,
         'feeReceiver': accounts[1]
     })
-    voucher = pledge_agent.btcReceiptList(0)
+    voucher = pledge_agent.btcReceiptMap(tx_id)
     assert voucher['fee'] == actual_fee - received_fee
     assert voucher['feeReceiver'] == accounts[1]
     assert tracker1.delta() == received_fee
     turn_round(consensuses, round_count=1)
     pledge_agent.claimBtcReward([tx_id])
     assert tracker1.delta() == actual_fee - received_fee
-    assert pledge_agent.btcReceiptList(0)['fee'] == 0
+    assert pledge_agent.btcReceiptMap(tx_id)['fee'] == 0
     assert tracker0.delta() == BLOCK_REWARD // 4 - (actual_fee - received_fee)
 
 
@@ -1239,12 +1226,12 @@ def test_claim_rewards_with_different_fees_after_transfer_success(pledge_agent, 
     pledge_agent.delegateBtc(delegate_btc_tx0, 0, [], 0, lock_script, {"from": accounts[1]})
     turn_round()
     pledge_agent.transferBtc(tx_id, operators[1])
-    turn_round(consensuses, round_count=2)
+    turn_round(consensuses, round_count=3)
     tracker1 = get_tracker(accounts[1])
     tx = pledge_agent.claimBtcReward([tx_id])
     if fee > 0:
         expect_event(tx, 'transferredBtcFee', {
-            'brIndex': 0,
+            'txid': tx_id,
             'fee': fee * pledge_agent.FEE_FACTOR(),
             'feeReceiver': accounts[1]
         })
@@ -1269,14 +1256,13 @@ def test_multiple_btc_receipts_to_single_address(pledge_agent, set_candidate, de
     pledge_agent.transferBtc(tx_id0, operators[2])
     pledge_agent.transferBtc(tx_id1, operators[2])
     turn_round(consensuses)
-    btc_receipt_length = pledge_agent.getBtcReceiptListLength()
-    assert btc_receipt_length == 4
-    pledge_agent.claimBtcReward(tx_id_list)
+    tx = pledge_agent.claimBtcReward(tx_id_list)
+    assert 'claimedReward' not in tx.events
     turn_round(consensuses, round_count=2)
     tracker0 = get_tracker(accounts[0])
     pledge_agent.claimBtcReward(tx_id_list)
     actual_reward = total_reward * (BTC_VALUE * 2 * btcFactor) // (BTC_VALUE * 2 * btcFactor + delegate_amount)
-    assert tracker0.delta() == actual_reward * 2
+    assert tracker0.delta() == actual_reward * 2 - FEE * 2
 
 
 def test_multiple_reward_transfers_in_multiple_rounds(pledge_agent, set_candidate, delegate_btc_valid_tx):
@@ -1294,54 +1280,63 @@ def test_multiple_reward_transfers_in_multiple_rounds(pledge_agent, set_candidat
         pledge_agent.delegateBtc(btc_tx, 0, [], 0, lock_script, {'from': accounts[1]})
         tx_id_list.append(tx_id)
     turn_round()
-    btc_receipt_list_length = len(operators) - 1
     for index, operator in enumerate(operators):
         before_agent = operators[index]
-        btc_receipt_list_length += 1
+
+        transfer_voucher = pledge_agent.btcReceiptMap(tx_id_list[index])
+        expect_query(transfer_voucher,
+                     {'agent': before_agent,
+                      'delegator': accounts[0],
+                      'value': BTC_VALUE + index,
+                      'endRound': end_round,
+                      'rewardIndex': 0,
+                      'feeReceiver': accounts[1],
+                      'fee': FEE})
         tx = pledge_agent.transferBtc(tx_id_list[index], operators[index - 1])
         before_amount = BTC_VALUE + index
+        target_agent_amount = 0
+        if index == 0:
+            target_agent_amount = operators.index(operators[index - 1]) + BTC_VALUE
         expect_event(tx, "transferredBtc", {
             "txid": tx_id_list[index],
-            "brIndex": index,
-            "inBrIndex": btc_receipt_list_length,
             "sourceAgent": operators[index],
             "targetAgent": operators[index - 1],
             "amount": BTC_VALUE + index,
-            "totalAmount": before_amount + operators.index(operators[index - 1]) + BTC_VALUE,
+            "totalAmount": before_amount + target_agent_amount,
         })
-        latest_voucher = pledge_agent.btcReceiptList(index)
+        latest_voucher = pledge_agent.btcReceiptMap(tx_id_list[index])
         expect_query(latest_voucher,
-                     {'agent': operators[index - 1], 'delegator': accounts[0], 'value': BTC_VALUE + index,
-                      'endRound': end_round,
-                      'rewardIndex': 1, 'transferInIndex': btc_receipt_list_length + 1,
-                      'feeReceiver': accounts[1], 'fee': FEE})
-        transfer_voucher = pledge_agent.btcReceiptList(btc_receipt_list_length)
-        expect_query(transfer_voucher,
-                     {'agent': before_agent, 'delegator': ZERO_ADDRESS, 'value': BTC_VALUE + index,
-                      'endRound': get_current_round() + 1,
-                      'rewardIndex': 0, 'transferInIndex': 0,
-                      'feeReceiver': ZERO_ADDRESS, 'fee': 0})
+                     {
+                         'agent': operators[index - 1],
+                         'delegator': accounts[0],
+                         'value': BTC_VALUE + index,
+                         'endRound': end_round,
+                         'rewardIndex': 1,
+                         'feeReceiver': accounts[1],
+                         'fee': FEE}
+                     )
+
     pledge_agent.setClaimRoundLimit(3)
     turn_round(consensuses, round_count=2)
     tracker0 = get_tracker(accounts[0])
     pledge_agent.claimBtcReward(tx_id_list)
-    assert tracker0.delta() == BLOCK_REWARD // 2 * 3 - FEE * 2
-    voucher = pledge_agent.btcReceiptList(len(operators))
-    assert voucher['agent'] == ZERO_ADDRESS
+    assert tracker0.delta() == BLOCK_REWARD // 2 * 3 - FEE * 3
+    voucher = pledge_agent.btcReceiptMap(tx_id_list[0])
+    assert voucher['agent'] == operators[-1]
     pledge_agent.setClaimRoundLimit(7)
-    for i in range(4):
-        pledge_agent.claimBtcReward(tx_id_list)
-    assert tracker0.delta() == BLOCK_REWARD // 2 * 21 - FEE * 10
-    assert pledge_agent.getBtcReceiptListLength() == len(operators)
+    pledge_agent.claimBtcReward(tx_id_list)
+    assert tracker0.delta() == BLOCK_REWARD // 2 * 7 - FEE * 7
     turn_round(consensuses, round_count=2)
-    pledge_agent.setClaimRoundLimit(24)
+    pledge_agent.setClaimRoundLimit(21)
     pledge_agent.claimBtcReward(tx_id_list)
     """
     when a validator only has rewards for one round, but I attempt to claim rewards every other round, 
     even for rounds without rewards, it still counts towards the claim limit.
     """
-    assert tracker0.delta() == BLOCK_REWARD // 2 * 12
-    assert pledge_agent.getBtcReceiptListLength() == 0
+    assert tracker0.delta() == BLOCK_REWARD // 2 * 11 - FEE
+    assert pledge_agent.btcReceiptMap(tx_id_list[0])['agent'] == ZERO_ADDRESS
+    pledge_agent.claimBtcReward(tx_id_list[-2:])
+    assert tracker0.delta() == BLOCK_REWARD // 2 * 3 - FEE
 
 
 def test_claim_limit_exhausted(pledge_agent, set_candidate, delegate_btc_valid_tx):
@@ -1371,7 +1366,7 @@ def test_claim_limit_exhausted(pledge_agent, set_candidate, delegate_btc_valid_t
     then the claim limit count will not be affected when claiming BTC rewards.
     """
     assert tracker0.delta() == BLOCK_REWARD // 2 + BLOCK_REWARD // 4 * 2
-    assert pledge_agent.getBtcReceiptListLength() == len(operators) - 3
+    assert pledge_agent.btcReceiptMap(tx_id_list[2])['agent'] == ZERO_ADDRESS
 
 
 def test_claiming_reward_by_non_owner_of_this_btc_receipt_reverts(pledge_agent, set_candidate, delegate_btc_valid_tx):
@@ -1651,17 +1646,16 @@ def test_operations_with_coin_power_and_btc_staking(pledge_agent, set_candidate,
     tracker0 = get_tracker(accounts[0])
     tracker1 = get_tracker(accounts[1])
     tracker2 = get_tracker(accounts[2])
-    deduction_reward = total_reward * undelegate_amount // total_score
+    deduction_reward = (total_reward * undelegate_amount // total_score) + (total_reward * BTC_AMOUNT // total_score)
     power_reward = total_reward * 2 // 3
-    reward1 = total_reward * (delegate_amount - undelegate_amount) // total_score
-    reward0 = total_reward - power_reward - reward1 - deduction_reward
-    pledge_agent.claimReward(operators, {'from': accounts[1]})
+    reward1 = total_reward - power_reward - deduction_reward
     pledge_agent.claimBtcReward(tx_id_list, {'from': accounts[0]})
+    pledge_agent.claimReward(operators, {'from': accounts[1]})
     pledge_agent.claimReward([], {'from': accounts[2]})
     total_delegate -= undelegate_amount
-    assert tracker0.delta() == reward0 - FEE
+    assert tracker0.delta() == 0
     assert tracker1.delta() == reward1
-    assert tracker2.delta() == total_reward * 2 // 3 + FEE
+    assert tracker2.delta() == total_reward * 2 // 3
     total_score = total_delegate * 3
     turn_round(consensuses)
     # the total score of all power.
@@ -1671,6 +1665,122 @@ def test_operations_with_coin_power_and_btc_staking(pledge_agent, set_candidate,
     pledge_agent.claimReward(operators, {'from': accounts[1]})
     pledge_agent.claimBtcReward(tx_id_list, {'from': accounts[0]})
     pledge_agent.claimReward([], {'from': accounts[2]})
-    assert tracker0.delta() == total_reward
+    assert tracker0.delta() == total_reward - FEE
     assert tracker1.delta() == coin_reward
-    assert tracker2.delta() == power_reward
+    assert tracker2.delta() == power_reward + FEE
+
+
+def test_transfer_btc_reverts_for_non_delegator(pledge_agent, set_candidate, delegate_btc_valid_tx):
+    end_round = lock_time // ROUND_INTERVAL
+    delegate_amount = 20000
+    operators, consensuses = set_candidate
+    set_last_round_tag(end_round - MIN_BTC_LOCK_ROUND - 1)
+    lock_script, delegate_btc_tx0, tx_id_list = delegate_btc_valid_tx
+    pledge_agent.delegateBtc(delegate_btc_tx0, 0, [], 0, lock_script)
+    pledge_agent.delegateCoin(operators[0], {"value": delegate_amount, "from": accounts[1]})
+    turn_round()
+    with brownie.reverts("not the delegator of this btc receipt"):
+        pledge_agent.transferBtc(tx_id_list[0], operators[1], {'from': accounts[1]})
+    with brownie.reverts("not the delegator of this btc receipt"):
+        pledge_agent.claimBtcReward(tx_id_list, {'from': accounts[1]})
+
+
+def test_claiming_historical_rewards_with_btc_transfer(pledge_agent, set_candidate, delegate_btc_valid_tx):
+    end_round = lock_time // ROUND_INTERVAL
+    delegate_amount = 20000
+    operators, consensuses = set_candidate
+    set_last_round_tag(end_round - MIN_BTC_LOCK_ROUND - 3)
+    lock_script, delegate_btc_tx0, tx_id_list = delegate_btc_valid_tx
+    pledge_agent.delegateBtc(delegate_btc_tx0, 0, [], 0, lock_script)
+    pledge_agent.delegateCoin(operators[0], {"value": delegate_amount, "from": accounts[1]})
+    turn_round()
+    turn_round(consensuses, round_count=2)
+    tracker0 = get_tracker(accounts[0])
+    tx = pledge_agent.transferBtc(tx_id_list[0], operators[1], {'from': accounts[0]})
+    expect_event(tx, "claimedReward", {
+        'amount': BLOCK_REWARD // 4 * 2 - FEE
+    })
+    assert tracker0.delta() == BLOCK_REWARD // 4 * 2
+
+
+def test_transfer_btc_to_existing_btc_staker(pledge_agent, set_candidate, delegate_btc_valid_tx):
+    end_round = lock_time // ROUND_INTERVAL
+    delegate_amount = 20000
+    operators, consensuses = set_candidate
+    set_last_round_tag(end_round - MIN_BTC_LOCK_ROUND - 3)
+    lock_script, delegate_btc_tx0, tx_id_list = delegate_btc_valid_tx
+    delegate_btc_tx1, tx_id1 = get_btc_tx(BTC_VALUE, chain_id, operators[1], accounts[1], lock_script_type)
+    pledge_agent.delegateBtc(delegate_btc_tx0, 0, [], 0, lock_script, {'from': accounts[2]})
+    pledge_agent.delegateBtc(delegate_btc_tx1, 0, [], 0, lock_script, {'from': accounts[2]})
+    pledge_agent.delegateCoin(operators[0], {"value": delegate_amount, "from": accounts[1]})
+    turn_round()
+    pledge_agent.transferBtc(tx_id_list[0], operators[1], {'from': accounts[0]})
+    agent_map0 = pledge_agent.agentsMap(operators[0])
+    agent_map1 = pledge_agent.agentsMap(operators[1])
+    assert agent_map0['totalBtc'] == 0
+    assert agent_map1['totalBtc'] == BTC_VALUE * 2
+    turn_round(consensuses, round_count=2)
+    tracker0 = get_tracker(accounts[0])
+    tracker1 = get_tracker(accounts[1])
+    pledge_agent.claimBtcReward([tx_id_list[0]], {'from': accounts[0]})
+    pledge_agent.claimBtcReward([tx_id1], {'from': accounts[1]})
+    total_reward = BLOCK_REWARD // 2
+    assert tracker0.delta() == total_reward // 2 - FEE
+    assert tracker1.delta() == total_reward + total_reward - total_reward // 2 - FEE
+
+
+def test_transfer_btc_from_multiple_btc_stakings(pledge_agent, set_candidate, delegate_btc_valid_tx):
+    end_round = lock_time // ROUND_INTERVAL
+    operators, consensuses = set_candidate
+    set_last_round_tag(end_round - MIN_BTC_LOCK_ROUND - 3)
+    lock_script, delegate_btc_tx0, tx_id_list = delegate_btc_valid_tx
+    delegate_btc_tx1, tx_id1 = get_btc_tx(BTC_VALUE, chain_id, operators[0], accounts[0], lock_script_type)
+    pledge_agent.delegateBtc(delegate_btc_tx0, 0, [], 0, lock_script, {'from': accounts[2]})
+    pledge_agent.delegateBtc(delegate_btc_tx1, 0, [], 0, lock_script, {'from': accounts[2]})
+    tx_id_list.append(tx_id1)
+    turn_round()
+    pledge_agent.transferBtc(tx_id_list[0], operators[1], {'from': accounts[0]})
+    turn_round(consensuses)
+    tracker0 = get_tracker(accounts[0])
+    pledge_agent.claimBtcReward(tx_id_list, {'from': accounts[0]})
+    total_reward = BLOCK_REWARD // 2
+    assert tracker0.delta() == total_reward - total_reward // 2 - FEE
+
+
+def test_multiple_btc_stakings_in_vout(pledge_agent, set_candidate):
+    btc_amount = 53820
+    lock_script = "0480db8767b17576a914574fdd26858c28ede5225a809f747c01fcc1f92a88ac"
+    operators, consensuses = set_candidate
+    btc_tx = (
+        "0200000001dd94cb72979c528593cb1188f4e3bf43a52f5570edab981e3d303ff24166afe5000000006b483045022100f2f069e37929cdfafffa79dcc1cf478504875fbe2a41704a96aee88ec604c0e502207259c56c67de8de6bb8c15e9d14b6ad16acd86d6a834fbb0531fd27bee7e5e3301210223dd766d6e38eaf9c044dcb18d8221fe8c9a5763ca331e93fadc8f55949b8e12"
+        "feffffff03b80b00"
+        "000000000017a914c0958c8d9357598c5f7a6eea8a807d81683f9bb687"
+        "0000000000000000536a4c505341542b01045c9fb29aac15b9a4b7f17c3385939b007540f4d791ccf7e1DAb7D90A0a91f8B1f6A693Bf0bb3a979a0010480db8767b17576a914574fdd26858c28ede5225a809f747c01fcc1f92a88ac"
+        "3cd200000000000017a914c0958c8d9357598c5f7a6eea8a807d81683f9bb68700000000")
+    tx_id = get_transaction_txid(btc_tx)
+    tx = pledge_agent.delegateBtc(btc_tx, 0, [], 0, lock_script, {"from": accounts[2]})
+    turn_round()
+    expect_event(tx, 'delegatedBtc', {
+        'txid': tx_id,
+        'script': '0x' + lock_script,
+        'blockHeight': 0,
+        'outputIndex': 2
+    })
+    agent_map = pledge_agent.agentsMap(operators[0])
+    expect_query(pledge_agent.btcReceiptMap(tx_id), {
+        'agent': operators[0],
+        'delegator': accounts[0],
+        'value': btc_amount,
+        'endRound': lock_time // ROUND_INTERVAL,
+        'rewardIndex': 0,
+        'feeReceiver': accounts[2],
+        'fee': FEE
+    })
+    turn_round(consensuses)
+    tracker0 = get_tracker(accounts[0])
+    tracker1 = get_tracker(accounts[2])
+    pledge_agent.claimBtcReward([tx_id])
+    assert agent_map['totalBtc'] == btc_amount
+    assert pledge_agent.btcReceiptMap(tx_id)['value'] == btc_amount
+    assert tracker0.delta() == BLOCK_REWARD // 2 - FEE
+    assert tracker1.delta() == FEE
