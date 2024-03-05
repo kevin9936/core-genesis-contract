@@ -154,7 +154,7 @@ contract PledgeAgent is IPledgeAgent, System, IParamSubscriber {
   /*********************** events **************************/
   event paramChange(string key, bytes value);
   event delegatedCoin(address indexed agent, address indexed delegator, uint256 amount, uint256 totalAmount);
-  event delegatedBtc(bytes32 indexed txid, bytes script, uint32 blockHeight, uint256 outputIndex);
+  event delegatedBtc(bytes32 indexed txid, address indexed agent, address indexed delegator, bytes script, uint32 blockHeight, uint256 outputIndex);
   event undelegatedCoin(address indexed agent, address indexed delegator, uint256 amount);
   event transferredCoin(
     address indexed sourceAgent,
@@ -507,7 +507,7 @@ contract PledgeAgent is IPledgeAgent, System, IParamSubscriber {
       revert InactiveAgent(br.agent);
     }
 
-    emit delegatedBtc(txid, script, blockHeight, outputIndex);
+    emit delegatedBtc(txid, br.agent, br.delegator, script, blockHeight, outputIndex);
 
     if (fee != 0) {
       br.fee = fee;
@@ -527,7 +527,7 @@ contract PledgeAgent is IPledgeAgent, System, IParamSubscriber {
   function transferBtc(bytes32 txid, address targetAgent) public {
     BtcReceipt storage br = btcReceiptMap[txid];
     require(br.value != 0, "btc tx not found");
-
+    require(br.delegator == msg.sender, "not the delegator of this btc receipt");
     address agent = br.agent;
     require(agent != targetAgent, "can not transfer to the same validator");
     require(br.endRound > roundTag + 1, "insufficient locking rounds");
@@ -543,7 +543,7 @@ contract PledgeAgent is IPledgeAgent, System, IParamSubscriber {
     round2expireInfoMap[br.endRound].agent2valueMap[agent] -= br.value;
 
     Reward storage r = a.rewardSet[a.rewardSet.length - 1];
-    if (r.round == roundTag) {
+    if (r.round == roundTag && br.rewardIndex < a.rewardSet.length) {
       r.coin -= br.value * stateMap[roundTag].btcFactor;
     }
 
