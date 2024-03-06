@@ -3,7 +3,7 @@ import time
 import brownie
 import pytest
 from web3 import Web3
-from brownie import accounts, PledgeAgentProxy, DelegateReentry, UndelegateReentry, ClaimRewardReentry
+from brownie import accounts, PledgeAgentProxy, DelegateReentry, UndelegateReentry, ClaimRewardReentry,ClaimBtcRewardReentry
 from .btc_block_data import *
 from .common import register_candidate, turn_round, get_current_round, set_last_round_tag
 from .utils import *
@@ -1784,3 +1784,23 @@ def test_multiple_btc_stakings_in_vout(pledge_agent, set_candidate):
     assert pledge_agent.btcReceiptMap(tx_id)['value'] == btc_amount
     assert tracker0.delta() == BLOCK_REWARD // 2 - FEE
     assert tracker1.delta() == FEE
+
+
+
+def test_claim_reward_reentry(pledge_agent,set_candidate,delegate_btc_valid_tx):
+    pledge_agent_proxy = ClaimBtcRewardReentry.deploy(pledge_agent.address, {'from': accounts[0]})
+    end_round = lock_time // ROUND_INTERVAL
+    operators, consensuses = set_candidate
+    set_last_round_tag(end_round - MIN_BTC_LOCK_ROUND - 3)
+    lock_script, _, _ = delegate_btc_valid_tx
+    delegate_btc_tx1, tx_id1 = get_btc_tx(BTC_VALUE, chain_id, operators[0], pledge_agent_proxy.address, lock_script_type)
+    pledge_agent.delegateBtc(delegate_btc_tx1, 0, [], 0, lock_script, {'from': accounts[2]})
+    pledge_agent.delegateCoin(operators[0], {"value": 20000, "from": accounts[1]})
+    turn_round()
+    # print('pledge_agent_proxy.addrsss',pledge_agent_proxy.address)
+    pledge_agent_proxy.setAgents([tx_id1])
+    turn_round(consensuses)
+    tracker = get_tracker(pledge_agent_proxy)
+    tx = pledge_agent_proxy.claimBtcReward([tx_id1])
+    print(tx.events)
+    assert tracker.delta() == BLOCK_REWARD // 2

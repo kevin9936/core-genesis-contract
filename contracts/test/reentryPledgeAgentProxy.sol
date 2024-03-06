@@ -1,14 +1,21 @@
 pragma solidity 0.8.4;
+
 import "./BaseProxy.sol";
 
 interface IPledgeAgent {
     function claimReward(address[] calldata agentList) external returns (uint256, bool);
+    function claimBtcReward(bytes32[] calldata txidList) external returns (uint256, bool);
     function delegateCoin(address agent) external payable;
+
     function undelegateCoin(address agent) external;
+
     function undelegateCoin(address agent, uint256 amount) external;
+
     function transferCoin(address sourceAgent, address targetAgent) external;
+
     function transferCoin(address sourceAgent, address targetAgent, uint256 amount) external;
-    function requiredCoinDeposit() external view returns(uint256);
+
+    function requiredCoinDeposit() external view returns (uint256);
 }
 
 contract ReentryPledgeAgentProxy is BaseProxy {
@@ -52,6 +59,12 @@ contract ReentryPledgeAgentProxy is BaseProxy {
         (bool success, string memory _msg) = _call(payload);
         emit proxyClaim(success, _msg);
     }
+    function claimBtcReward(bytes32[] calldata txidList) external payable {
+        bytes memory payload = abi.encodeWithSignature("claimBtcReward(bytes32[])", txidList);
+        (bool success, string memory _msg) = _call(payload);
+        emit proxyClaim(success, _msg);
+    }
+    
 }
 
 contract DelegateReentry is ReentryPledgeAgentProxy {
@@ -97,7 +110,7 @@ contract ClaimRewardReentry is ReentryPledgeAgentProxy {
     function setAgents(address[] calldata _agents) external {
         delete agents;
         agents = new address[](_agents.length);
-        for (uint i=0; i<_agents.length; i++) {
+        for (uint i = 0; i < _agents.length; i++) {
             agents[i] = _agents[i];
         }
     }
@@ -106,5 +119,22 @@ contract ClaimRewardReentry is ReentryPledgeAgentProxy {
         if (impl.balance > 0) {
             IPledgeAgent(impl).claimReward(agents);
         }
+    }
+}
+
+contract ClaimBtcRewardReentry is ReentryPledgeAgentProxy {
+    bytes32[]  public txidList;
+
+    constructor(address _pledgeAgentAddress) ReentryPledgeAgentProxy(_pledgeAgentAddress) {}
+
+    function setAgents(bytes32[] calldata _txid) external {
+        delete txidList;
+        txidList = new bytes32[](_txid.length);
+        for (uint i = 0; i < _txid.length; i++) {
+            txidList[i] = _txid[i];
+        }
+    }
+    receive() external payable {
+        IPledgeAgent(impl).claimBtcReward(txidList);
     }
 }
