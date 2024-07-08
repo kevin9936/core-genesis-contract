@@ -44,9 +44,10 @@ def turn_round(miners: list = None, tx_fee=100, round_count=1):
 
     for _ in range(round_count):
         for miner in miners:
-            ValidatorSetMock[0].deposit(miner, {"value": tx_fee, "from": accounts[-2]})
+            ValidatorSetMock[0].deposit(miner, {"value": tx_fee, "from": accounts[-10]})
         tx = CandidateHubMock[0].turnRound()
         chain.sleep(1)
+        print(f'turn_round>>>>>>>>>>>>>:{get_current_round()}:>>{tx.events}')
 
     return tx
 
@@ -69,9 +70,43 @@ def register_relayer(relayer_address=None):
 
 
 def get_current_round():
-    return CandidateHubMock[0].roundTag()
+    round_tag = CandidateHubMock[0].roundTag()
+    print('get_current_round>>>>>>>>>>>>>', round_tag)
+    return round_tag
 
 
 def set_last_round_tag(rount_tag):
+    print('set_last_round_tag>>>>>>>>>>>>', rount_tag)
     CandidateHubMock[0].setRoundTag(rount_tag)
-    PledgeAgentMock[0].setRoundTag(rount_tag)
+    BitcoinStakeMock[0].setRoundTag(rount_tag)
+
+
+def stake_hub_claim_reward(account):
+    tx = None
+    if isinstance(account, list):
+        for i in account:
+            tx = StakeHubMock[0].claimReward({'from': i})
+            print(f'{account}:stake_hub_claim_reward>>>>>>>>>>>>{tx.events}')
+    else:
+        tx = StakeHubMock[0].claimReward({'from': account})
+        print(f'{account}:stake_hub_claim_reward>>>>>>>>>>>>{tx.events}')
+    return tx
+
+
+def claim_stake_and_relay_reward(account):
+    print('claim_stake_and_relay_reward<<<<<<<<<<<<<<<<')
+    tx0 = stake_hub_claim_reward(account)
+    tx1 = claim_relayer_reward(account)
+    return tx0
+
+
+def claim_relayer_reward(account):
+    tx = None
+    if isinstance(account, list):
+        for i in account:
+            tx = StakeHubMock[0].claimRelayerReward({'from': i})
+            print(f'{account}:claim_relayer_reward>>>>>>>>>>>>{tx.events}')
+    else:
+        tx = StakeHubMock[0].claimRelayerReward({'from': account})
+        print(f'{account}:claim_relayer_reward>>>>>>>>>>>>{tx.events}')
+    return tx
