@@ -8,9 +8,7 @@ contract PledgeAgentMock is PledgeAgent {
     function developmentInit() external {
         requiredCoinDeposit = requiredCoinDeposit / 1e16;
         btcFactor = 2;
-        BTC_UNIT_CONVERSION = BTC_UNIT_CONVERSION / 1e9 / 2;
         minBtcLockRound = 3;
-        minBtcValue = INIT_MIN_BTC_VALUE / 1000;
         roundTag = 1;
     }
 
@@ -83,10 +81,6 @@ contract PledgeAgentMock is PledgeAgent {
 
     function setClaimRoundLimit(int value) external {
         CLAIM_ROUND_LIMIT = value;
-    }
-
-    function setPowerBlockFactor(uint value) external {
-        POWER_BLOCK_FACTOR = value;
     }
 
 }

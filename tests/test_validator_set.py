@@ -305,7 +305,7 @@ def test_update_param_success_with_key_blockRewardIncentivePercent():
 
 def test_distribute_reward_failed_by_address_which_is_not_candidate():
     with brownie.reverts("the msg sender must be candidate contract"):
-        validator_set_instance.distributeReward()
+        validator_set_instance.distributeReward(0)
     __contract_check(0, init_validator_incomes)
     __balance_check()
 
@@ -313,14 +313,15 @@ def test_distribute_reward_failed_by_address_which_is_not_candidate():
 def test_distribute_reward_success_with_empty_validators():
     __fake_validator_set()
     validator_set_instance.updateValidatorSet([], [], [], [])
-    validator_set_instance.distributeReward()
+    validator_set_instance.distributeReward(7)
     __contract_check(0, init_validator_incomes)
     __balance_check()
 
 
-def test_distribute_reward_success_with_validators_which_have_no_incomes():
+def test_distribute_reward_success_with_validators_which_have_no_incomes(candidate_hub):
     __fake_validator_set()
-    validator_set_instance.distributeReward()
+    round_tag = candidate_hub.getRoundTag()
+    validator_set_instance.distributeReward(round_tag)
     __contract_check(0, init_validator_incomes)
     __balance_check()
 

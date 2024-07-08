@@ -25,13 +25,13 @@ contract ValidatorSetMock is ValidatorSet {
     function updateSubsidyReduceInterval(uint256 _internal) external {
         SUBSIDY_REDUCE_INTERVAL = _internal;
     }
-    function addRoundRewardMock(address[] memory agentList, uint256[] memory rewardList)
+    function addRoundRewardMock(address[] memory agentList, uint256[] memory rewardList,uint roundTag)
     external {
         uint256 rewardSum = 0;
         for (uint256 i = 0; i < rewardList.length; i++) {
         	rewardSum += rewardList[i];
         }
-        IPledgeAgent(PLEDGE_AGENT_ADDR).addRoundReward{ value: rewardSum }(agentList, rewardList);
+        IStakeHub(PLEDGE_AGENT_ADDR).addRoundReward{ value: rewardSum }(agentList, rewardList,roundTag);
     }
 
     function jailValidator(address operateAddress, uint256 round, uint256 fine) external {

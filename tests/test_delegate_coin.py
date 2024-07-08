@@ -41,6 +41,17 @@ def set_candidate():
     return consensus, operator
 
 
+
+
+def test_delegate_once1(pledge_agent, validator_set,stake_hub,btc_agent,btc_lst_stake):
+    operator = accounts[1]
+    btc_agent.setBtcStake(pledge_agent,btc_lst_stake)
+    consensus = register_candidate(operator=operator)
+    pledge_agent.delegateCoin(operator, {"value": MIN_INIT_DELEGATE_VALUE})
+    turn_round()
+    assert consensus in validator_set.getValidators()
+
+
 @pytest.mark.parametrize("claim_type", ["claim", "delegate", "undelegate", "transfer"])
 def test_delegate_once(pledge_agent, validator_set, claim_type):
     operator = accounts[1]

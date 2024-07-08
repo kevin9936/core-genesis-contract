@@ -33,7 +33,7 @@ contract BtcLightClientMock is BtcLightClient {
     function setCheckResult(bool value) public {
         checkResult = value;
     }
-    
+
 
     function setMiners(uint roundTimeTag, address candidate, address[] memory rewardAddrs) public {
         RoundPower storage r = roundPowerMap[roundTimeTag];
