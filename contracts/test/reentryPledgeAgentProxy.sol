@@ -3,7 +3,7 @@ pragma solidity 0.8.4;
 import "./BaseProxy.sol";
 
 interface IPledgeAgent {
-    function claimReward(address[] calldata agentList) external returns (uint256, bool);
+    function claimReward() external returns (uint256, bool);
 
     function claimBtcReward(bytes32[] calldata txidList) external returns (uint256, bool);
 
@@ -23,19 +23,20 @@ interface IPledgeAgent {
 }
 
 contract ReentryPledgeAgentProxy is BaseProxy {
-    event proxyDelegate(bool success, string data);
-    event proxyClaim(bool success, string data);
+    event proxyDelegate(bool success, string data,address sender);
+    event proxyClaim(bool success, string data, address sender);
+    event proxyClaimReentry(bool success, string data, address sender);
     event proxyBtcClaim(bool success, string data);
     event proxyUndelegate(bool success, string data);
     event proxyTransferBtc(bool success, string data);
     event proxyUndelegatePartial(bool success, string data);
 
-    constructor(address _pledgeAgent) BaseProxy(_pledgeAgent) {}
+    constructor(address _pledgeAgent, address _stakeHub) BaseProxy(_pledgeAgent, _stakeHub) {}
 
     function delegateCoin(address agent) external payable {
         bytes memory payload = abi.encodeWithSignature("delegateCoin(address)", agent);
         (bool success, string memory _msg) = _call(payload);
-        emit proxyDelegate(success, _msg);
+        emit proxyDelegate(success, _msg,msg.sender);
     }
 
     function undelegateCoin(address agent) external payable {
@@ -58,17 +59,18 @@ contract ReentryPledgeAgentProxy is BaseProxy {
     function transferCoin(address sourceAgent, address targetAgent, uint256 amount) external payable {
         bytes memory payload = abi.encodeWithSignature("transferCoin(address,address,uint256)", sourceAgent, targetAgent, amount);
         (bool success, string memory _msg) = _call(payload);
-    }  
-    function transferBtc(bytes32 txid, address targetAgent) external  {
-        bytes memory payload = abi.encodeWithSignature("transferBtc(bytes32,address)", txid,targetAgent);
-        (bool success, string memory _msg) = _call(payload);
-        emit proxyTransferBtc(success,_msg);
     }
 
-    function claimReward(address[] calldata agentList) external payable {
-        bytes memory payload = abi.encodeWithSignature("claimReward(address[])", agentList);
+    function transferBtc(bytes32 txid, address targetAgent) external {
+        bytes memory payload = abi.encodeWithSignature("transferBtc(bytes32,address)", txid, targetAgent);
         (bool success, string memory _msg) = _call(payload);
-        emit proxyClaim(success, _msg);
+        emit proxyTransferBtc(success, _msg);
+    }
+
+    function claimReward() external payable {
+        bytes memory payload = abi.encodeWithSignature("claimReward()");
+        (bool success, string memory _msg) = _callC(payload);
+        emit proxyClaim(success, _msg, msg.sender);
     }
 
     function claimBtcReward(bytes32[] calldata txidList) external payable {
@@ -83,7 +85,7 @@ contract DelegateReentry is ReentryPledgeAgentProxy {
     address public agent;
     uint256 public minDelegateAmount;
 
-    constructor(address _pledgeAgentAddress) ReentryPledgeAgentProxy(_pledgeAgentAddress) payable {
+    constructor(address _pledgeAgentAddress, address _stakeHub) ReentryPledgeAgentProxy(_pledgeAgentAddress, _stakeHub) payable {
         minDelegateAmount = IPledgeAgent(impl).requiredCoinDeposit();
     }
 
@@ -100,7 +102,7 @@ contract DelegateReentry is ReentryPledgeAgentProxy {
 contract UndelegateReentry is ReentryPledgeAgentProxy {
     address public agent;
 
-    constructor(address _pledgeAgentAddress) ReentryPledgeAgentProxy(_pledgeAgentAddress) {}
+    constructor(address _pledgeAgentAddress, address _stakeHub) ReentryPledgeAgentProxy(_pledgeAgentAddress, _stakeHub) {}
 
     function setAgent(address _agent) external {
         agent = _agent;
@@ -115,29 +117,19 @@ contract UndelegateReentry is ReentryPledgeAgentProxy {
 
 
 contract ClaimRewardReentry is ReentryPledgeAgentProxy {
-    address[] public agents;
-
-    constructor(address _pledgeAgentAddress) ReentryPledgeAgentProxy(_pledgeAgentAddress) {}
-
-    function setAgents(address[] calldata _agents) external {
-        delete agents;
-        agents = new address[](_agents.length);
-        for (uint i = 0; i < _agents.length; i++) {
-            agents[i] = _agents[i];
-        }
-    }
-
+    constructor(address _pledgeAgentAddress, address _stakeHub) ReentryPledgeAgentProxy(_pledgeAgentAddress, _stakeHub) {}
     receive() external payable {
-        if (impl.balance > 0) {
-            IPledgeAgent(impl).claimReward(agents);
+        if (stakeHub.balance > 0) {
+            IPledgeAgent(stakeHub).claimReward();
         }
+        emit proxyClaimReentry(true,'',msg.sender);
     }
 }
 
 contract ClaimBtcRewardReentry is ReentryPledgeAgentProxy {
     bytes32[]  public txidList;
 
-    constructor(address _pledgeAgentAddress) ReentryPledgeAgentProxy(_pledgeAgentAddress) {}
+    constructor(address _pledgeAgentAddress, address _stakeHub) ReentryPledgeAgentProxy(_pledgeAgentAddress, _stakeHub) {}
 
     function setTxidList(bytes32[] calldata _txid) external {
         delete txidList;
@@ -153,20 +145,20 @@ contract ClaimBtcRewardReentry is ReentryPledgeAgentProxy {
 }
 
 
-
 contract TransferBtcReentry is ReentryPledgeAgentProxy {
     bytes32 public txid;
     address public targetAgent;
-    constructor(address _pledgeAgentAddress) ReentryPledgeAgentProxy(_pledgeAgentAddress) {}
+    constructor(address _pledgeAgentAddress, address _stakeHub) ReentryPledgeAgentProxy(_pledgeAgentAddress, _stakeHub) {}
 
     function setTxid(bytes32 _txid) external {
         txid = _txid;
     }
+
     function setTargetAgent(bytes32 _targetAgent) external {
         targetAgent = targetAgent;
     }
 
     receive() external payable {
-        IPledgeAgent(impl).transferBtc(txid,targetAgent);
+        IPledgeAgent(impl).transferBtc(txid, targetAgent);
     }
 }

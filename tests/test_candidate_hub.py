@@ -461,8 +461,8 @@ def test_jail_validator(candidate_hub, validator_set, required_margin):
                     })
 
 
-def test_turn_round(candidate_hub, pledge_agent, validator_set, required_margin):
-    required_coin_deposit = pledge_agent.requiredCoinDeposit()
+def test_turn_round(candidate_hub, core_agent, validator_set, required_margin):
+    required_coin_deposit = core_agent.requiredCoinDeposit()
     validator_count = candidate_hub.validatorCount()
 
     tests = [
@@ -478,7 +478,7 @@ def test_turn_round(candidate_hub, pledge_agent, validator_set, required_margin)
             candidate_hub.setCandidateStatus(agent, _set_status, {'from': agent})
         for agent, _deposit in zip(agents, deposit):
             if _deposit > 0:
-                __delegate_coin_success(pledge_agent, agent, agent, 0, _deposit)
+                __delegate_coin_success(core_agent, agent, agent, 0, _deposit)
 
         turn_round()
 
@@ -494,11 +494,11 @@ def test_turn_round(candidate_hub, pledge_agent, validator_set, required_margin)
             if current_status == (current_status & candidate_hub.UNREGISTER_STATUS()):
                 candidate_hub.unregister({'from': agent})
             if _deposit > 0:
-                pledge_agent.undelegateCoin(agent, {'from': agent})
+                core_agent.undelegateCoin(agent, _deposit, {'from': agent})
 
 
-def test_unregister_reentry(candidate_hub, required_margin):
-    candidate_hub_proxy = UnRegisterReentry.deploy(candidate_hub.address, {'from': accounts[0]})
+def test_unregister_reentry(candidate_hub, required_margin,stake_hub):
+    candidate_hub_proxy = UnRegisterReentry.deploy(candidate_hub.address,stake_hub, {'from': accounts[0]})
     register_candidate(operator=accounts[1])
     candidate_hub_proxy.register(random_address(), candidate_hub_proxy.address, 500, {'value': required_margin})
     tx = candidate_hub_proxy.unregister()
@@ -508,11 +508,11 @@ def test_unregister_reentry(candidate_hub, required_margin):
     })
 
 
-def __delegate_coin_success(pledge_agent, agent, delegator, old_value, new_value):
-    tx = pledge_agent.delegateCoin(agent, {'from': delegator, 'value': new_value})
+def __delegate_coin_success(core_agent, agent, delegator, old_value, new_value):
+    tx = core_agent.delegateCoin(agent, {'from': delegator, 'value': new_value})
     expect_event(tx, "delegatedCoin", {
-        "agent": agent,
+        "candidate": agent,
         "delegator": delegator,
         "amount": new_value,
-        "totalAmount": new_value + old_value
+        "realtimeAmount": new_value + old_value
     })

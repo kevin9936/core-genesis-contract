@@ -175,8 +175,9 @@ def test_get_adjustment_index(btc_light_client):
 def test_get_round_powers(btc_light_client):
     btc_light_client.setMiners(1, accounts[0], accounts[2:3])
     btc_light_client.setMiners(1, accounts[1], accounts[3:5])
+    total_power = len(accounts[2:3]) + len(accounts[3:5])
     round_powers = btc_light_client.getRoundPowers(1, accounts[:2])
-    assert round_powers == [1, 2]
+    assert round_powers == ([1, 2], total_power)
 
 
 def test_get_round_miners(btc_light_client):
