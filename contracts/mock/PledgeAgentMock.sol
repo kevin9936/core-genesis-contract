@@ -68,19 +68,19 @@ contract PledgeAgentMock is PledgeAgent {
         btcFactor = newBtcFactor;
     }
 
-    function collectCoinRewardMock(address agent, address delegator,
-        int256 roundLimit) external {
-        Agent storage a = agentsMap[agent];
-        CoinDelegator storage d = a.cDelegatorMap[delegator];
-        rewardAmountM = collectCoinReward(a, d, roundLimit);
-    }
+//    function collectCoinRewardMock(address agent, address delegator,
+//        uint256 roundLimit) external {
+//        Agent storage a = agentsMap[agent];
+//        CoinDelegator storage d = a.cDelegatorMap[delegator];
+//        rewardAmountM = collectCoinReward(a, d, roundLimit);
+//    }
 
     function setRoundTag(uint value) external {
         roundTag = value;
     }
 
     function setClaimRoundLimit(int value) external {
-        CLAIM_ROUND_LIMIT = value;
+//        CLAIM_ROUND_LIMIT = value;
     }
 
 }

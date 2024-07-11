@@ -4,10 +4,19 @@ from web3 import Web3
 from brownie import accounts, PledgeAgentProxy, DelegateReentry, UndelegateReentry, ClaimRewardReentry
 from .common import register_candidate, turn_round
 from .utils import get_tracker, expect_event, expect_query, encode_args_with_signature
-from .calc_reward import parse_delegation, set_delegate, set_coin_delegator, calculate_rewards
+from .calc_reward import parse_delegation, set_delegate, set_coin_delegator, calculate_rewards, calculate_coin_rewards
+
+core_hardcap = 6000
+power_hardcap = 2000
+btc_hardcap = 4000
+sum_hardcap = core_hardcap + power_hardcap + btc_hardcap
 
 MIN_INIT_DELEGATE_VALUE = 0
 BLOCK_REWARD = 0
+total_reward = 0
+COIN_REWARD = 0
+POWER_REWARD = 0
+BTC_REWARD = 0
 
 ONE_ETHER = Web3.toWei(1, 'ether')
 TX_FEE = 100
@@ -26,11 +35,16 @@ def set_min_init_delegate_value(min_init_delegate_value):
 
 @pytest.fixture(scope="module", autouse=True)
 def set_block_reward(validator_set):
-    global BLOCK_REWARD
+    global BLOCK_REWARD, POWER_REWARD, BTC_REWARD, total_reward
+    global COIN_REWARD
     block_reward = validator_set.blockReward()
     block_reward_incentive_percent = validator_set.blockRewardIncentivePercent()
     total_block_reward = block_reward + TX_FEE
     BLOCK_REWARD = total_block_reward * ((100 - block_reward_incentive_percent) / 100)
+    total_reward = BLOCK_REWARD // 2
+    POWER_REWARD = total_reward * power_hardcap // sum_hardcap
+    BTC_REWARD = total_reward * btc_hardcap // sum_hardcap
+    COIN_REWARD = total_reward * core_hardcap // sum_hardcap
 
 
 @pytest.fixture()
@@ -41,11 +55,8 @@ def set_candidate():
     return consensus, operator
 
 
-
-
-def test_delegate_once1(pledge_agent, validator_set,stake_hub,btc_agent,btc_lst_stake):
+def test_delegate_once1(pledge_agent, validator_set, stake_hub, btc_agent, btc_lst_stake):
     operator = accounts[1]
-    btc_agent.setBtcStake(pledge_agent,btc_lst_stake)
     consensus = register_candidate(operator=operator)
     pledge_agent.delegateCoin(operator, {"value": MIN_INIT_DELEGATE_VALUE})
     turn_round()
@@ -58,6 +69,7 @@ def test_delegate_once(pledge_agent, validator_set, claim_type):
     consensus = register_candidate(operator=operator)
     pledge_agent.delegateCoin(operator, {"value": MIN_INIT_DELEGATE_VALUE})
     turn_round()
+    # Core staking can earn up to 50% of the total rewards
     assert consensus in validator_set.getValidators()
 
     turn_round([consensus])
@@ -65,17 +77,17 @@ def test_delegate_once(pledge_agent, validator_set, claim_type):
 
     if claim_type == "claim":
         pledge_agent.claimReward([operator])
-        assert tracker.delta() == BLOCK_REWARD / 2
+        assert tracker.delta() == BLOCK_REWARD / 4
     elif claim_type == "delegate":
         pledge_agent.delegateCoin(operator, {"value": 100})
-        assert tracker.delta() == (BLOCK_REWARD / 2 - 100)
+        assert tracker.delta() == (BLOCK_REWARD / 4 - 100)
     elif claim_type == "undelegate":
         pledge_agent.undelegateCoin(operator)
-        assert tracker.delta() == (BLOCK_REWARD / 2 + MIN_INIT_DELEGATE_VALUE)
+        assert tracker.delta() == (BLOCK_REWARD / 4 + MIN_INIT_DELEGATE_VALUE)
     elif claim_type == "transfer":
         register_candidate(operator=accounts[2])
         pledge_agent.transferCoin(operator, accounts[2])
-        assert tracker.delta() == BLOCK_REWARD / 2
+        assert tracker.delta() == BLOCK_REWARD / 4
 
 
 @pytest.mark.parametrize("internal", [
@@ -96,7 +108,7 @@ def test_delegate2one_agent_twice_in_different_rounds(pledge_agent, set_candidat
 
     tracker = get_tracker(accounts[0])
     pledge_agent.claimReward([operator])
-    assert tracker.delta() == BLOCK_REWARD / 2
+    assert tracker.delta() == BLOCK_REWARD / 4
 
 
 @pytest.mark.parametrize("internal", [
@@ -107,7 +119,6 @@ def test_delegate2one_agent_twice_in_different_rounds(pledge_agent, set_candidat
 def test_delegate2two_agents_in_different_rounds(pledge_agent, internal):
     operators = []
     consensuses = []
-
     for operator in accounts[1:3]:
         operators.append(operator)
         consensuses.append(register_candidate(operator=operator))
@@ -122,10 +133,12 @@ def test_delegate2two_agents_in_different_rounds(pledge_agent, internal):
         turn_round()
 
     turn_round(consensuses)
-
+    print(operators)
     tracker = get_tracker(accounts[0])
     pledge_agent.claimReward(operators)
-    assert tracker.delta() == BLOCK_REWARD
+    # Coin staking can get 50% of the rewards 
+    # 2 validators each receive 50% of the reward
+    assert tracker.delta() == BLOCK_REWARD // 4 * 2
 
 
 def test_claim_reward_after_transfer_to_candidate(pledge_agent, candidate_hub, validator_set):
@@ -154,9 +167,9 @@ def test_claim_reward_after_transfer_to_candidate(pledge_agent, candidate_hub, v
     candidate_hub.refuseDelegate({'from': operators[2]})
 
     turn_round(consensuses, round_count=2)
-
+    # There are a total of 5 rounds of rewards
     pledge_agent.claimReward(operators)
-    assert tracker.delta() == BLOCK_REWARD * 2.5
+    assert tracker.delta() == COIN_REWARD * 5
 
 
 def test_claim_reward_after_transfer_to_validator(pledge_agent, validator_set):
@@ -245,7 +258,7 @@ def test_undelegate_coin_next_round(pledge_agent):
     assert reward_sum == 0
 
 
-def test_undelegate_coin_reward(pledge_agent):
+def test_undelegate_coin_reward(pledge_agent, stake_hub):
     operator = accounts[1]
     consensus = register_candidate(operator=operator)
     pledge_agent.delegateCoin(operator, {"value": MIN_INIT_DELEGATE_VALUE})
@@ -253,9 +266,12 @@ def test_undelegate_coin_reward(pledge_agent):
     pledge_agent.undelegateCoin(operator)
     tx = turn_round([consensus])
     assert "receiveDeposit" in tx.events
+    # Only the rewards that exceed the hard cap are burned
     event = tx.events['receiveDeposit'][-1]
-    assert event['from'] == pledge_agent.address
-    assert event['amount'] == BLOCK_REWARD // 2
+    assert event['from'] == stake_hub.address
+    assert event['amount'] == total_reward - COIN_REWARD
+    tx = pledge_agent.claimReward([operator], {'from': accounts[0]})
+    assert 'claimedReward' not in tx.events
 
 
 def test_proxy_claim_reward_success(pledge_agent):
@@ -269,16 +285,16 @@ def test_proxy_claim_reward_success(pledge_agent):
     turn_round([consensus])
     assert pledge_agent.rewardMap(pledge_agent_proxy.address) == 0
     reward = pledge_agent_proxy.claimReward.call([operator])
-    assert reward == BLOCK_REWARD // 2
+    assert reward == COIN_REWARD
     tx = pledge_agent_proxy.claimReward([operator])
     expect_event(tx, "claim", {
-        "reward": BLOCK_REWARD // 2,
+        "reward": COIN_REWARD,
         "allClaimed": True,
     })
     expect_event(tx, "claimedReward", {
         "delegator": pledge_agent_proxy.address,
         "operator": pledge_agent_proxy.address,
-        "amount": BLOCK_REWARD // 2,
+        "amount": COIN_REWARD,
         "success": True
     })
     assert pledge_agent.rewardMap(pledge_agent_proxy.address) == 0
@@ -356,7 +372,7 @@ def test_claim_reward_reentry(pledge_agent):
     expect_event(tx, "proxyClaim", {
         "success": True
     })
-    assert tracker.delta() == BLOCK_REWARD // 2
+    assert tracker.delta() == COIN_REWARD
 
 
 def test_undelegate_amount_small(pledge_agent, validator_set):
@@ -419,8 +435,13 @@ def test_claim_reward_after_undelegate_one_round(pledge_agent, validator_set):
     total_pledged_amount = delegate_amount * 2
     assert reward_info['coin'] == remain_pledged_amount
     assert reward_info['score'] == total_pledged_amount
-    turn_round([consensus], round_count=1)
-    pledge_agent.claimReward([operator], {'from': accounts[0]})
+    tx = turn_round([consensus], round_count=1)
+    print('tx.events', tx.events)
+    tx = pledge_agent.claimReward([operator], {'from': accounts[0]})
+    print('claimedReward', accounts[0])
+    print('claimedReward', tx.events)
+    aa = pledge_agent.getDelegator(operator, accounts[0])
+    print('12313123', aa)
     deduction_reward = total_reward * (delegate_amount * 2 - remain_pledged_amount) // (delegate_amount * 2)
     assert tracker0.delta() == total_reward - deduction_reward
     assert tracker1.delta() == 0
@@ -521,7 +542,6 @@ def test_claim_reward_after_undelegate_coin_partially(pledge_agent, validator_se
 
 
 def test_multi_delegators_claim_reward_after_undelegate_coin_partially(pledge_agent, validator_set):
-    total_reward = BLOCK_REWARD // 2
     operator = accounts[2]
     delegate_amount = MIN_INIT_DELEGATE_VALUE * 5
     undelegate_amount0 = delegate_amount // 2
@@ -540,11 +560,12 @@ def test_multi_delegators_claim_reward_after_undelegate_coin_partially(pledge_ag
     tracker1.update_height()
     pledge_agent.claimReward([operator], {'from': accounts[0]})
     pledge_agent.claimReward([operator], {'from': accounts[1]})
-    deduction_reward = total_reward * (undelegate_amount0 + undelegate_amount1) // total_pledged_amount
-    actual_reward0 = total_reward * undelegate_amount0 // total_pledged_amount
-    total_reward -= deduction_reward
+    actual_reward0 = COIN_REWARD * undelegate_amount0 // total_pledged_amount
+    # There are changes to how rewards are calculated
+    # Each time you claim a reward, you will be counted according to the percentage of points
+    actual_reward1 = COIN_REWARD * (delegate_amount - undelegate_amount1) // total_pledged_amount
     assert tracker0.delta() == actual_reward0
-    assert tracker1.delta() == total_reward - actual_reward0
+    assert tracker1.delta() == actual_reward1
 
 
 @pytest.mark.parametrize("undelegate_type", ['all', 'part'])
@@ -565,7 +586,6 @@ def test_withdraw_principal(pledge_agent, validator_set, undelegate_type):
 def test_claim_rewards_for_multiple_validators(pledge_agent, validator_set):
     operators = []
     consensuses = []
-    total_reward = BLOCK_REWARD // 2
     delegate_amount = MIN_INIT_DELEGATE_VALUE * 10
     undelegate_amount = delegate_amount // 3
     for operator in accounts[2:5]:
@@ -579,15 +599,13 @@ def test_claim_rewards_for_multiple_validators(pledge_agent, validator_set):
     tracker0 = get_tracker(accounts[0])
     turn_round(consensuses, round_count=2)
     pledge_agent.claimReward(operators, {'from': accounts[0]})
-    deduction_reward = total_reward * undelegate_amount // delegate_amount
-    actual_reward = total_reward - deduction_reward + total_reward
+    actual_reward = COIN_REWARD + COIN_REWARD * (delegate_amount - undelegate_amount) // delegate_amount
     assert tracker0.delta() == actual_reward
 
 
 def test_claim_rewards_each_round_after_undelegate_or_delegate(pledge_agent, validator_set, candidate_hub):
     operators = []
     consensuses = []
-    total_reward = BLOCK_REWARD // 2
     delegate_amount = MIN_INIT_DELEGATE_VALUE * 10
     undelegate_amount = MIN_INIT_DELEGATE_VALUE * 4
     for operator in accounts[2:5]:
@@ -612,23 +630,20 @@ def test_claim_rewards_each_round_after_undelegate_or_delegate(pledge_agent, val
     turn_round(consensuses)
     pledge_agent.undelegateCoin(operators[0], undelegate_amount, {'from': accounts[0]})
     pledge_agent.claimReward(operators, {'from': accounts[1]})
-    assert tracker0.delta() == total_reward // 2 + undelegate_amount
-    assert tracker1.delta() == total_reward - total_reward // 2 + total_reward
+    assert tracker0.delta() == COIN_REWARD // 2 + undelegate_amount
+    assert tracker1.delta() == COIN_REWARD // 2 + COIN_REWARD
     remain_pledged_amount = delegate_amount * 2 - undelegate_amount
     total_pledged_amount = delegate_amount * 3
     turn_round(consensuses)
-    deduction_reward0 = total_reward * undelegate_amount // total_pledged_amount
-    distributed_reward = total_reward - deduction_reward0
-    actual_reward0 = total_reward * remain_pledged_amount // total_pledged_amount
-    actual_reward1 = distributed_reward - actual_reward0
+    actual_reward0 = COIN_REWARD * remain_pledged_amount // total_pledged_amount
+    actual_reward1 = COIN_REWARD * delegate_amount // total_pledged_amount + COIN_REWARD
     pledge_agent.claimReward(operators, {'from': accounts[0]})
     pledge_agent.claimReward(operators, {'from': accounts[1]})
     assert tracker0.delta() == actual_reward0
-    assert tracker1.delta() == actual_reward1 + total_reward
+    assert tracker1.delta() == actual_reward1
 
 
 def test_auto_reward_distribution_on_undelegate(pledge_agent, validator_set, candidate_hub):
-    total_reward = BLOCK_REWARD // 2
     operator = accounts[2]
     operator1 = accounts[4]
     delegate_amount0 = MIN_INIT_DELEGATE_VALUE * 2
@@ -643,9 +658,11 @@ def test_auto_reward_distribution_on_undelegate(pledge_agent, validator_set, can
     turn_round([consensus1, consensus])
     pledge_agent.undelegateCoin(operator, MIN_INIT_DELEGATE_VALUE, {'from': accounts[0]})
     pledge_agent.undelegateCoin(operator, {'from': accounts[1]})
-    account1_reward = total_reward * delegate_amount0 // (delegate_amount0 + MIN_INIT_DELEGATE_VALUE)
-    assert tracker0.delta() == account1_reward + MIN_INIT_DELEGATE_VALUE
-    assert tracker1.delta() == total_reward - account1_reward + MIN_INIT_DELEGATE_VALUE
+    total_score = delegate_amount0 + MIN_INIT_DELEGATE_VALUE
+    account0_reward = calculate_coin_rewards(delegate_amount0, total_score, COIN_REWARD)
+    account1_reward = calculate_coin_rewards(MIN_INIT_DELEGATE_VALUE, total_score, COIN_REWARD)
+    assert tracker0.delta() == account0_reward + MIN_INIT_DELEGATE_VALUE
+    assert tracker1.delta() == account1_reward + MIN_INIT_DELEGATE_VALUE
 
 
 def test_undelegate_claim_principal_for_candidate_node(pledge_agent, validator_set, candidate_hub):
@@ -672,17 +689,17 @@ def test_undelegate_claim_principal_for_candidate_node(pledge_agent, validator_s
     total_delegate_amount = delegate_amount * 5
     pledge_agent.undelegateCoin(operators[2], undelegate_amount, {'from': accounts[0]})
     turn_round(consensuses, round_count=1)
-    total_reward = BLOCK_REWARD // 2
-    expect_reward = total_reward - total_reward * undelegate_amount // total_delegate_amount
-    tracker0.update_height()
+    expect_reward = calculate_coin_rewards(total_delegate_amount - undelegate_amount, total_delegate_amount,
+                                           COIN_REWARD)
     pledge_agent.claimReward(operators, {'from': accounts[0]})
-    assert tracker0.delta() == expect_reward
+    assert tracker0.delta() == expect_reward + undelegate_amount
     pledge_agent.undelegateCoin(operators[2], MIN_INIT_DELEGATE_VALUE, {'from': accounts[0]})
     candidate_hub.refuseDelegate({'from': operators[2]})
     turn_round(consensuses, round_count=1)
     tracker0.update_height()
     total_delegate_amount -= undelegate_amount
-    expect_reward = total_reward * (total_delegate_amount - MIN_INIT_DELEGATE_VALUE) // total_delegate_amount
+    expect_reward = calculate_coin_rewards(total_delegate_amount - MIN_INIT_DELEGATE_VALUE, total_delegate_amount,
+                                           COIN_REWARD)
     pledge_agent.claimReward(operators, {'from': accounts[0]})
     assert tracker0.delta() == expect_reward
 
@@ -729,7 +746,6 @@ def test_transfer_with_partial_undelegate_and_claimed_rewards(pledge_agent, vali
     operators = []
     remain_pledged_amount = delegate_amount
     total_pledged_amount = delegate_amount * 2
-    total_reward = BLOCK_REWARD // 2
     consensuses = []
     for operator in accounts[3:6]:
         operators.append(operator)
@@ -746,7 +762,7 @@ def test_transfer_with_partial_undelegate_and_claimed_rewards(pledge_agent, vali
     tracker1 = get_tracker(accounts[1])
     pledge_agent.claimReward(operators, {'from': accounts[1]})
     remain_pledged_amount -= undelegate_amount
-    expect_reward = total_reward * remain_pledged_amount // total_pledged_amount
+    expect_reward = COIN_REWARD * remain_pledged_amount // total_pledged_amount
     assert tracker1.delta() == expect_reward
 
 
@@ -763,9 +779,9 @@ def test_delegate_then_all_undelegate(pledge_agent, validator_set):
     pledge_agent.delegateCoin(operator, {"value": additional_amount, 'from': accounts[0]})
     pledge_agent.undelegateCoin(operator, undelegate_amount, {'from': accounts[0]})
     tx = turn_round([consensus], round_count=1)
-    assert tx.events['receiveDeposit'][1]['amount'] == total_reward // 2
+    assert tx.events['receiveDeposit'][1]['amount'] == total_reward - total_reward // 2
     pledge_agent.claimReward([operator], {'from': accounts[0]})
-    assert tracker0.delta() == total_reward - total_reward // 2 + MIN_INIT_DELEGATE_VALUE
+    assert tracker0.delta() == COIN_REWARD // 2 + MIN_INIT_DELEGATE_VALUE
 
 
 def test_undelegate_transfer_input_and_deposit(pledge_agent, validator_set):
@@ -786,16 +802,10 @@ def test_undelegate_transfer_input_and_deposit(pledge_agent, validator_set):
     pledge_agent.transferCoin(operators[2], operators[0], transfer_amount1, {'from': accounts[0]})
     pledge_agent.undelegateCoin(operators[0], {'from': accounts[0]})
     pledge_agent.undelegateCoin(operators[2], {'from': accounts[0]})
-    tx = turn_round(consensuses, round_count=1)
-    deduct_reward0 = total_reward * (delegate_amount - transfer_amount) // delegate_amount
-    deduct_reward2 = total_reward * (delegate_amount - transfer_amount1) // delegate_amount
-    assert tx.events['receiveDeposit'][1]['amount'] == deduct_reward0
-    assert tx.events['receiveDeposit'][2]['amount'] == deduct_reward2
+    turn_round(consensuses, round_count=1)
     tracker0 = get_tracker(accounts[0])
-    tx1 = pledge_agent.claimReward(operators, {'from': accounts[0]})
-    assert tx1.events['receiveDeposit'][0]['amount'] == total_reward - deduct_reward0
-    assert tx1.events['receiveDeposit'][1]['amount'] == total_reward - deduct_reward2
-    assert tracker0.delta() == total_reward
+    pledge_agent.claimReward(operators, {'from': accounts[0]})
+    assert tracker0.delta() == COIN_REWARD
 
 
 def test_claim_rewards_after_transfers_undelegations_both_validators(pledge_agent, validator_set):
@@ -2454,7 +2464,8 @@ def test_post_transfer_major_slash(pledge_agent, validator_set, slash_indicator,
 
 
 @pytest.mark.parametrize("threshold_type", ['minor', 'major'])
-def test_major_violation_followed_by_reward_claim(pledge_agent, validator_set, slash_indicator, threshold_type, candidate_hub):
+def test_major_violation_followed_by_reward_claim(pledge_agent, validator_set, slash_indicator, threshold_type,
+                                                  candidate_hub):
     round_time_tag = 7
     candidate_hub.setControlRoundTimeTag(True)
     candidate_hub.setRoundTag(round_time_tag)

@@ -110,9 +110,9 @@ def foundation(accounts):
 
 
 @pytest.fixture(scope="module")
-def stake_hub(accounts, validator_set, pledge_agent, hash_agent, btc_agent):
+def stake_hub(accounts, validator_set, pledge_agent, hash_power_agent, btc_agent):
     c = accounts[0].deploy(StakeHubMock)
-    c.updateContractStakeHub(validator_set, pledge_agent, hash_agent, btc_agent)
+    c.updateContractStakeHub(validator_set, pledge_agent, hash_power_agent, btc_agent)
     c.init()
     if is_development:
         c.developmentInit()
@@ -151,7 +151,7 @@ def core_agent(accounts, pledge_agent):
 
 
 @pytest.fixture(scope="module")
-def hash_agent(accounts):
+def hash_power_agent(accounts):
     c = accounts[0].deploy(HashPowerAgent)
     c.init()
     return c
@@ -181,7 +181,7 @@ def set_system_contract_address(
         btc_agent,
         btc_lst_stake,
         core_agent,
-        hash_agent
+        hash_power_agent
 ):
     args = [validator_set.address, slash_indicator.address, system_reward.address,
             btc_light_client.address, relay_hub.address, candidate_hub.address,
@@ -201,8 +201,8 @@ def set_system_contract_address(
     btc_stake.updateContractAddr(*args)
     btc_agent.updateContractAddr(*args)
     btc_lst_stake.updateContractAddr(*args)
-    hash_agent.updateContractAddr(*args)
-    args1 = [stake_hub, btc_stake, btc_agent, btc_lst_stake, core_agent, hash_agent]
+    hash_power_agent.updateContractAddr(*args)
+    args1 = [stake_hub, btc_stake, btc_agent, btc_lst_stake, core_agent, hash_power_agent]
     candidate_hub.updateStakeContractAddr(*args1)
     btc_light_client.updateStakeContractAddr(*args1)
     gov_hub.updateStakeContractAddr(*args1)
@@ -218,7 +218,7 @@ def set_system_contract_address(
     btc_agent.updateStakeContractAddr(*args1)
     btc_lst_stake.updateStakeContractAddr(*args1)
     # core_agent.updateContractAddr(*args)
-    hash_agent.updateStakeContractAddr(*args1)
+    hash_power_agent.updateStakeContractAddr(*args1)
 
     system_reward.init()
     candidate_hub.setControlRoundTimeTag(True)
