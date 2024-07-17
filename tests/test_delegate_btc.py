@@ -6,7 +6,7 @@ from brownie.network import gas_price
 from web3 import Web3
 from brownie import accounts, TransferBtcReentry, ClaimBtcRewardReentry
 from .btc_block_data import *
-from .common import register_candidate, turn_round, get_current_round, set_last_round_tag
+from .common import register_candidate, turn_round, get_current_round, set_last_round_tag, stake_hub_claim_reward
 from .utils import *
 
 MIN_INIT_DELEGATE_VALUE = 0
@@ -24,6 +24,13 @@ lock_time = 1736956800
 chain_id = 1116
 lock_script_type = 'hash'
 FEE = 1
+core_hardcap = 6000
+power_hardcap = 2000
+btc_hardcap = 4000
+sum_hardcap = core_hardcap + power_hardcap + btc_hardcap
+COIN_REWARD = 0
+POWER_REWARD = 0
+BTC_REWARD = 0
 
 
 @pytest.fixture(scope="module", autouse=True)
@@ -33,18 +40,23 @@ def deposit_for_reward(validator_set, gov_hub):
 
 
 @pytest.fixture(scope="module", autouse=True)
-def set_block_reward(validator_set, candidate_hub, btc_light_client, pledge_agent):
-    global BLOCK_REWARD, btcFactor, MIN_BTC_LOCK_ROUND, FEE, BTC_AMOUNT
-    FEE = 1 * pledge_agent.FEE_FACTOR()
+def set_block_reward(validator_set, candidate_hub, btc_light_client, pledge_agent, stake_hub):
+    global BLOCK_REWARD, btcFactor, MIN_BTC_LOCK_ROUND, FEE, BTC_AMOUNT, POWER_REWARD, BTC_REWARD, COIN_REWARD
+    FEE = 1 * 100
     block_reward = validator_set.blockReward()
     block_reward_incentive_percent = validator_set.blockRewardIncentivePercent()
     total_block_reward = block_reward + TX_FEE
     BLOCK_REWARD = total_block_reward * ((100 - block_reward_incentive_percent) / 100)
-    btcFactor = pledge_agent.btcFactor() * pledge_agent.BTC_UNIT_CONVERSION()
+    btcFactor = stake_hub.INIT_BTC_FACTOR() * stake_hub.BTC_UNIT_CONVERSION()
+    print('stake_hub.BTC_UNIT_CONVERSION()', stake_hub.BTC_UNIT_CONVERSION())
     BTC_AMOUNT = BTC_VALUE * btcFactor
     MIN_BTC_LOCK_ROUND = pledge_agent.minBtcLockRound()
     candidate_hub.setControlRoundTimeTag(True)
     btc_light_client.setCheckResult(True)
+    total_reward = BLOCK_REWARD // 2
+    POWER_REWARD = total_reward * power_hardcap // sum_hardcap
+    BTC_REWARD = total_reward * 3333 // 10000
+    COIN_REWARD = total_reward * core_hardcap // sum_hardcap
 
 
 @pytest.fixture(scope="module", autouse=True)
@@ -72,8 +84,9 @@ def delegate_btc_valid_tx():
     return lock_script, btc_tx, tx_id_list
 
 
-def test_delegate_btc_with_lock_time_in_tx(pledge_agent, set_candidate):
+def test_delegate_btc_with_lock_time_in_tx(pledge_agent, set_candidate, stake_hub, btc_stake, btc_lst_stake, btc_agent):
     operators, consensuses = set_candidate
+    print('operators', operators[0])
     btc_amount = BTC_VALUE
     lock_script = "0480db8767b17551210223dd766d6e38eaf9c044dcb18d8221fe8c9a5763ca331e93fadc8f55949b8e122103000871fc99dfcbb5a811c5e23c077683b07ab2bbbfff775ce30a809a6d41214152ae"
     btc_tx = (
@@ -83,33 +96,41 @@ def test_delegate_btc_with_lock_time_in_tx(pledge_agent, set_candidate):
         "0000000000000000366a345341542b01045c9fb29aac15b9a4b7f17c3385939b007540f4d791ccf7e1DAb7D90A0a91f8B1f6A693Bf0bb3a979a00180db8767"
         "00000000")
     tx_id = get_transaction_txid(btc_tx)
-    tx = pledge_agent.delegateBtc(btc_tx, 1, [], 0, lock_script, {"from": accounts[1]})
+    print('dsadsfad', stake_hub.liabilityOperators(btc_stake))
+    print('dsadsfad', stake_hub.liabilityOperators(btc_stake))
+    tx = btc_stake.delegate(btc_tx, 1, [], 0, lock_script, {"from": accounts[1]})
+    print('delegatedBtc', tx.events)
+    print('delegatorMap',btc_stake.getDelegatorMap(accounts[0]))
     expect_event(tx, 'delegatedBtc', {
         'txid': tx_id,
+        'candidate': operators[0],
+        'delegator': accounts[0],
         'script': '0x' + lock_script,
-        'blockHeight': 1,
-        'outputIndex': 0
+        'amount': btc_amount
 
     })
+    print('receiptMap', btc_stake.receiptMap(tx_id))
     turn_round()
-    agent_map = pledge_agent.agentsMap(operators[0])
-    assert pledge_agent.btcReceiptMap(tx_id)['value'] == BTC_VALUE
-    assert agent_map['totalBtc'] == btc_amount
-    turn_round(consensuses)
-    expect_query(pledge_agent.btcReceiptMap(tx_id), {
-        'agent': operators[0],
-        'delegator': accounts[0],
-        'value': btc_amount,
-        'endRound': lock_time // ROUND_INTERVAL,
-        'rewardIndex': 0,
-        'feeReceiver': accounts[1],
-        'fee': FEE
-    })
+    print(btc_stake.accuredRewardPerBTCMap(operators[0],7))
+    print('receiptMap', btc_stake.receiptMap(tx_id))
+    print('roundTag',btc_stake.roundTag())
+    assert btc_stake.receiptMap(tx_id)['candidate'] == operators[0]
+    assert btc_stake.receiptMap(tx_id)['delegator'] == accounts[0]
+    assert btc_stake.receiptMap(tx_id)['round'] == 0
+    tx = turn_round(consensuses)
+    print('accuredRewardPerBTCMapaccuredRewardPerBTCMap',btc_stake.accuredRewardPerBTCMap(operators[0],8))
+    print('txtxtxtxtxtxtxtx',tx.events)
+
+    tx = stake_hub.getLiabilities(accounts[0])
+    print('getLiabilities',tx)
+    
+
     tracker0 = get_tracker(accounts[0])
     tracker1 = get_tracker(accounts[1])
-    pledge_agent.claimBtcReward([tx_id])
-    assert tracker0.delta() == BLOCK_REWARD // 2 - FEE
-    assert tracker1.delta() == FEE
+    tx = stake_hub_claim_reward(accounts[0])
+    print(tx.events)
+    assert tracker0.delta() == BTC_REWARD
+    # assert tracker1.delta() == FEE
 
 
 def test_delegate_btc_with_lock_script_in_tx(pledge_agent, set_candidate):

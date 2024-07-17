@@ -1,11 +1,12 @@
 import pytest
-from web3 import Web3
 import brownie
 from brownie import accounts
 from eth_abi import encode_abi
-from .utils import random_address, expect_event, padding_left, expect_event_not_emitted, get_tracker, \
+from web3 import Web3
+from .calc_reward import parse_delegation, set_delegate
+from .utils import random_address, expect_event, expect_event_not_emitted, get_tracker, \
     encode_args_with_signature
-from .common import register_candidate, turn_round, execute_proposal
+from .common import register_candidate, turn_round, get_current_round
 
 MIN_INIT_DELEGATE_VALUE = 0
 POWER_FACTOR = 0
@@ -17,6 +18,7 @@ btc_light_client_instance = None
 required_coin_deposit = 0
 TX_FEE = Web3.toWei(1, 'ether')
 actual_block_reward = 0
+DENOMINATOR = 10000
 
 
 @pytest.fixture(scope="module", autouse=True)
@@ -169,7 +171,7 @@ class TestUndelegateCoin:
         operator = accounts[1]
         register_candidate(operator=operator)
         turn_round()
-        with brownie.reverts("delegator does not exist"):
+        with brownie.reverts("Not enough deposit token"):
             pledge_agent.undelegateCoin(operator)
 
     def test_fail_to_undelegate_after_transfer(self, pledge_agent):
@@ -184,7 +186,7 @@ class TestUndelegateCoin:
         pledge_agent.delegateCoin(operators[0], {"value": delegate_amount, 'from': accounts[0]})
         turn_round()
         pledge_agent.transferCoin(operators[0], operators[1], transfer_amount0, {'from': accounts[0]})
-        with brownie.reverts("remaining amount is too small"):
+        with brownie.reverts("Not enough deposit token"):
             pledge_agent.undelegateCoin(operators[0], undelegate_amount)
 
     def test_undelegeate_self(self, pledge_agent):
@@ -207,126 +209,208 @@ class TestUndelegateCoin:
         pledge_agent.undelegateCoin(operator)
 
 
-class TestUpdateParams:
-    def test_update_power_factor(self, pledge_agent):
-        new_power_factor = 250
-        hex_value = padding_left(Web3.toHex(new_power_factor), 64)
-
-        execute_proposal(
-            pledge_agent.address,
-            0,
-            "updateParam(string,bytes)",
-            encode_abi(['string', 'bytes'], ['powerFactor', Web3.toBytes(hexstr=hex_value)]),
-            "update power factor"
-        )
-
-        # check
-        assert pledge_agent.powerFactor() == new_power_factor
-
-
-def test_add_round_reward_success_with_normal_agent(pledge_agent, validator_set):
+def test_add_round_reward_success_with_normal_agent(pledge_agent, validator_set, candidate_hub, hash_power_agent,
+                                                    btc_agent, stake_hub):
     agents = accounts[1:4]
-    rewards = [1e7, 1e8, 1e8]
+    rewards = [1e7, 1e8]
     coins = [1e6, 4e6]
     powers = [2, 5]
-    total_coin = 1e7
-    total_power = 10
-    btc_coin = 10
-    expect_coin_rewards = [0, 0]
-    expect_power_rewards = [0, 0]
-
-    for i in range(len(coins)):
-        c_score = coins[i] * (total_power + 1)
-        p_score = (total_coin + 1) * powers[i] * POWER_FACTOR // 10000
-        agent_score = c_score + p_score
-        expect_coin_rewards[i] = rewards[i] * c_score // agent_score
-        expect_power_rewards[i] = rewards[i] * p_score // agent_score
-
     __candidate_register(agents[0])
     __candidate_register(agents[1])
-    pledge_agent.setRoundState(total_power, total_coin, btc_coin)
-    pledge_agent.setAgentValidator(agents[0], powers[0], coins[0])
-    pledge_agent.setAgentValidator(agents[1], powers[1], coins[1])
-    tx = validator_set.addRoundRewardMock(agents, rewards)
-
-    for i in range(len(coins)):
+    stake_hub.setCandidateAmountMap(agents[0], coins[0], powers[0], 0)
+    stake_hub.setCandidateAmountMap(agents[1], coins[1], powers[1], 0)
+    _, _, account_rewards, _, collateral_state = parse_delegation([{
+        "address": agents[0],
+        "active": True,
+        "coin": [set_delegate(accounts[0], coins[0])],
+        "power": [set_delegate(accounts[0], powers[0])],
+        "btc": []
+    }, {
+        "address": agents[1],
+        "active": True,
+        "coin": [set_delegate(accounts[0], coins[1])],
+        "power": [set_delegate(accounts[0], powers[1])],
+        "btc": []
+    }], 0)
+    stake_hub.setStateMapDiscount(pledge_agent.address, 0, 1, collateral_state['coin'])
+    round_tag = candidate_hub.roundTag()
+    tx = validator_set.addRoundRewardMock(agents[:2], rewards, round_tag)
+    factor = 500
+    reward0 = rewards[0] * coins[0] / (coins[0] + powers[0] * factor)
+    reward1 = rewards[1] * coins[1] / (coins[1] + powers[1] * factor)
+    validator_coin_reward0 = reward0 * collateral_state['coin'] // DENOMINATOR
+    validator_coin_reward1 = reward1 * collateral_state['coin'] // DENOMINATOR
+    validator_power_reward0 = rewards[0] * (powers[0] * factor) // (coins[0] + powers[0] * factor)
+    validator_power_reward1 = rewards[1] * (powers[1] * factor) // (coins[1] + powers[1] * factor)
+    except_reward = [validator_coin_reward0, validator_coin_reward1, validator_power_reward0, validator_power_reward1]
+    agents = [accounts[1], accounts[2], accounts[1], accounts[2]]
+    for i in range(len(except_reward)):
         expect_event(tx, "roundReward", {
-            "agent": agents[i],
-            "coinReward": expect_coin_rewards[i],
-            "powerReward": expect_power_rewards[i]
+            "validator": agents[i],
+            "amounted": except_reward[i]
         }, idx=i)
 
 
-def test_add_round_reward_success_with_no_agent(pledge_agent, validator_set):
+def test_add_round_reward_success_with_no_agent(pledge_agent, validator_set, candidate_hub, stake_hub, btc_agent):
     agents = accounts[1:4]
     rewards = (1e7, 1e8, 1e8)
-    total_coin = 1e7
-    btc_coin = 1e7
-    total_power = 10
     __candidate_register(agents[0])
     __candidate_register(agents[1])
-    pledge_agent.setRoundState(total_power, total_coin, btc_coin)
-    tx = validator_set.addRoundRewardMock(agents, rewards)
+    round_tag = candidate_hub.roundTag()
+    tx = validator_set.addRoundRewardMock(agents, rewards, round_tag)
     expect_event_not_emitted(tx, "roundReward")
+
+
+def test_add_round_reward_success(pledge_agent, validator_set, candidate_hub, stake_hub, btc_agent, btc_lst_stake,
+                                  hash_power_agent):
+    agents = accounts[1:4]
+    rewards = (1e8, 1e8, 1e8)
+    total_coin = 250
+    btc_coin = 10
+    total_power = 5
+    __candidate_register(agents[0])
+    __candidate_register(agents[1])
+    stake_hub.setCandidateAmountMap(agents[0], total_coin, total_power, btc_coin * 2)
+    stake_hub.setCandidateAmountMap(agents[1], total_coin, total_power, btc_coin)
+    btc_agent.setCandidateMap(agents[0], btc_coin * 2, 0)
+    btc_agent.setCandidateMap(agents[1], btc_coin, 0)
+    _, _, account_rewards, collateral_reward, collateral_state = parse_delegation([{
+        "address": agents[0],
+        "active": True,
+        "coin": [set_delegate(accounts[0], total_coin)],
+        "power": [set_delegate(accounts[0], total_power)],
+        "btc": [set_delegate(accounts[0], btc_coin * 2)]
+    }, {
+        "address": agents[1],
+        "active": True,
+        "coin": [set_delegate(accounts[0], total_coin)],
+        "power": [set_delegate(accounts[0], total_power)],
+        "btc": [set_delegate(accounts[0], btc_coin)]
+    }], 1e8)
+    stake_hub.setStateMapDiscount(hash_power_agent.address, 0, 500, collateral_state['power'])
+    round_tag = candidate_hub.roundTag()
+    tx = validator_set.addRoundRewardMock(agents, rewards, round_tag)
+    for index, t in enumerate(tx.events['roundReward']):
+        # core
+        if t['name'] == Web3.keccak(text='CORE').hex():
+            assert t['amounted'] == collateral_reward['coin'][t['validator']]
+        # power
+        elif t['name'] == Web3.keccak(text='HASHPOWER').hex():
+            assert t['amounted'] == collateral_reward['power'][t['validator']]
+        # btc
+        elif t['name'] == Web3.keccak(text='BTC').hex():
+            assert t['amounted'] == collateral_reward['btc'][t['validator']]
 
 
 def test_add_round_reward_failed_with_invalid_argument(validator_set):
     agents = accounts[1:4]
     rewards = [1e7, 1e8]
+    round_tag = get_current_round()
     with brownie.reverts("the length of agentList and rewardList should be equal"):
-        validator_set.addRoundRewardMock(agents, rewards)
+        validator_set.addRoundRewardMock(agents, rewards, round_tag)
 
 
-def test_get_score_success(candidate_hub, validator_set):
-    agents = accounts[1:6]
-    delegators = accounts[6:11]
-
+def test_get_coin_score_success(candidate_hub, validator_set, stake_hub, btc_light_client, pledge_agent,
+                                hash_power_agent, btc_agent):
+    operators = []
+    consensuses = []
+    for operator in accounts[6:11]:
+        operators.append(operator)
+        consensuses.append(register_candidate(operator=operator))
     for i in range(3):
-        __candidate_register(agents[i])
-        __delegate_coin_success(agents[i], delegators[i], 0, required_coin_deposit + i)
-
+        __delegate_coin_success(operators[i], accounts[i], 0, required_coin_deposit + i)
     turn_round()
-    for i in range(3):
-        validator_set.deposit(agents[i], {'value': TX_FEE})
-
+    turn_round(consensuses, tx_fee=TX_FEE)
     for i in range(3, 5):
-        __candidate_register(agents[i])
-        __delegate_coin_success(agents[i], delegators[i], 0, required_coin_deposit + i)
-
-    powers = [0, 0, 0, 3, 5]
-    total_coin = required_coin_deposit * 5 + 1 + 10
-    total_power = POWER_BLOCK_FACTOR * (3 + 5) + 1
-    candidate_hub.getScoreMock(agents, powers,0)
+        __delegate_coin_success(operators[i], accounts[i], 0, required_coin_deposit + i)
+    candidate_hub.getScoreMock(operators, get_current_round())
     scores = candidate_hub.getScores()
+    coin_hard_cap = 6000
+    hard_cap_sum = 12000
+    discount = coin_hard_cap * sum(scores) * DENOMINATOR // (hard_cap_sum * sum(scores))
     assert len(scores) == 5
     for i in range(5):
-        expected_score = (required_coin_deposit + i) * total_power + total_coin * powers[
-            i] * POWER_BLOCK_FACTOR * POWER_FACTOR // 10000
+        expected_score = required_coin_deposit + i
         assert expected_score == scores[i]
+        assert stake_hub.candidateScoreMap(operators[i]) == scores[i]
+    assert stake_hub.stateMap(pledge_agent.address)['discount'] == discount
 
 
-def test_collect_coin_reward_success(validator_set, pledge_agent):
-    agent = accounts[1]
-    consensus_address = __candidate_register(agent)
-    delegator = accounts[2]
+def test_get_power_score_success(candidate_hub, validator_set, stake_hub, btc_light_client, hash_power_agent):
+    operators = []
+    consensuses = []
+    for operator in accounts[6:11]:
+        operators.append(operator)
+        consensuses.append(register_candidate(operator=operator))
+    for i in range(5):
+        btc_light_client.setMiners(get_current_round() - 5, operators[i], [accounts[i]])
     turn_round()
+    turn_round(consensuses, tx_fee=TX_FEE)
+    power = 500
+    candidate_hub.getScoreMock(operators, get_current_round())
+    scores = candidate_hub.getScores()
+    power_hard_cap = 2000
+    hard_cap_sum = 12000
+    discount = power_hard_cap * sum(scores) * DENOMINATOR // (hard_cap_sum * power * 5)
+    assert len(scores) == 5
+    for i in range(5):
+        expected_score = power
+        assert expected_score == scores[i]
+        assert stake_hub.candidateScoreMap(operators[i]) == scores[i]
+    assert stake_hub.stateMap(hash_power_agent.address)['discount'] == discount
 
-    validator_set.deposit(consensus_address, {'value': TX_FEE})
+
+def test_get_coin_and_power_score_success(candidate_hub, validator_set, stake_hub, btc_light_client, hash_power_agent):
+    operators = []
+    consensuses = []
+    for operator in accounts[6:11]:
+        operators.append(operator)
+        consensuses.append(register_candidate(operator=operator))
+    for i in range(3):
+        __delegate_coin_success(operators[i], accounts[i], 0, required_coin_deposit + i)
+    for i in range(5):
+        btc_light_client.setMiners(get_current_round() - 5, operators[i], [accounts[i]])
     turn_round()
+    turn_round(consensuses, tx_fee=TX_FEE)
+    for i in range(3, 5):
+        __delegate_coin_success(operators[i], accounts[i], 0, required_coin_deposit + i)
+    power = 500
+    candidate_hub.getScoreMock(operators, get_current_round())
+    scores = candidate_hub.getScores()
+    power_hard_cap = 2000
+    hard_cap_sum = 12000
+    discount = power_hard_cap * sum(scores) * DENOMINATOR // (hard_cap_sum * power * 5)
+    assert len(scores) == 5
+    for i in range(5):
+        expected_score = (required_coin_deposit + i) + power
+        assert expected_score == scores[i]
+        assert stake_hub.candidateScoreMap(operators[i]) == scores[i]
+    assert stake_hub.stateMap(hash_power_agent.address)['discount'] == discount
 
-    __delegate_coin_success(agent, delegator, 0, required_coin_deposit)
-    for _ in range(5):
-        validator_set.deposit(consensus_address, {'value': TX_FEE})
-        turn_round()
 
+def test_collect_coin_reward_success(validator_set, pledge_agent, stake_hub):
+    operators = []
+    consensuses = []
+    for operator in accounts[6:11]:
+        operators.append(operator)
+        consensuses.append(register_candidate(operator=operator))
+    turn_round()
+    __delegate_coin_success(operators[0], accounts[0], 0, required_coin_deposit)
+    # turn_round(consensuses, round_count=2)
+    validator_set.deposit(consensuses[0], {'value': TX_FEE})
+    print('get_current_round', get_current_round())
+    turn_round()
+    validator_set.deposit(consensuses[0], {'value': TX_FEE})
+    turn_round()
+    # validator_set.deposit(consensuses[0], {'value': TX_FEE})
+    # tx = stake_hub.claimReward()
     expect_reward = actual_block_reward * 90 // 100 * 4
-    delegator_tracker = get_tracker(delegator)
-    result = pledge_agent.getDelegator(agent, delegator).dict()
+    delegator_tracker = get_tracker(accounts[0])
+    result = pledge_agent.getDelegator(operators[0], accounts[0]).dict()
     round_tag = result['changeRound']
-    pledge_agent.collectCoinRewardMock(agent, delegator, 10, {'from': agent})
+    tx = pledge_agent.collectCoinRewardMock(operators[0], accounts[0], 10, {'from': accounts[0]})
     reward_amount_M = pledge_agent.rewardAmountM()
-    result = pledge_agent.getDelegator(agent, delegator).dict()
-
+    result = pledge_agent.getDelegator(operators[0], accounts[0]).dict()
     assert expect_reward == reward_amount_M
 
     assert delegator_tracker.delta() == 0

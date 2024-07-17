@@ -12,8 +12,8 @@ contract PledgeAgentMock is PledgeAgent {
         roundTag = 1;
     }
 
-    function setRoundState(uint256 power, uint256 coin, uint256 btc) external {
-        stateMap[roundTag] = RoundState(power + 1, coin + 1, powerFactor, btc, btcFactor);
+    function setRoundState(address agent, uint256 power, uint256 coin, uint256 btc) external {
+//        stateMap[agent] = RoundState(power + 1, coin + 1, powerFactor, btc, btcFactor);
     }
 
     function setAgentRound(address agent, uint256 power, uint256 coin) external {
@@ -27,13 +27,6 @@ contract PledgeAgentMock is PledgeAgent {
         uint256 power,
         uint256 round) external {}
 
-    function setAgentValidator(address agent, uint256 power, uint256 coin) external {
-        RoundState memory rs = stateMap[roundTag];
-        uint256 totalScore = coin * rs.power + power * rs.coin * rs.powerFactor / 10000;
-        agentsMap[agent].rewardSet.push(Reward(0, 0, totalScore, coin, roundTag));
-        agentsMap[agent].power = power;
-        agentsMap[agent].coin = coin;
-    }
 
     function setCoinDelegator(address agent) external {}
 
@@ -54,7 +47,6 @@ contract PledgeAgentMock is PledgeAgent {
     }
 
 
-
     function getDebtDepositMap(uint256 rRound, address delegator) external view returns (uint) {
         uint256 debt = debtDepositMap[rRound][delegator];
         return debt;
@@ -68,12 +60,12 @@ contract PledgeAgentMock is PledgeAgent {
         btcFactor = newBtcFactor;
     }
 
-//    function collectCoinRewardMock(address agent, address delegator,
-//        uint256 roundLimit) external {
-//        Agent storage a = agentsMap[agent];
-//        CoinDelegator storage d = a.cDelegatorMap[delegator];
-//        rewardAmountM = collectCoinReward(a, d, roundLimit);
-//    }
+    function collectCoinRewardMock(address agent, address delegator,
+        int256 roundLimit) external {
+        Agent storage a = agentsMap[agent];
+        CoinDelegator storage d = a.cDelegatorMap[delegator];
+        (uint256 historyAmountM, uint256 rewardAmountM) = collectCoinReward(a, d, roundLimit);
+    }
 
     function setRoundTag(uint value) external {
         roundTag = value;

@@ -1,13 +1,15 @@
 pragma solidity 0.8.4;
 
 contract PledgeAgentProxy {
-    address pledgeAgent;
+    address public pledgeAgent;
+    address public stakeHub;
     bool public  receiveState;
 
     event delegate(bool success);
-    event claim(uint256 reward, bool allClaimed);
-    constructor(address pledgeAgentAddress) public {
+    event claim(uint256 reward, bool allClaimed, address delegator);
+    constructor(address pledgeAgentAddress, address stakeHubAddress) public {
         pledgeAgent = pledgeAgentAddress;
+        stakeHub = stakeHubAddress;
     }
 
     function delegateCoin(address agent) external payable {
@@ -16,21 +18,21 @@ contract PledgeAgentProxy {
         emit delegate(success);
     }
 
-    function claimReward(address[] calldata agentList) external returns(uint256) {
-        bytes4 funcSelector = bytes4(keccak256("claimReward(address[])"));
-        bytes memory payload = abi.encodeWithSignature("claimReward(address[])", agentList);
-        (bool success, bytes memory returnData) = pledgeAgent.call(payload);
+    function claimReward() external returns (uint256) {
+        bytes memory payload = abi.encodeWithSignature("claimReward()");
+        (bool success, bytes memory returnData) = stakeHub.call(payload);
         require(success, "call to claimReward failed");
-        (uint256 rewardSum, bool allClaimed) = abi.decode(returnData, (uint256, bool));
-        emit claim(rewardSum, allClaimed);
+        (uint256 rewardSum) = abi.decode(returnData, (uint256));
+        emit claim(rewardSum, success, msg.sender);
         return rewardSum;
     }
 
     function setReceiveState(bool state) external {
         receiveState = state;
     }
+
     receive() external payable {
-        if (receiveState == false){
+        if (receiveState == false) {
             revert("refused");
         }
     }

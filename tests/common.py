@@ -75,3 +75,9 @@ def get_current_round():
 def set_last_round_tag(rount_tag):
     CandidateHubMock[0].setRoundTag(rount_tag)
     PledgeAgentMock[0].setRoundTag(rount_tag)
+
+
+def stake_hub_claim_reward(account):
+    tx = StakeHubMock[0].claimReward({'from': account})
+    print(f'{account}:stake_hub_claim_reward>>>>>>>>>>>>{tx.events}',)
+    return tx

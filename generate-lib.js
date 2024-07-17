@@ -21,6 +21,7 @@ program.option("--mock <mock>",
     "if use mock",
     false);
 program.option("-c, --chainid <chainid>", "chain id", "1116")
+program.option("-d, --coreDecimal <coreDecimal>", "coreDecimal id", "100")
 
 
 program.parse(process.argv);
@@ -28,6 +29,7 @@ program.parse(process.argv);
 const data = {
   chainid: program.chainid,
   initRoundInterval: init_cycle.roundInterval,
+  coreDecimal: program.coreDecimal
 };
 
 const templateString = fs.readFileSync(program.template).toString();

@@ -31,7 +31,7 @@ contract ValidatorSetMock is ValidatorSet {
         for (uint256 i = 0; i < rewardList.length; i++) {
         	rewardSum += rewardList[i];
         }
-        IStakeHub(PLEDGE_AGENT_ADDR).addRoundReward{ value: rewardSum }(agentList, rewardList,roundTag);
+        IStakeHub(STAKE_HUB_ADDR).addRoundReward{ value: rewardSum }(agentList, rewardList,roundTag);
     }
 
     function jailValidator(address operateAddress, uint256 round, uint256 fine) external {

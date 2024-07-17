@@ -110,9 +110,10 @@ def foundation(accounts):
 
 
 @pytest.fixture(scope="module")
-def stake_hub(accounts, validator_set, pledge_agent, hash_power_agent, btc_agent):
+def stake_hub(accounts, validator_set, pledge_agent, hash_power_agent, btc_agent,btc_stake,btc_lst_stake):
     c = accounts[0].deploy(StakeHubMock)
     c.updateContractStakeHub(validator_set, pledge_agent, hash_power_agent, btc_agent)
+    c.setLiabilityOperators(btc_stake,btc_lst_stake)
     c.init()
     if is_development:
         c.developmentInit()
@@ -129,6 +130,8 @@ def btc_stake(accounts):
 def btc_agent(accounts,btc_stake,btc_lst_stake):
     c = accounts[0].deploy(BitcoinAgentMock)
     c.init()
+    if is_development:
+        c.developmentInit()
     c.setBtcStake(btc_stake,btc_lst_stake)
 
     return c
@@ -136,7 +139,7 @@ def btc_agent(accounts,btc_stake,btc_lst_stake):
 
 @pytest.fixture(scope="module")
 def btc_lst_stake(accounts, candidate_hub):
-    c = accounts[0].deploy(BitcoinLSTStake)
+    c = accounts[0].deploy(BitcoinLSTStakeMock)
     c.updateContractHub(candidate_hub.address)
     c.init()
     return c

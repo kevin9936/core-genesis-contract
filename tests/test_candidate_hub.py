@@ -497,8 +497,8 @@ def test_turn_round(candidate_hub, pledge_agent, validator_set, required_margin)
                 pledge_agent.undelegateCoin(agent, {'from': agent})
 
 
-def test_unregister_reentry(candidate_hub, required_margin):
-    candidate_hub_proxy = UnRegisterReentry.deploy(candidate_hub.address, {'from': accounts[0]})
+def test_unregister_reentry(candidate_hub, required_margin,stake_hub):
+    candidate_hub_proxy = UnRegisterReentry.deploy(candidate_hub.address,stake_hub, {'from': accounts[0]})
     register_candidate(operator=accounts[1])
     candidate_hub_proxy.register(random_address(), candidate_hub_proxy.address, 500, {'value': required_margin})
     tx = candidate_hub_proxy.unregister()

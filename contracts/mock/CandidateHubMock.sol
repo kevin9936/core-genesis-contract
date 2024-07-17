@@ -82,7 +82,7 @@ contract CandidateHubMock is CandidateHub {
   }
 
  function getScoreMock(address[] memory candidates, uint256 round) external {
-    scores = IStakeHub(PLEDGE_AGENT_ADDR).getHybridScore(
+    scores = IStakeHub(STAKE_HUB_ADDR).getHybridScore(
       candidates,
       round
     );
