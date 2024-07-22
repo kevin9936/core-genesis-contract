@@ -102,6 +102,12 @@ def burn(accounts):
     c.init()
     return c
 
+@pytest.fixture(scope="module")
+def core_agent(accounts):
+    c = accounts[0].deploy(CoreAgent)
+    c.init()
+    return c
+
 
 @pytest.fixture(scope="module")
 def foundation(accounts):
@@ -110,11 +116,20 @@ def foundation(accounts):
 
 
 @pytest.fixture(scope="module")
-def stake_hub(accounts, validator_set, pledge_agent, hash_power_agent, btc_agent,btc_stake,btc_lst_stake):
+def stake_hub(accounts, validator_set, pledge_agent, hash_power_agent, btc_agent,btc_stake,btc_lst_stake,candidate_hub,core_agent):
+    aaaa = candidate_hub.getCandidates()
+    print('aaaa',aaaa)
     c = accounts[0].deploy(StakeHubMock)
-    c.updateContractStakeHub(validator_set, pledge_agent, hash_power_agent, btc_agent)
+    print('0x8093Bf791e937997B70B6cC05641cE1b94DAC4F7',core_agent)
+    print('0x8093Bf791e937997B70B6cC05641cE1b94DAC4F7',btc_agent)
+    core_agent.updateContractStakeHub(validator_set,core_agent, pledge_agent, hash_power_agent, btc_agent,candidate_hub,c)
+    btc_agent.updateContractStakeHub(validator_set,core_agent, pledge_agent, hash_power_agent, btc_agent,candidate_hub,c)
+    c.updateContractStakeHub(validator_set,core_agent, pledge_agent, hash_power_agent, btc_agent,candidate_hub,c)
     c.setLiabilityOperators(btc_stake,btc_lst_stake)
-    c.init()
+    print('STAKE_HUB_ADDR',c.STAKE_HUB_ADDR())
+    tx = c.init()
+    # print(c.getAssets())
+    print('.event',tx.events)
     if is_development:
         c.developmentInit()
     return c
@@ -144,13 +159,6 @@ def btc_lst_stake(accounts, candidate_hub):
     c.init()
     return c
 
-
-@pytest.fixture(scope="module")
-def core_agent(accounts, pledge_agent):
-    """
-    Use the PledgeAgent contract address
-    """
-    return pledge_agent
 
 
 @pytest.fixture(scope="module")

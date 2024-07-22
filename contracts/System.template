@@ -55,15 +55,18 @@ contract System {
   }
   function updateContractStakeHub(
     address validatorAddr,
+    address coreAgentAddr,
     address pledgeAgentAddr,
     address hashAgentAddr,
-    address btcAgentAddr
+    address btcAgentAddr,
+    address candidateAddr
   ) external {
     VALIDATOR_CONTRACT_ADDR = validatorAddr;
     CORE_AGENT_ADDR = pledgeAgentAddr;
     PLEDGE_AGENT_ADDR = pledgeAgentAddr;
     HASH_AGENT_ADDR = hashAgentAddr;
     BTC_AGENT_ADDR = btcAgentAddr;
+    CANDIDATE_HUB_ADDR = candidateAddr;
   }
   function updateStakeContractAddr(
     address btcHubAddr,

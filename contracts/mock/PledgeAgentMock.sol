@@ -64,7 +64,7 @@ contract PledgeAgentMock is PledgeAgent {
         int256 roundLimit) external {
         Agent storage a = agentsMap[agent];
         CoinDelegator storage d = a.cDelegatorMap[delegator];
-        (uint256 historyAmountM, uint256 rewardAmountM) = collectCoinReward(a, d, roundLimit);
+        (uint256 rewardAmountM) = collectCoinReward(a, d, roundLimit);
     }
 
     function setRoundTag(uint value) external {

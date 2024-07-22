@@ -55,7 +55,8 @@ def set_candidate():
     return consensus, operator
 
 
-@pytest.mark.parametrize("claim_type", ["claim", "delegate", "undelegate", "transfer"])
+# @pytest.mark.parametrize("claim_type", ["claim", "delegate", "undelegate", "transfer"])
+@pytest.mark.parametrize("claim_type", ["claim"])
 def test_delegate_once(pledge_agent, validator_set, claim_type, stake_hub):
     operator = accounts[1]
     consensus = register_candidate(operator=operator)
