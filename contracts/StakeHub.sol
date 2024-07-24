@@ -18,10 +18,10 @@ import "./lib/SatoshiPlusHelper.sol";
 contract StakeHub is IStakeHub, System, IParamSubscriber {
   using BytesLib for *;
 
-  uint256 public constant HASH_UNIT_CONVERSION = 1e18;
-  uint256 public constant INIT_HASH_FACTOR = 1e6;
-  uint256 public constant BTC_UNIT_CONVERSION = 1e10;
-  uint256 public constant INIT_BTC_FACTOR = 1e4;
+  uint256 public constant HASH_UNIT_CONVERSION = 10;
+  uint256 public constant INIT_HASH_FACTOR = 50;
+  uint256 public constant BTC_UNIT_CONVERSION = 5;
+  uint256 public constant INIT_BTC_FACTOR = 2;
 
   uint256 public constant MASK_STAKE_CORE_MASK = 1;
   uint256 public constant MASK_STAKE_HASH_MASK = 2;
