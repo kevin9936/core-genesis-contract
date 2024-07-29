@@ -54,7 +54,7 @@ def test_update_param_failed_with_unknown_key(gov_hub):
 def test_update_param_failed_about_key_proposalMaxOperations_with_invalid_length(gov_hub):
     fake_gov()
     error_msg = encode_args_with_signature('MismatchParamLength(string)', ['proposalMaxOperations'])
-    with brownie.reverts(f"typed error: {error_msg}"):
+    with brownie.reverts(f"{error_msg}"):
         gov_hub.updateParam("proposalMaxOperations", "0x00000000000000000000000000000000000001")
 
 
@@ -64,7 +64,7 @@ def test_update_param_failed_about_key_proposalMaxOperations_out_of_range(gov_hu
         "OutOfBounds(string,uint256,uint256,uint256)",
         ["proposalMaxOperations", 0, 1, Web3.to_int(hexstr=constants.MAX_INT)]
     )
-    with brownie.reverts(f"typed error: {error_msg}"):
+    with brownie.reverts(f"{error_msg}"):
         gov_hub.updateParam("proposalMaxOperations", "0x0000000000000000000000000000000000000000000000000000000000000000")
 
 
@@ -81,7 +81,7 @@ def test_update_param_success_about_key_proposalMaxOperations(gov_hub):
 def test_update_param_failed_about_key_votingPeriod_with_invalid_length(gov_hub):
     fake_gov()
     error_msg = encode_args_with_signature('MismatchParamLength(string)', ['votingPeriod'])
-    with brownie.reverts(f"typed error: {error_msg}"):
+    with brownie.reverts(f"{error_msg}"):
         gov_hub.updateParam("votingPeriod", "0x00000000000000000000000000000000000001")
 
 
@@ -92,7 +92,7 @@ def test_update_param_failed_about_key_votingPeriod_out_of_range(gov_hub):
         "OutOfBounds(string,uint256,uint256,uint256)",
         ["votingPeriod", Web3.to_int(hexstr=value), 28800, Web3.to_int(hexstr=constants.MAX_INT)]
     )
-    with brownie.reverts(f"typed error: {error_msg}"):
+    with brownie.reverts(f"{error_msg}"):
         gov_hub.updateParam('votingPeriod', value)
 
 

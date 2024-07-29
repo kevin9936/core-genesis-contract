@@ -89,9 +89,18 @@ def padding_left(hex_str, length):
 
 
 def encode_args_with_signature(function_signature: str, args: list) -> str:
-    selector = Web3.keccak(text=function_signature)[:4].hex()
-    args_in_function_signature = function_signature[function_signature.index('(') + 1:-1].replace(' ', '').split(',')
-    return selector + encode(args_in_function_signature, args).hex()
+    selector = function_signature.split('(')[0]
+    types = function_signature.split('(')[-1].split(',')
+    sr = ', '
+    new_args = []
+    for index, a in enumerate(args):
+        if types[index].replace(')', '') == 'address':
+            new_args.append(str(a).lower())
+        else:
+            new_args.append(str(a))
+    error1 = sr.join(new_args)
+    error = f"{selector}: {error1}"
+    return error
 
 
 def expect_query(query_data, expect: dict):

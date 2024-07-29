@@ -74,6 +74,7 @@ def get_current_round():
 
 
 def set_last_round_tag(rount_tag):
+    print('set_last_round_tag>>>>>>>>>>>>',rount_tag)
     CandidateHubMock[0].setRoundTag(rount_tag)
     BitcoinStakeMock[0].setRoundTag(rount_tag)
 

@@ -7,7 +7,7 @@ contract BitcoinStakeMock is BitcoinStake {
     uint256 public minBtcLockRound;
 
     function developmentInit() external {
-        minBtcLockRound = 3;
+        minBtcLockRound = 1;
     }
 
     function getDelegatorBtcMap(address delegator) external view returns (bytes32[] memory) {

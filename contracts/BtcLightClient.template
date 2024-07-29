@@ -295,7 +295,7 @@ contract BtcLightClient is ILightClient, System, IParamSubscriber{
     bytes32 blockHash = height2HashMap[blockHeight];
     {% if mock %}
     if (checkResult == true){
-      return (checkResult,0);
+      return (checkResult,timesTamp);
     }
     {% endif %}
     if (blockHeight + confirmBlock > getChainTipHeight() || txid == bytes32(0) || blockHash == bytes32(0)) {
@@ -687,6 +687,7 @@ contract BtcLightClient is ILightClient, System, IParamSubscriber{
   }
   {% if mock %}
   bool public checkResult;
+  uint64 public timesTamp;
   {% endif %}
   
 }

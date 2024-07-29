@@ -6,6 +6,7 @@ from brownie.network import gas_price
 from web3 import Web3
 from brownie import accounts, TransferBtcReentry, ClaimBtcRewardReentry
 from .btc_block_data import *
+from .calc_reward import set_delegate, parse_delegation
 from .common import register_candidate, turn_round, get_current_round, set_last_round_tag, stake_hub_claim_reward
 from .utils import *
 
@@ -55,7 +56,7 @@ def set_block_reward(validator_set, candidate_hub, btc_light_client, btc_stake, 
     BTC_AMOUNT = BTC_VALUE * btcFactor
     MIN_BTC_LOCK_ROUND = btc_stake.minBtcLockRound()
     candidate_hub.setControlRoundTimeTag(True)
-    btc_light_client.setCheckResult(True)
+    btc_light_client.setCheckResult(True, 1723046400)
     total_reward = BLOCK_REWARD // 2
     POWER_REWARD = total_reward * power_hardcap // sum_hardcap
     # BTC_AMOUNT =2000
@@ -241,6 +242,23 @@ def __check_btc_tx_map_info(tx_id, result: dict):
         assert data[i] == result[i]
 
 
+def __calculate_btc_only_rewards(total_btc, claim_btc=None, validator_score=None, btc_factor=10, total_reward=None):
+    DENOMINATOR = 10000
+    collateral_state_btc = 3333
+    if total_reward is None:
+        total_reward = BLOCK_REWARD // 2
+    if validator_score is None:
+        validator_score = total_btc
+    if claim_btc is None:
+        claim_btc = total_btc
+    reward = total_reward * (total_btc * btc_factor) // (
+            validator_score * btc_factor) * collateral_state_btc // DENOMINATOR
+    reward1 = reward * BTC_DECIMAL // total_btc
+    reward2 = reward1 * claim_btc // BTC_DECIMAL
+    print('__calculate_btc_only_rewards>>>>', reward2)
+    return reward2
+
+
 def test_delegate_btc_with_lock_script_in_tx(btc_stake, set_candidate):
     btc_amount = BTC_VALUE * 3 // 2
     lock_script = "0480db8767b17576a914574fdd26858c28ede5225a809f747c01fcc1f92a88ac"
@@ -383,28 +401,37 @@ def test_delegate_btc_with_witness_transaction_hash_script(btc_stake, set_candid
     tx = btc_stake.delegate(btc_tx, 0, [], 0, lock_script)
     turn_round()
     expect_event(tx, 'delegatedBtc', {
-        'outputIndex': 0,
-        'script': '0x' + lock_script,
-        'blockHeight': 0,
         'txid': tx_id,
-    })
-    agent_map = btc_stake.agentsMap(operators[0])
-    btc_delegator = btc_stake.btcReceiptMap(tx_id)
-    expect_query(btc_delegator, {
-        'agent': operators[0],
+        'candidate': operators[0],
         'delegator': accounts[0],
-        'value': btc_amount,
-        'endRound': lock_time // ROUND_INTERVAL,
-        'rewardIndex': 0,
-        'feeReceiver': accounts[0],
-        'fee': FEE
+        'script': '0x' + lock_script,
+        'amount': btc_amount
+    })
+    __check_btc_tx_map_info(tx_id, {
+        'amount': btc_amount,
+        'outputIndex': 0,
+        'lockTime': lock_time,
+        'usedHeight': 0,
+    })
+    __check_receipt_map_info(tx_id, {
+        'candidate': operators[0],
+        'delegator': accounts[0],
+        'round': get_current_round() - 1
     })
     turn_round(consensuses)
     tracker = get_tracker(accounts[0])
-    tx = btc_stake.claimBtcReward([tx_id])
+    tx = stake_hub_claim_reward(accounts[0])
     assert "claimedReward" in tx.events
-    assert agent_map['totalBtc'] == btc_amount
-    assert tracker.delta() == BLOCK_REWARD // 2
+    delegate_info = [{
+        "address": "n0",
+        "active": True,
+        "coin": [],
+        "power": [],
+        "btc": [set_delegate(accounts[0], btc_amount)],
+    }]
+    _, _, account_rewards, _, _ = parse_delegation(delegate_info, BLOCK_REWARD // 2)
+
+    assert tracker.delta() == account_rewards[accounts[0]]
 
 
 def test_delegate_btc_with_witness_transaction_key_script(btc_stake, set_candidate):
@@ -421,27 +448,26 @@ def test_delegate_btc_with_witness_transaction_key_script(btc_stake, set_candida
     tx = btc_stake.delegate(btc_tx, 0, [], 0, lock_script)
     turn_round()
     expect_event(tx, 'delegatedBtc', {
-        'outputIndex': 0,
-        'script': '0x' + lock_script,
-        'blockHeight': 0,
         'txid': tx_id,
-    })
-    btc_delegator = btc_stake.btcReceiptMap(tx_id)
-    expect_query(btc_delegator, {
-        'agent': operators[0],
+        'candidate': operators[0],
         'delegator': accounts[0],
-        'value': btc_amount,
-        'endRound': lock_time // ROUND_INTERVAL,
-        'rewardIndex': 0,
-        'feeReceiver': accounts[0],
-        'fee': FEE
+        'script': '0x' + lock_script,
+        'amount': btc_amount
     })
-
+    __check_candidate_map_info(operators[0], {
+        'stakedAmount': btc_amount,
+        'realtimeAmount': btc_amount
+    })
+    __check_receipt_map_info(tx_id, {
+        'candidate': operators[0],
+        'delegator': accounts[0],
+        'round': get_current_round() - 1
+    })
     turn_round(consensuses)
     tracker = get_tracker(accounts[0])
-    tx = btc_stake.claimBtcReward([tx_id])
+    tx = stake_hub_claim_reward(accounts[0])
     assert "claimedReward" in tx.events
-    assert tracker.delta() == BLOCK_REWARD // 2
+    assert tracker.delta() == __calculate_btc_only_rewards(btc_amount)
 
 
 def test_invalid_lock_script(btc_stake, delegate_btc_valid_tx):
@@ -458,43 +484,45 @@ def test_insufficient_lock_round_revert(btc_stake, set_candidate, delegate_btc_v
     end_round = lock_time // ROUND_INTERVAL
     set_last_round_tag(end_round)
     lock_script, btc_tx, tx_id_list = delegate_btc_valid_tx
-    with brownie.reverts("insufficient lock round"):
+    with brownie.reverts("insufficient locking rounds"):
         btc_stake.delegate(btc_tx, end_round, [], 0, lock_script)
     set_last_round_tag(end_round - MIN_BTC_LOCK_ROUND)
-    with brownie.reverts("insufficient lock round"):
+    with brownie.reverts("insufficient locking rounds"):
         btc_stake.delegate(btc_tx, end_round, [], 0, lock_script)
     set_last_round_tag(end_round - MIN_BTC_LOCK_ROUND - 1)
     tx = btc_stake.delegate(btc_tx, end_round, [], 0, lock_script)
     assert "delegatedBtc" in tx.events
 
 
-def test_revert_on_duplicate_btc_tx_delegate(btc_stake, set_candidate, delegate_btc_valid_tx):
+def test_revert_on_duplicate_btc_tx_delegate(btc_stake, set_candidate, delegate_btc_valid_tx, btc_light_client):
     lock_script, btc_tx, tx_id_list = delegate_btc_valid_tx
     btc_stake.delegate(btc_tx, 0, [], 0, lock_script)
-    with brownie.reverts("btc tx confirmed"):
+    print('ht_client.c', btc_light_client.checkResult())
+    with brownie.reverts("btc tx is already delegated."):
         btc_stake.delegate(btc_tx, 0, [], 0, lock_script)
 
 
 def test_revert_on_unconfirmed_btc_tx_delegate(btc_stake, btc_light_client, set_candidate, delegate_btc_valid_tx):
-    btc_light_client.setCheckResult(False)
+    btc_light_client.setCheckResult(False, 0)
     lock_script, btc_tx, tx_id_list = delegate_btc_valid_tx
-    with brownie.reverts("btc tx not confirmed"):
+    with brownie.reverts("btc tx isn't confirmed"):
         btc_stake.delegate(btc_tx, 0, [], 0, lock_script)
 
 
-def test_revert_on_insufficient_btc_amount_delegate(btc_stake, set_candidate, delegate_btc_valid_tx):
+@pytest.mark.parametrize("btc_value", [1, 2, 100, 800, 1200, 99999999])
+def test_btc_delegate_no_amount_limit(btc_stake, set_candidate, delegate_btc_valid_tx, btc_value):
     operators, consensuses = set_candidate
-    btc_amount = 999
+    btc_amount = btc_value
     lock_script = get_lock_script(lock_time, public_key, lock_script_type)
     btc_tx, tx_id = get_btc_tx(btc_amount, chain_id, operators[0], accounts[0])
-    with brownie.reverts("staked value does not meet requirement"):
-        btc_stake.delegate(btc_tx, 0, [], 0, lock_script)
-    btc_tx, tx_id = get_btc_tx(btc_amount + 1, chain_id, operators[0], accounts[0])
+    # with brownie.reverts("staked value does not meet requirement"):
     tx = btc_stake.delegate(btc_tx, 0, [], 0, lock_script)
     assert "delegatedBtc" in tx.events
-    btc_tx, tx_id = get_btc_tx(btc_amount + 2, chain_id, operators[0], accounts[0])
-    tx = btc_stake.delegate(btc_tx, 0, [], 0, lock_script)
-    assert "delegatedBtc" in tx.events
+    turn_round(consensuses, round_count=2)
+    tracker = get_tracker(accounts[0])
+    tx = stake_hub_claim_reward(accounts[0])
+    assert "claimedReward" in tx.events
+    assert tracker.delta() == __calculate_btc_only_rewards(btc_amount)
 
 
 def test_revert_on_unequal_chain_id(btc_stake, set_candidate):
@@ -509,8 +537,18 @@ def test_revert_on_delegate_inactive_agent(btc_stake, set_candidate):
     lock_script = get_lock_script(lock_time, public_key, lock_script_type)
     btc_tx, _ = get_btc_tx(BTC_VALUE, chain_id, accounts[1], accounts[0], lock_script_type)
     error_msg = encode_args_with_signature('InactiveAgent(address)', [accounts[1].address])
-    with brownie.reverts(f"typed error: {error_msg}"):
+    with brownie.reverts(f"{error_msg}"):
         btc_stake.delegate(btc_tx, 0, [], 0, lock_script)
+
+
+def __create_btc_delegate(candidate, account, amount=None, scrip_type='hash'):
+    lock_script = get_lock_script(lock_time, public_key, scrip_type)
+    if amount is None:
+        amount = BTC_VALUE
+    btc_tx, tx_id = get_btc_tx(amount, chain_id, candidate, account, scrip_type, lock_time)
+    tx_id_list = [tx_id]
+    print(f'__create_btc_delegate>>>>>>>>>>>{lock_script}:{btc_tx}')
+    return lock_script, btc_tx, tx_id_list
 
 
 @pytest.mark.parametrize("output_view", [
@@ -520,14 +558,12 @@ def test_revert_on_delegate_inactive_agent(btc_stake, set_candidate):
     pytest.param("a9149ca26c6aa5a614836d041193ab7df1b6d650791386", id="OP_EQUAL error"),
     pytest.param("a9142d0a37f671e76a72f6dc30669ffaefa6120b798887", id="output error")
 ])
-def test_revert_on_invalid_btc_tx_output(btc_stake, set_candidate, delegate_btc_valid_tx, output_view):
-    lock_script, btc_tx, tx_id_list = delegate_btc_valid_tx
-    btc_tx = delegate_btc_block_data['btc_tx_block_data'] + (
-        f"03b80b00"
-        f"000000000017{output_view}"
-        f"0000000000000000356a335341542b04589fb29aac15b9a4b7f17c3385939b007540f4d7911ef01e76f1aad50144a32680f16aa97a10f8af950180db8767"
-        f"89130000000000001976a914574fdd26858c28ede5225a809f747c01fcc1f92a88ac00000000")
-    with brownie.reverts("staked value does not meet requirement"):
+def test_revert_on_invalid_btc_tx_output(btc_stake, set_candidate, output_view):
+    operators, consensuses = set_candidate
+    lock_script, btc_tx, _ = __create_btc_delegate(operators[0], accounts[0], scrip_type='key')
+    old_script_pub_key = output_script_pub_key['script_public_key']
+    btc_tx = btc_tx.replace(old_script_pub_key, output_view)
+    with brownie.reverts("staked value is zero"):
         btc_stake.delegate(btc_tx, 0, [], 0, lock_script)
 
 
@@ -536,14 +572,15 @@ def test_revert_on_invalid_btc_tx_output(btc_stake, set_candidate, delegate_btc_
     pytest.param("0021aee9137b4958e35085907caaa2d5a9e659b0b1037e06f04280e2e98520f7f16a", id="OP_PUSHBYTES_32 error"),
     pytest.param("0020aee9137b4958e35085907caaa2d5a9e659b0b1036e06f04280e2e98520f7f16c", id="ScriptPubKey error")
 ])
-def test_revert_on_invalid_witness_btc_tx_output(btc_stake, set_candidate, delegate_btc_valid_tx, output_view):
-    lock_script, btc_tx, tx_id_list = delegate_btc_valid_tx
-    btc_tx = delegate_btc_block_data[
-                 'witness_btc_tx_block_data'] + (
-                 f"03b80b00000000000022{output_view}"
-                 f"0000000000000000356a335341542b04589fb29aac15b9a4b7f17c3385939b007540f4d7911ef01e76f1aad50144a32680f16aa97a10f8af950180db8767"
-                 "8e440100000000001976a914574fdd26858c28ede5225a809f747c01fcc1f92a88ac00000000")
-    with brownie.reverts("staked value does not meet requirement"):
+def test_revert_on_invalid_witness_btc_tx_output(btc_stake, set_candidate, output_view):
+    lock_script = '0480db8767b17576a914574fdd26858c28ede5225a809f747c01fcc1f92a88ac'
+    btc_tx = (
+        "0200000001ac5d10fc2c7fde4aa105a740e0ae00dafa66a87f472d0395e71c4d70c4d698ba020000006b4830450221009b0f6b1f2cdb0125f166245064d18f026dc77777a657b83d6f56c79101c269b902206c84550b64755ec2eba1893e81b22a57350b003aa5a3a8915ac7c2eb905a1b7501210223dd766d6e38eaf9c044dcb18d8221fe8c9a5763ca331e93fadc8f55949b8e12"
+        "feffffff03140500"
+        f"000000000022{output_view}"
+        "0000000000000000536a4c505341542b01045c9fb29aac15b9a4b7f17c3385939b007540f4d791ccf7e1DAb7D90A0a91f8B1f6A693Bf0bb3a979a0010480db8767b17576a914574fdd26858c28ede5225a809f747c01fcc1f92a88ac"
+        "bcc00000000000001976a914574fdd26858c28ede5225a809f747c01fcc1f92a88ac00000000")
+    with brownie.reverts("staked value is zero"):
         btc_stake.delegate(btc_tx, 0, [], 0, lock_script)
 
 
@@ -561,10 +598,11 @@ def test_revert_on_insufficient_payload_length(btc_stake, set_candidate, delegat
 
 def test_revert_on_invalid_magic_value(btc_stake, set_candidate, delegate_btc_valid_tx):
     lock_script, _, _ = delegate_btc_valid_tx
+    error_magic = '5341542c'
     btc_tx = delegate_btc_block_data[
                  'btc_tx_block_data'] + (
                  "03d00700000000000017a914c0958c8d9357598c5f7a6eea8a807d81683f9bb687"
-                 "0000000000000000526a4c4f5341542c04589fb29aac15b9a4b7f17c3385939b007540f4d7911ef01e76f1aad50144a32680f16aa97a10f8af95010480db8767b17576a914574fdd26858c28ede5225a809f747c01fcc1f92a88aca443"
+                 f"0000000000000000526a4c4f{error_magic}04589fb29aac15b9a4b7f17c3385939b007540f4d7911ef01e76f1aad50144a32680f16aa97a10f8af95010480db8767b17576a914574fdd26858c28ede5225a809f747c01fcc1f92a88aca443"
                  "0000000000001976a914574fdd26858c28ede5225a809f747c01fcc1f92a88ac00000000")
     with brownie.reverts("wrong magic"):
         btc_stake.delegate(btc_tx, 0, [], 0, lock_script)
@@ -572,75 +610,27 @@ def test_revert_on_invalid_magic_value(btc_stake, set_candidate, delegate_btc_va
 
 def test_claim_rewards_with_max_delegate_btc(btc_stake, set_candidate):
     operators, consensuses = [], []
-    btc_stake.setClaimRoundLimit(10)
     for operator in accounts[10:22]:
         operators.append(operator)
         consensuses.append(register_candidate(operator=operator))
     end_round = lock_time // ROUND_INTERVAL
     set_last_round_tag(end_round - MIN_BTC_LOCK_ROUND - 1)
     lock_script = get_lock_script(lock_time, public_key, lock_script_type)
-    tx_id_list = []
+    sum_reward = 0
     for index, operator in enumerate(operators):
         btc_tx, tx_id = get_btc_tx(BTC_VALUE + index, chain_id, operator, accounts[0], lock_script_type, lock_script)
         btc_stake.delegate(btc_tx, 0, [], 0, lock_script, {'from': accounts[1]})
-        tx_id_list.append(tx_id)
+        amount = BTC_VALUE + index
+        sum_reward += __calculate_btc_only_rewards(amount)
     turn_round()
     turn_round(consensuses, round_count=3)
+
     tracker0 = get_tracker(accounts[0])
     tracker1 = get_tracker(accounts[1])
-    btc_stake.claimBtcReward(tx_id_list)
-    start_index = 0
-    for i in range(3):
-        del tx_id_list[0]
-        start_index += 1
-    assert tracker0.delta() == BLOCK_REWARD // 2 * 10 - FEE * 4
-    assert tracker1.delta() == FEE * 4
-    last_voucher = btc_stake.btcReceiptMap(tx_id_list[0])
-    expect_query(last_voucher, {'agent': operators[start_index], 'rewardIndex': 1, 'value': BTC_VALUE + start_index})
-    btc_stake.claimBtcReward(tx_id_list)
-    for i in range(3):
-        del tx_id_list[0]
-        start_index += 1
-    last_voucher = btc_stake.btcReceiptMap(tx_id_list[0])
-    expect_query(last_voucher, {'agent': operators[start_index], 'rewardIndex': 2, 'value': BTC_VALUE + start_index})
-    btc_stake.claimBtcReward(tx_id_list)
-    for i in range(4):
-        del tx_id_list[0]
-        start_index += 1
-    last_voucher = btc_stake.btcReceiptMap(tx_id_list[0])
-    expect_query(last_voucher, {'agent': operators[start_index], 'rewardIndex': 0, 'value': BTC_VALUE + start_index})
-    btc_stake.claimBtcReward(tx_id_list)
-    assert tracker0.delta() == BLOCK_REWARD // 2 * 26 - FEE * 8
-    assert tracker1.delta() == FEE * 8
+    stake_hub_claim_reward(accounts[0])
+    assert tracker0.delta() == sum_reward
+    assert tracker1.delta() == FEE * 12
 
-
-def test_claim_rewards_with_max_claim_limit(btc_stake, delegate_btc_valid_tx):
-    operators, consensuses = [], []
-    btc_stake.setClaimRoundLimit(2)
-    for operator in accounts[5:9]:
-        operators.append(operator)
-        consensuses.append(register_candidate(operator=operator))
-    end_round = lock_time // ROUND_INTERVAL
-    set_last_round_tag(end_round - MIN_BTC_LOCK_ROUND - 1)
-    lock_script, delegate_btc_tx0, tx_id_list = delegate_btc_valid_tx
-    btc_stake.delegate(delegate_btc_tx0, 0, [], 0, lock_script, {'from': accounts[1]})
-    delegate_btc_tx1, tx_id1 = get_btc_tx(BTC_VALUE + 1, chain_id, operators[1], accounts[0], lock_script_type,
-                                          lock_script)
-    btc_stake.delegate(delegate_btc_tx1, 0, [], 0, lock_script, {'from': accounts[1]})
-    tx_id_list.append(tx_id1)
-    turn_round()
-    turn_round(consensuses, round_count=2)
-    tracker0 = get_tracker(accounts[0])
-    btc_stake.claimBtcReward(tx_id_list)
-    assert btc_stake.btcReceiptMap(tx_id_list[0])['rewardIndex'] == 2
-    assert btc_stake.btcReceiptMap(tx_id1)['rewardIndex'] == 0
-    turn_round(consensuses, round_count=1)
-    btc_stake.setClaimRoundLimit(4)
-    btc_stake.claimBtcReward(tx_id_list)
-    turn_round(consensuses, round_count=1)
-    assert tracker0.delta() == BLOCK_REWARD * 3 - FEE * 2
-    assert btc_stake.btcReceiptMap(tx_id_list[0])['agent'] == ZERO_ADDRESS
-    assert btc_stake.btcReceiptMap(tx_id1)['agent'] == ZERO_ADDRESS
 
 
 def test_collect_porter_fee_success(btc_stake, set_candidate, delegate_btc_valid_tx):
@@ -787,7 +777,7 @@ def test_transfer_to_non_validator_target(btc_stake, set_candidate, delegate_btc
     btc_stake.delegate(delegate_btc_tx0, 0, [], 0, lock_script, {'from': accounts[1]})
     turn_round(consensuses)
     error_msg = encode_args_with_signature("InactiveAgent(address)", [accounts[2].address])
-    with brownie.reverts(f"typed error: {error_msg}"):
+    with brownie.reverts(f"{error_msg}"):
         btc_stake.transferBtc(tx_id_list[0], accounts[2])
     assert btc_stake.btcReceiptMap(tx_id_list[0])['value'] == BTC_VALUE
 
@@ -1554,7 +1544,7 @@ def test_revert_on_incorrect_version(btc_stake, set_candidate):
     set_last_round_tag(end_round - MIN_BTC_LOCK_ROUND - 1)
     lock_script = get_lock_script(lock_time, public_key, lock_script_type)
     btc_tx, tx_id = get_btc_tx(BTC_VALUE, chain_id, operators[0], accounts[0], lock_script_type, version=2)
-    with brownie.reverts("wrong version"):
+    with brownie.reverts("unsupport sat+ version in btc staking"):
         btc_stake.delegate(btc_tx, 0, [], 0, lock_script)
 
 
@@ -1909,30 +1899,38 @@ def test_multiple_btc_stakings_in_vout(btc_stake, set_candidate):
         "3cd200000000000017a914c0958c8d9357598c5f7a6eea8a807d81683f9bb68700000000")
     tx_id = get_transaction_txid(btc_tx)
     tx = btc_stake.delegate(btc_tx, 0, [], 0, lock_script, {"from": accounts[2]})
-    turn_round()
     expect_event(tx, 'delegatedBtc', {
         'txid': tx_id,
-        'script': '0x' + lock_script,
-        'blockHeight': 0,
-        'outputIndex': 2
-    })
-    agent_map = btc_stake.agentsMap(operators[0])
-    expect_query(btc_stake.btcReceiptMap(tx_id), {
-        'agent': operators[0],
+        'candidate': operators[0],
         'delegator': accounts[0],
-        'value': btc_amount,
-        'endRound': lock_time // ROUND_INTERVAL,
-        'rewardIndex': 0,
-        'feeReceiver': accounts[2],
-        'fee': FEE
+        'script': '0x' + lock_script,
+        'amount': btc_amount
+    })
+    __check_candidate_map_info(operators[0], {
+        'stakedAmount': 0,
+        'realtimeAmount': btc_amount
+    })
+    turn_round()
+    __check_candidate_map_info(operators[0], {
+        'stakedAmount': btc_amount,
+        'realtimeAmount': btc_amount
+    })
+    __check_receipt_map_info(tx_id, {
+        'candidate': operators[0],
+        'delegator': accounts[0],
+        'round': get_current_round() - 1
     })
     turn_round(consensuses)
     tracker0 = get_tracker(accounts[0])
     tracker1 = get_tracker(accounts[2])
-    btc_stake.claimBtcReward([tx_id])
-    assert agent_map['totalBtc'] == btc_amount
-    assert btc_stake.btcReceiptMap(tx_id)['value'] == btc_amount
-    assert tracker0.delta() == BLOCK_REWARD // 2 - FEE
+    stake_hub_claim_reward(accounts[0])
+    __check_btc_tx_map_info(tx_id, {
+        'amount': btc_amount,
+        'outputIndex': 2,
+        'lockTime': lock_time,
+        'usedHeight': 0,
+    })
+    assert tracker0.delta() == __calculate_btc_only_rewards(btc_amount)
     assert tracker1.delta() == FEE
 
 
@@ -2185,7 +2183,7 @@ def test_update_param_failed(btc_stake, gov_hub, key):
         "OutOfBounds(string,uint256,uint256,uint256)",
         [key, 0, lower_bound, uint256_max]
     )
-    with brownie.reverts(f"typed error: {error_msg}"):
+    with brownie.reverts(f"{error_msg}"):
         btc_stake.updateParam(key, hex_value, {'from': gov_hub.address})
 
 

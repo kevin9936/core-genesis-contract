@@ -1150,7 +1150,7 @@ def test_transfer_to_unregister_and_candidate_validator(core_agent, candidate_hu
         candidate_hub.unregister({'from': operator1})
     turn_round()
     error_msg = encode_args_with_signature("InactiveCandidate(address)", [operator1.address])
-    with brownie.reverts(f"typed error: {error_msg}"):
+    with brownie.reverts(f"{error_msg}"):
         core_agent.transferCoin(operator, operator1, transfer_amount, {"from": accounts[0]})
 
 

@@ -74,7 +74,7 @@ def test_update_param_failed_with_unknown_key(burn):
 def test_update_param_burn_cap_with_unmatched_length(burn):
     __update_gov_address(burn)
     error_msg = encode_args_with_signature('MismatchParamLength(string)', ['burnCap'])
-    with brownie.reverts(f"typed error: {error_msg}"):
+    with brownie.reverts(f"{error_msg}"):
         burn.updateParam("burnCap", "0x0000000000123")
 
 
@@ -96,7 +96,7 @@ def test_update_param_burn_cap_with_value_which_is_less_than_burn_contract_balan
         "OutOfBounds(string,uint256,uint256,uint256)",
         ["burnCap", Web3.to_int(hexstr=new_burn_cap), burn.balance(), Web3.to_int(hexstr=constants.MAX_INT)]
     )
-    with brownie.reverts(f"typed error: {error_msg}"):
+    with brownie.reverts(f"{error_msg}"):
         burn.updateParam("burnCap", new_burn_cap)
 
 

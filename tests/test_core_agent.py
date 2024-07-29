@@ -56,7 +56,8 @@ class TestDelegateCoin:
     def test_delegate2unregistered_agent(self, core_agent):
         random_agent_addr = random_address()
         error_msg = encode_args_with_signature("InactiveCandidate(address)", [random_agent_addr])
-        with brownie.reverts(f"typed error: {error_msg}"):
+        print(error_msg)
+        with brownie.reverts(error_msg):
             core_agent.delegateCoin(random_agent_addr)
 
     def test_delegate2registered_agent(self, core_agent):
@@ -96,7 +97,7 @@ class TestDelegateCoin:
         register_candidate(operator=operator)
         candidate_hub.refuseDelegate({'from': operator})
         error_msg = encode_args_with_signature("InactiveCandidate(address)", [operator.address])
-        with brownie.reverts(f"typed error: {error_msg}"):
+        with brownie.reverts(f"{error_msg}"):
             core_agent.delegateCoin(operator)
 
     def test_delegate2validator(self, core_agent, candidate_hub, validator_set):
@@ -128,7 +129,7 @@ class TestDelegateCoin:
 
         assert candidate_hub.isJailed(operator) is True
         error_msg = encode_args_with_signature("InactiveCandidate(address)", [operator.address])
-        with brownie.reverts(f"typed error: {error_msg}"):
+        with brownie.reverts(f"{error_msg}"):
             core_agent.delegateCoin(operator)
 
     def test_delegate2under_margin(self, core_agent, slash_indicator, candidate_hub, validator_set):
@@ -149,7 +150,7 @@ class TestDelegateCoin:
         assert candidate_hub.isJailed(operator) is False
 
         error_msg = encode_args_with_signature("InactiveCandidate(address)", [operator.address])
-        with brownie.reverts(f"typed error: {error_msg}"):
+        with brownie.reverts(f"{error_msg}"):
             core_agent.delegateCoin(operator)
 
 
@@ -474,7 +475,7 @@ def test_delegate_coin_failed_with_invalid_candidate(core_agent):
     delegator = accounts[2]
 
     error_msg = encode_args_with_signature("InactiveCandidate(address)", [agent.address])
-    with brownie.reverts(f"typed error: {error_msg}"):
+    with brownie.reverts(f"{error_msg}"):
         core_agent.delegateCoin(agent, {'from': delegator, 'value': required_coin_deposit - 1})
 
 
@@ -555,7 +556,7 @@ def test_transfer_coin_failed_with_inactive_target_agent(core_agent):
                            round_tag, 0)
 
     error_msg = encode_args_with_signature("InactiveCandidate(address)", [agent_target.address])
-    with brownie.reverts(f"typed error: {error_msg}"):
+    with brownie.reverts(f"{error_msg}"):
         core_agent.transferCoin(agent_source, agent_target, required_coin_deposit, {'from': delegator})
 
 
@@ -569,7 +570,7 @@ def test_transfer_coin_failed_with_same_agent(core_agent):
 
     error_msg = encode_args_with_signature("SameCandidate(address)",
                                            [agent_source.address])
-    with brownie.reverts(f"typed error: {error_msg}"):
+    with brownie.reverts(f"{error_msg}"):
         core_agent.transferCoin(agent_source, agent_target, required_coin_deposit, {'from': delegator})
 
 
@@ -1090,7 +1091,7 @@ def test_move_data_success(core_agent, pledge_agent):
     core_agent.moveData(candidate, delegator0, staked_amount, transferred_amount, round_tag,
                         {'from': pledge_agent, 'value': real_amount})
     # the transfer part of the reward has been settled, so it is cleared to 0
-    __check_coin_delegator_map(candidate, delegator0, real_amount, real_amount, get_current_round() - 1, 0)
+    __check_coin_delegator_map(candidate, delegator0, real_amount, real_amount, get_current_round(), 0)
     assert __get_candidate_list_by_delegator(delegator0)[0] == candidate
     assert core_agent.delegatorMap(delegator0) == real_amount
     # scenario 2: No reward settlement

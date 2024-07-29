@@ -76,6 +76,7 @@ def test_move2_core_agent_execution_success(pledge_agent, validator_set, stake_h
     change_round = 1
     if operate == 'delegate':
         __old_delegate_coin(operators[0], accounts[0], old=False)
+        staked_amount = delegate_amount 
         real_amount = MIN_INIT_DELEGATE_VALUE * 6
     elif operate == 'undelegate':
         turn_round()
@@ -94,6 +95,7 @@ def test_move2_core_agent_execution_success(pledge_agent, validator_set, stake_h
         transferred_amount = MIN_INIT_DELEGATE_VALUE
     else:
         # core agent init roundTag - 1
+        staked_amount = MIN_INIT_DELEGATE_VALUE * 5
         change_round = 0
         __old_claim_reward(operators)
 
@@ -229,7 +231,7 @@ def test_migration_scenario_3(pledge_agent, validator_set, stake_hub, operate):
     __old_turn_round(consensuses)
     reward = BLOCK_REWARD
     if operate == 'undelegate':
-        __old_undelegate_coin(operators[0], accounts[0], delegate_amount // 2)
+        __old_undelegate_coin(operators[0], accounts[0])
         reward = reward // 2
     else:
         __old_transfer_coin(operators[0], operators[1], accounts[0], delegate_amount)
@@ -238,6 +240,7 @@ def test_migration_scenario_3(pledge_agent, validator_set, stake_hub, operate):
     turn_round(consensuses)
     tracker0 = get_tracker(accounts[0])
     __old_claim_reward(operators, accounts[0])
+    stake_hub_claim_reward(accounts[0])
     assert tracker0.delta() == reward
 
 
@@ -259,33 +262,38 @@ def test_migration_scenario_4(pledge_agent, validator_set, stake_hub, operate):
         __old_transfer_coin(operators[0], operators[1], accounts[0], undelegate_amount)
     __get_reward_map_info(accounts[0])
     __init_hybrid_score_mock()
+    __get_old_reward_index_info(operators[0], 1)
+    # __get_old_reward_index_info(operators[0],2)
     __get_reward_map_info(accounts[0])
     __get_candidate_map_info(operators[0])
-    __get_delegator_info(operators[0],accounts[0])
-    __get_old_delegator_info(operators[0],accounts[0])
-    tx = turn_round(consensuses,round_count=1)
-    __get_candidate_map_info(operators[0])
-    __get_delegator_info(operators[0],accounts[0])
-    __get_reward_map_info(accounts[0])
+    __get_delegator_info(operators[0], accounts[0])
+    __get_old_delegator_info(operators[0], accounts[0])
+    tx = turn_round(consensuses, round_count=1)
+    __get_old_reward_index_info(operators[0], 1)
+    # __get_old_reward_index_info(operators[0],2)
 
+    __get_candidate_map_info(operators[0])
+    __get_delegator_info(operators[0], accounts[0])
+    __get_reward_map_info(accounts[0])
+    __get_old_agent_map_info(operators[0])
     # print('round_count1',tx.events)
     # tx = turn_round(consensuses,round_count=1)
     # print('round_count2',tx.events)
     tracker0 = get_tracker(accounts[0])
-    __get_old_delegator_info(operators[0],accounts[0])
-    __get_delegator_info(operators[0],accounts[0])
+    __get_old_delegator_info(operators[0], accounts[0])
+    __get_delegator_info(operators[0], accounts[0])
     __old_claim_reward(operators, accounts[0])
     __get_reward_map_info(accounts[0])
 
     assert tracker0.delta() == 0
-    __get_delegator_info(operators[0],accounts[0])
+    __get_delegator_info(operators[0], accounts[0])
     __get_candidate_map_info(operators[0])
     print(operators[0])
     print(operators[1])
     stake_hub_claim_reward(accounts[0])
 
-
     # __old_turn_round(consensuses)
+
 
 @pytest.mark.parametrize("operate", ['undelegate', 'transfer'])
 def test_migration_scenario_5(pledge_agent, validator_set, stake_hub, operate):
@@ -308,32 +316,31 @@ def test_migration_scenario_5(pledge_agent, validator_set, stake_hub, operate):
     __init_hybrid_score_mock()
     __get_reward_map_info(accounts[0])
     __get_candidate_map_info(operators[0])
-    __get_delegator_info(operators[0],accounts[0])
-    __get_old_delegator_info(operators[0],accounts[0])
-    tx = turn_round(consensuses,round_count=1)
+    __get_delegator_info(operators[0], accounts[0])
+    __get_old_delegator_info(operators[0], accounts[0])
+    tx = turn_round(consensuses, round_count=1)
     __get_candidate_map_info(operators[0])
-    __get_delegator_info(operators[0],accounts[0])
+    __get_delegator_info(operators[0], accounts[0])
     __get_reward_map_info(accounts[0])
 
     # print('round_count1',tx.events)
     # tx = turn_round(consensuses,round_count=1)
     # print('round_count2',tx.events)
     tracker0 = get_tracker(accounts[0])
-    __get_old_delegator_info(operators[0],accounts[0])
-    __get_delegator_info(operators[0],accounts[0])
+    __get_old_delegator_info(operators[0], accounts[0])
+    __get_delegator_info(operators[0], accounts[0])
     __old_claim_reward(operators, accounts[0])
     __get_reward_map_info(accounts[0])
 
     # assert tracker0.delta() == 0
-    __get_delegator_info(operators[0],accounts[0])
+    __get_delegator_info(operators[0], accounts[0])
     __get_candidate_map_info(operators[0])
     print(operators[0])
     print(operators[1])
-    tx = turn_round(consensuses,round_count=1)
+    tx = turn_round(consensuses, round_count=1)
     __get_reward_map_info(accounts[0])
-    __get_delegator_info(operators[0],accounts[0])
+    __get_delegator_info(operators[0], accounts[0])
     stake_hub_claim_reward(accounts[0])
-
 
     # __old_turn_round(consensuses)
 
@@ -413,6 +420,19 @@ def __old_claim_reward(candidates, account=None):
     print('__old_claim_reward>>>>>>>>>tx', tx.events)
 
 
+def __get_old_reward_index_info(candidate, index):
+    """
+    uint256 totalReward;
+    uint256 remainReward;
+    uint256 score;
+    uint256 coin;
+    uint256 round;
+    """
+    reward_index = PLEDGE_AGENT.getReward(candidate, index)
+    print('__get_old_reward_index_info>>>>>>>', reward_index)
+    return reward_index
+
+
 def __get_old_agent_map_info(candidate):
     """
     uint256 totalDeposit;
@@ -451,6 +471,7 @@ def __get_delegator_info(candidate, delegator):
     delegator_info = CoreAgentMock[0].getDelegator(candidate, delegator)
     print('__get_delegator_info>>>>', delegator_info)
     return delegator_info
+
 
 def __get_reward_map_info(delegator):
     """

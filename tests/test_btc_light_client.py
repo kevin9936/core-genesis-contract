@@ -227,6 +227,6 @@ def test_update_param_store_block_gasprice_failed(btc_light_client, gasprice, in
         "OutOfBounds(string,uint256,uint256,uint256)",
         ["storeBlockGasPrice", gasprice, int(1e9), uint256_max]
     )
-    with brownie.reverts(f"typed error: {error_msg}"):
+    with brownie.reverts(f"{error_msg}"):
         btc_light_client.updateParam('storeBlockGasPrice', hex_value, {'from': accounts[0]})
     update_default_block_gasprice(btc_light_client)
