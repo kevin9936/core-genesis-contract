@@ -80,10 +80,10 @@ def test_update_param_incentive_balance_cap_success(system_reward):
 @pytest.mark.parametrize("value,success", [(0, True), (1, True), (2, False), (int(math.pow(2, 256))-1, False)])
 def test_update_param_is_burn(system_reward, value, success):
     if success:
-        system_reward.updateParam("isBurn", padding_left(Web3.toHex(value), 64))
+        system_reward.updateParam("isBurn", padding_left(Web3.to_hex(value), 64))
     else:
         with brownie.reverts("the newIsBurn out of range"):
-            system_reward.updateParam("isBurn", padding_left(Web3.toHex(value), 64))
+            system_reward.updateParam("isBurn", padding_left(Web3.to_hex(value), 64))
 
 
 def test_receive_rewards_with_value_0(system_reward):
@@ -93,7 +93,7 @@ def test_receive_rewards_with_value_0(system_reward):
 
 
 def test_receive_rewards_success_with_balance_less_than_incentive_balance_cap(system_reward):
-    value = Web3.toWei(2, 'ether')
+    value = Web3.to_wei(2, 'ether')
     tx = system_reward.receiveRewards({'value': value})
     expect_event(tx, "receiveDeposit", {
         'from': accounts[0],
@@ -104,10 +104,10 @@ def test_receive_rewards_success_with_balance_less_than_incentive_balance_cap(sy
 
 def test_receive_rewards_success_with_balance_equal_to_incentive_balance_cap(system_reward):
     incentive_balance_cap = system_reward.incentiveBalanceCap()
-    init_balance = incentive_balance_cap - Web3.toWei(1, 'ether')
+    init_balance = incentive_balance_cap - Web3.to_wei(1, 'ether')
     accounts[0].transfer(system_reward.address, init_balance)
 
-    value = Web3.toWei(1, 'ether')
+    value = Web3.to_wei(1, 'ether')
     tx = system_reward.receiveRewards({'value': value})
     expect_event(tx, "receiveDeposit", {
         'from': accounts[0],
@@ -119,13 +119,13 @@ def test_receive_rewards_success_with_balance_equal_to_incentive_balance_cap(sys
 @pytest.mark.parametrize("is_burn", [False, True])
 def test_receive_rewards_success_with_balance_more_than_incentive_balance_cap(system_reward, foundation, burn, is_burn):
     if is_burn:
-        system_reward.updateParam("isBurn", padding_left(Web3.toHex(1), 64))
+        system_reward.updateParam("isBurn", padding_left(Web3.to_hex(1), 64))
 
     incentive_balance_cap = system_reward.incentiveBalanceCap()
-    init_balance = incentive_balance_cap - Web3.toWei(1, 'ether')
+    init_balance = incentive_balance_cap - Web3.to_wei(1, 'ether')
     accounts[0].transfer(system_reward.address, init_balance)
 
-    value = Web3.toWei(2, 'ether')
+    value = Web3.to_wei(2, 'ether')
     tx = system_reward.receiveRewards({'value': value})
     expect_event(tx, "receiveDeposit", {
         'from': accounts[0],
@@ -158,21 +158,21 @@ def test_claim_rewards_emit_empty_with_amount_0(system_reward):
 
 def test_claim_rewards_success_with_amount_less_than_balance(system_reward):
     system_reward.setOperator(accounts[0])
-    accounts[3].transfer(system_reward.address, Web3.toWei(3, 'ether'))
-    tx = system_reward.claimRewards(accounts[0], Web3.toWei(1, 'ether'))
+    accounts[3].transfer(system_reward.address, Web3.to_wei(3, 'ether'))
+    tx = system_reward.claimRewards(accounts[0], Web3.to_wei(1, 'ether'))
     expect_event(tx, "rewardTo", {
         "to": accounts[0],
-        "amount": Web3.toWei(1, 'ether')
+        "amount": Web3.to_wei(1, 'ether')
     })
 
 
 def test_claim_rewards_success_with_amount_bigger_than_balance(system_reward):
     system_reward.setOperator(accounts[0])
-    accounts[3].transfer(system_reward.address, Web3.toWei(1, 'ether'))
-    tx = system_reward.claimRewards(accounts[0], Web3.toWei(3, 'ether'))
+    accounts[3].transfer(system_reward.address, Web3.to_wei(1, 'ether'))
+    tx = system_reward.claimRewards(accounts[0], Web3.to_wei(3, 'ether'))
     expect_event(tx, "rewardTo", {
         "to": accounts[0],
-        "amount": Web3.toWei(1, 'ether')
+        "amount": Web3.to_wei(1, 'ether')
     })
 
 

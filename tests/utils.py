@@ -43,7 +43,7 @@ def expect_event_not_emitted(tx_receipt: TransactionReceipt, event_name):
 
 def public_key2PKHash(public_key):
     if public_key.startswith('0x'):
-        public_key_bytes = Web3.toBytes(hexstr=public_key)
+        public_key_bytes = Web3.to_bytes(hexstr=public_key)
     else:
         public_key_bytes = codecs.decode(public_key, 'hex')
     # Run SHA256 for the public key

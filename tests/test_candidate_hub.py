@@ -88,7 +88,7 @@ def test_register_invalid_commission(candidate_hub, required_margin, commission)
 @pytest.mark.parametrize("margin", [
     pytest.param(0, marks=pytest.mark.xfail),
     pytest.param(1, marks=pytest.mark.xfail),
-    Web3.toWei(11000, 'ether')
+    Web3.to_wei(11000, 'ether')
 ])
 def test_register_margin(candidate_hub, margin):
     candidate_hub.register(

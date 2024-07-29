@@ -16,7 +16,7 @@ BTC_VALUE = 2000
 btcFactor = 0
 MIN_BTC_LOCK_ROUND = 0
 BTC_AMOUNT = 0
-ONE_ETHER = Web3.toWei(1, 'ether')
+ONE_ETHER = Web3.to_wei(1, 'ether')
 ZERO_ADDRESS = '0x0000000000000000000000000000000000000000'
 TX_FEE = 100
 public_key = "0223dd766d6e38eaf9c044dcb18d8221fe8c9a5763ca331e93fadc8f55949b8e12"
@@ -37,8 +37,8 @@ BTC_REWARD1 = 0
 
 @pytest.fixture(scope="module", autouse=True)
 def deposit_for_reward(validator_set, gov_hub):
-    accounts[-2].transfer(validator_set.address, Web3.toWei(100000, 'ether'))
-    accounts[-2].transfer(gov_hub.address, Web3.toWei(100000, 'ether'))
+    accounts[-2].transfer(validator_set.address, Web3.to_wei(100000, 'ether'))
+    accounts[-2].transfer(gov_hub.address, Web3.to_wei(100000, 'ether'))
 
 
 @pytest.fixture(scope="module", autouse=True)
@@ -2142,7 +2142,7 @@ def test_restaking_after_btc_staking_expiry(btc_stake, candidate_hub, set_candid
     ("delegateBtcGasPrice", 1e9)
 ])
 def test_update_param_success(btc_stake, gov_hub, key, value):
-    hex_value = padding_left(Web3.toHex(int(value)), 64)
+    hex_value = padding_left(Web3.to_hex(int(value)), 64)
     tx = btc_stake.updateParam(key, hex_value, {'from': gov_hub.address})
     expect_event(tx, 'paramChange', {
         'key': key,
@@ -2174,7 +2174,7 @@ def test_update_param_success(btc_stake, gov_hub, key, value):
     "delegateBtcGasPrice"
 ])
 def test_update_param_failed(btc_stake, gov_hub, key):
-    hex_value = padding_left(Web3.toHex(0), 64)
+    hex_value = padding_left(Web3.to_hex(0), 64)
     uint256_max = 2 ** 256 - 1
     lower_bound = 1
     if key == 'minBtcValue':
@@ -2190,7 +2190,7 @@ def test_update_param_failed(btc_stake, gov_hub, key):
 
 
 def test_update_param_failed_non_governance_contract(btc_stake):
-    hex_value = padding_left(Web3.toHex(1000), 64)
+    hex_value = padding_left(Web3.to_hex(1000), 64)
     with brownie.reverts("the msg sender must be governance contract"):
         btc_stake.updateParam('minBtcValue', hex_value, {'from': accounts[0]})
 
@@ -2228,7 +2228,7 @@ def test_revert_for_too_high_gas_price(btc_stake, delegate_btc_valid_tx, set_can
     with brownie.reverts("gas price is too high"):
         btc_stake.delegate(btc_tx, 0, [], 0, lock_script, {'from': accounts[0]})
     new_delegate_btc_gas_price = int(1e9)
-    hex_value = padding_left(Web3.toHex(new_delegate_btc_gas_price), 64)
+    hex_value = padding_left(Web3.to_hex(new_delegate_btc_gas_price), 64)
     btc_stake.updateParam('delegateBtcGasPrice', hex_value, {'from': gov_hub.address})
     gas_price(new_delegate_btc_gas_price + 1)
     with brownie.reverts("gas price is too high"):

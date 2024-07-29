@@ -245,7 +245,7 @@ def set_system_contract_address(
     system_reward.init()
     candidate_hub.setControlRoundTimeTag(True)
     # used for distribute reward
-    # accounts[-2].transfer(validator_set.address, Web3.toWei(100000, 'ether'))
+    # accounts[-2].transfer(validator_set.address, Web3.to_wei(100000, 'ether'))
 
 
 @pytest.fixture(scope="module")

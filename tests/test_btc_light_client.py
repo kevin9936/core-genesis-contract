@@ -16,7 +16,7 @@ def teardown_module():
 def set_up(system_reward, btc_light_client):
     register_relayer()
     # deposit to system reward contract
-    accounts[0].transfer(system_reward.address, Web3.toWei(10, 'ether'))
+    accounts[0].transfer(system_reward.address, Web3.to_wei(10, 'ether'))
     # set store block header gas price
     global store_block_header_tx_gas_price
     store_block_header_tx_gas_price = btc_light_client.storeBlockGasPrice()
@@ -58,7 +58,7 @@ def init_gov_address(validator_set, slash_indicator, system_reward, btc_light_cl
 
 
 def update_default_block_gasprice(btc_light_client):
-    hex_value = padding_left(Web3.toHex(store_block_header_tx_gas_price), 64)
+    hex_value = padding_left(Web3.to_hex(store_block_header_tx_gas_price), 64)
     btc_light_client.updateParam('storeBlockGasPrice', hex_value, {'from': accounts[0]})
 
 
@@ -210,8 +210,8 @@ def test_store_btc_block_gasprice_limit_failed(btc_light_client):
 
 @pytest.mark.parametrize("gasprice", [1, 10, 101, 1000, 10000,10000.1, 1000000000,10000000000000000000])
 def test_update_param_store_block_gasprice_success(btc_light_client, gasprice, init_gov_address):
-    gasprice = Web3.toWei(gasprice, 'gwei')
-    hex_value = padding_left(Web3.toHex(gasprice), 64)
+    gasprice = Web3.to_wei(gasprice, 'gwei')
+    hex_value = padding_left(Web3.to_hex(gasprice), 64)
     tx = btc_light_client.updateParam('storeBlockGasPrice', hex_value, {'from': accounts[0]})
     expect_event(tx, 'paramChange', {'key': 'storeBlockGasPrice', 'value': hex_value})
     assert btc_light_client.storeBlockGasPrice() == gasprice
@@ -220,9 +220,9 @@ def test_update_param_store_block_gasprice_success(btc_light_client, gasprice, i
 
 @pytest.mark.parametrize("gasprice", [0.1, 0.99,0.5])
 def test_update_param_store_block_gasprice_failed(btc_light_client, gasprice, init_gov_address):
-    gasprice = Web3.toWei(gasprice, 'gwei')
+    gasprice = Web3.to_wei(gasprice, 'gwei')
     uint256_max = 2 ** 256 - 1
-    hex_value = padding_left(Web3.toHex(gasprice), 64)
+    hex_value = padding_left(Web3.to_hex(gasprice), 64)
     error_msg = encode_args_with_signature(
         "OutOfBounds(string,uint256,uint256,uint256)",
         ["storeBlockGasPrice", gasprice, int(1e9), uint256_max]

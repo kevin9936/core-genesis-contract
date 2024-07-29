@@ -39,18 +39,18 @@ def test_update_param_dues_with_unmatched_length(relay_hub):
 
 def test_update_param_require_deposit_failed_with_value_out_of_range(relay_hub):
     with brownie.reverts("the requiredDeposit out of range"):
-        relay_hub.updateParam("requiredDeposit", padding_left(Web3.toHex(relay_hub.dues()), 64))
+        relay_hub.updateParam("requiredDeposit", padding_left(Web3.to_hex(relay_hub.dues()), 64))
 
 
 def test_update_param_dues_failed_with_value_out_of_range(relay_hub):
     with brownie.reverts("the dues out of range"):
-        relay_hub.updateParam("dues", padding_left(Web3.toHex(0), 64))
+        relay_hub.updateParam("dues", padding_left(Web3.to_hex(0), 64))
     with brownie.reverts("the dues out of range"):
-        relay_hub.updateParam("dues", padding_left(Web3.toHex(relay_hub.requiredDeposit() + 10), 64))
+        relay_hub.updateParam("dues", padding_left(Web3.to_hex(relay_hub.requiredDeposit() + 10), 64))
 
 
 def test_update_param_required_deposit_success(relay_hub):
-    value = padding_left(Web3.toHex(relay_hub.dues() + 10), 64)
+    value = padding_left(Web3.to_hex(relay_hub.dues() + 10), 64)
     tx = relay_hub.updateParam("requiredDeposit", value)
     expect_event(tx, "paramChange", {
         "key": "requiredDeposit",
@@ -59,7 +59,7 @@ def test_update_param_required_deposit_success(relay_hub):
 
 
 def test_update_param_dues_success(relay_hub):
-    value = padding_left(Web3.toHex(relay_hub.requiredDeposit() - 10), 64)
+    value = padding_left(Web3.to_hex(relay_hub.requiredDeposit() - 10), 64)
     tx = relay_hub.updateParam("dues", value)
     expect_event(tx, "paramChange", {
         "key": "dues",

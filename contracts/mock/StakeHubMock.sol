@@ -91,9 +91,9 @@ contract StakeHubMock is StakeHub {
     address[] memory candidates = abi.decode(data, (address[]));
     // move candidate amount.
 //    require(false,'sdfasf');
-    IPledgeAgent(PLEDGE_AGENT_ADDR).moveAgent(candidates);
-//    (success,data) = PLEDGE_AGENT_ADDR.call(abi.encodeWithSignature("moveAgent(address[])", candidates));
-//    require (success, "call PLEDGE_AGENT_ADDR.moveAgent fail");
+//    IPledgeAgent(PLEDGE_AGENT_ADDR).moveAgent(candidates);
+    (success,data) = PLEDGE_AGENT_ADDR.call(abi.encodeWithSignature("moveAgent(address[])", candidates));
+    require (success, "call PLEDGE_AGENT_ADDR.moveAgent fail");
   }
 
 }

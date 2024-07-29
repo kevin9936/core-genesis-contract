@@ -21,13 +21,13 @@ POWER_REWARD = 0
 BTC_REWARD = 0
 CORE_STAKE_DECIMAL = 10000
 
-ONE_ETHER = Web3.toWei(1, 'ether')
+ONE_ETHER = Web3.to_wei(1, 'ether')
 TX_FEE = 100
 
 
 @pytest.fixture(scope="module", autouse=True)
 def deposit_for_reward(validator_set):
-    accounts[-12].transfer(validator_set.address, Web3.toWei(100000, 'ether'))
+    accounts[-12].transfer(validator_set.address, Web3.to_wei(100000, 'ether'))
 
 
 @pytest.fixture(scope="module", autouse=True)

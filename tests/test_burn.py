@@ -1,7 +1,7 @@
 import pytest
 import brownie
 from web3 import Web3, constants
-from eth_abi import encode_abi
+from eth_abi import encode
 from brownie import accounts, SelfDestroy
 from .utils import expect_event, get_tracker, padding_left, encode_args_with_signature
 from .common import execute_proposal
@@ -89,12 +89,12 @@ def test_update_param_burn_cap_with_0(burn):
 
 def test_update_param_burn_cap_with_value_which_is_less_than_burn_contract_balance(burn):
     __update_gov_address(burn)
-    __add_balance(burn.address, Web3.toWei(1, 'ether'))
+    __add_balance(burn.address, Web3.to_wei(1, 'ether'))
 
     new_burn_cap = "0x0000000000000000000000000000000000000000000000000de0b6b3a763fff"
     error_msg = encode_args_with_signature(
         "OutOfBounds(string,uint256,uint256,uint256)",
-        ["burnCap", Web3.toInt(hexstr=new_burn_cap), burn.balance(), Web3.toInt(hexstr=constants.MAX_INT)]
+        ["burnCap", Web3.to_int(hexstr=new_burn_cap), burn.balance(), Web3.to_int(hexstr=constants.MAX_INT)]
     )
     with brownie.reverts(f"typed error: {error_msg}"):
         burn.updateParam("burnCap", new_burn_cap)
@@ -102,7 +102,7 @@ def test_update_param_burn_cap_with_value_which_is_less_than_burn_contract_balan
 
 def test_update_param_burn_cap_success(burn):
     __update_gov_address(burn)
-    __add_balance(burn.address, Web3.toWei(1, 'ether'))
+    __add_balance(burn.address, Web3.to_wei(1, 'ether'))
     account0_tracker = get_tracker(accounts[0])
     burn_tracker = get_tracker(burn)
 
@@ -126,7 +126,7 @@ def test_burn_success_with_value_0_and_balance_is_0(burn):
 def test_burn_success_with_value_0_and_balance_is_equal_to_burn_cap(burn):
     __update_gov_address(burn)
     burn.updateParam("burnCap", "0x0000000000000000000000000000000000000000000000000de0b6b3a7640000")
-    __add_balance(burn.address, Web3.toWei(1, 'ether'))
+    __add_balance(burn.address, Web3.to_wei(1, 'ether'))
 
     account0_tracker = get_tracker(accounts[0])
     burn_tracker = get_tracker(burn)
@@ -141,7 +141,7 @@ def test_burn_success_with_value_0_and_balance_is_equal_to_burn_cap(burn):
 def test_burn_success_with_value_0_and_balance_is_greater_than_burn_cap(burn):
     __update_gov_address(burn)
     burn.updateParam("burnCap", "0x0000000000000000000000000000000000000000000000000de0b6b3a7640000")
-    __add_balance(burn.address, Web3.toWei(2, 'ether'))
+    __add_balance(burn.address, Web3.to_wei(2, 'ether'))
 
     account0_tracker = get_tracker(accounts[0])
     burn_tracker = get_tracker(burn)
@@ -153,7 +153,7 @@ def test_burn_success_with_value_0_and_balance_is_greater_than_burn_cap(burn):
 
 
 def test_burn_success_with_1_ether_and_balance_is_0(burn):
-    burn_value = Web3.toWei(1, 'ether')
+    burn_value = Web3.to_wei(1, 'ether')
     tracker = get_tracker(accounts[0])
     burn_tracker = get_tracker(burn)
 
@@ -167,7 +167,7 @@ def test_burn_success_with_1_ether_and_balance_is_0(burn):
 def test_burn_success_with_value_1_and_balance_is_equal_to_burn_cap(burn):
     __update_gov_address(burn)
     burn.updateParam("burnCap", "0x0000000000000000000000000000000000000000000000000de0b6b3a7640000")
-    burn_value = Web3.toWei(1, 'ether')
+    burn_value = Web3.to_wei(1, 'ether')
 
     account0_tracker = get_tracker(accounts[0])
     burn_tracker = get_tracker(burn)
@@ -182,9 +182,9 @@ def test_burn_success_with_value_1_and_balance_is_equal_to_burn_cap(burn):
 def test_burn_failed_with_1_ether_due_to_balance_is_greater_than_burn_cap(burn):
     __update_gov_address(burn)
     burn.updateParam("burnCap", "0x0000000000000000000000000000000000000000000000000de0b6b3a7640000")
-    __add_balance(burn.address, Web3.toWei(2, 'ether'))
+    __add_balance(burn.address, Web3.to_wei(2, 'ether'))
 
-    burn_value = Web3.toWei(1, 'ether')
+    burn_value = Web3.to_wei(1, 'ether')
 
     account0_tracker = get_tracker(accounts[0])
     burn_tracker = get_tracker(burn)
@@ -200,21 +200,21 @@ def test_burn_success_with_half_of_2_ether_and_balance_is_greater_than_burn_cap(
     __update_gov_address(burn)
     burn.updateParam("burnCap", "0x0000000000000000000000000000000000000000000000000de0b6b3a7640000")
 
-    burn_value = Web3.toWei(2, 'ether')
+    burn_value = Web3.to_wei(2, 'ether')
 
     account0_tracker = get_tracker(accounts[0])
     burn_tracker = get_tracker(burn)
 
     tx = burn.burn({"value": burn_value})
-    expect_event(tx, "burned", {"to": accounts[0], "amount": Web3.toWei(1, 'ether')})
+    expect_event(tx, "burned", {"to": accounts[0], "amount": Web3.to_wei(1, 'ether')})
 
-    assert account0_tracker.delta() == (0 - Web3.toWei(1, 'ether'))
-    assert burn_tracker.delta() == Web3.toWei(1, 'ether')
+    assert account0_tracker.delta() == (0 - Web3.to_wei(1, 'ether'))
+    assert burn_tracker.delta() == Web3.to_wei(1, 'ether')
 
 
 def test_receive_ether(burn):
     with brownie.reverts():
-        accounts[0].transfer(burn.address, Web3.toWei(1, 'ether'))
+        accounts[0].transfer(burn.address, Web3.to_wei(1, 'ether'))
 
 
 def test_receive_ether_through_destruct_command(burn):
@@ -224,13 +224,13 @@ def test_receive_ether_through_destruct_command(burn):
 
 def test_modify_burn_cap(burn):
     new_cap = 200
-    hex_value = padding_left(Web3.toHex(new_cap), 64)
+    hex_value = padding_left(Web3.to_hex(new_cap), 64)
 
     execute_proposal(
         burn.address,
         0,
         "updateParam(string,bytes)",
-        encode_abi(['string', 'bytes'], ['burnCap', Web3.toBytes(hexstr=hex_value)]),
+        encode(['string', 'bytes'], ['burnCap', Web3.to_bytes(hexstr=hex_value)]),
         "update burn cap"
     )
     assert burn.burnCap() == new_cap
@@ -238,13 +238,13 @@ def test_modify_burn_cap(burn):
 
 def test_burn_less_than_cap(burn):
     new_cap = 100
-    hex_value = padding_left(Web3.toHex(new_cap), 64)
+    hex_value = padding_left(Web3.to_hex(new_cap), 64)
 
     execute_proposal(
         burn.address,
         0,
         "updateParam(string,bytes)",
-        encode_abi(['string', 'bytes'], ['burnCap', Web3.toBytes(hexstr=hex_value)]),
+        encode(['string', 'bytes'], ['burnCap', Web3.to_bytes(hexstr=hex_value)]),
         "update burn cap"
     )
 
@@ -259,13 +259,13 @@ def test_burn_less_than_cap(burn):
 
 def test_burn_greater_than_cap(burn):
     new_cap = 100
-    hex_value = padding_left(Web3.toHex(new_cap), 64)
+    hex_value = padding_left(Web3.to_hex(new_cap), 64)
 
     execute_proposal(
         burn.address,
         0,
         "updateParam(string,bytes)",
-        encode_abi(['string', 'bytes'], ['burnCap', Web3.toBytes(hexstr=hex_value)]),
+        encode(['string', 'bytes'], ['burnCap', Web3.to_bytes(hexstr=hex_value)]),
         "update burn cap"
     )
 

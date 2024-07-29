@@ -1,10 +1,8 @@
 import pytest
 import brownie
 from web3 import Web3, constants
-from eth_abi import encode_abi
 from brownie import *
-from .utils import expect_event, get_tracker, padding_left, AccountTracker
-from .common import execute_proposal
+from .utils import expect_event, get_tracker, AccountTracker
 
 init_validators = [
     '0x01Bca3615D24d3c638836691517b2B9b49b054B1',
@@ -177,7 +175,7 @@ def test_deposit_to_validator():
 
 @pytest.mark.parametrize("validator_address", [ZERO_ADDRESS, random_address])
 def test_deposit_to_deprecated_validator_with_positive_balance(validator_address):
-    accounts[1].transfer(validator_set_instance.address, Web3.toWei(10, 'ether'))
+    accounts[1].transfer(validator_set_instance.address, Web3.to_wei(10, 'ether'))
     validator_set_tracker.balance()
 
     deposit_value = 999
@@ -197,7 +195,7 @@ def test_deposit_to_deprecated_validator_with_positive_balance(validator_address
     (init_validators[0], 9999999)
 ])
 def test_deposit_to_validator_with_positive_balance(validator_address, deposit_value):
-    accounts[1].transfer(validator_set_instance.address, Web3.toWei(10, 'ether'))
+    accounts[1].transfer(validator_set_instance.address, Web3.to_wei(10, 'ether'))
     validator_set_tracker.balance()
 
     tx = validator_set_instance.deposit(validator_address, {'value': deposit_value})
@@ -596,8 +594,8 @@ def test_felony_failed_with_one_validator_which_has_income():
 
 
 def test_felony_success_with_validator_set_which_has_0_income(candidate_hub):
-    candidate_hub.register(accounts[0], accounts[0], 100, {'from': accounts[0], 'value': Web3.toWei(20000, 'ether')})
-    candidate_hub.register(accounts[1], accounts[1], 100, {'from': accounts[1], 'value': Web3.toWei(20000, 'ether')})
+    candidate_hub.register(accounts[0], accounts[0], 100, {'from': accounts[0], 'value': Web3.to_wei(20000, 'ether')})
+    candidate_hub.register(accounts[1], accounts[1], 100, {'from': accounts[1], 'value': Web3.to_wei(20000, 'ether')})
     __fake_validator_set()
     validator_set_instance.updateValidatorSet([accounts[0], accounts[1]], [accounts[0], accounts[1]],
                                               [accounts[0], accounts[1]], [100, 100])
@@ -618,7 +616,7 @@ def test_felony_success_with_validator_set_which_has_0_income(candidate_hub):
     candidate = candidate_hub.candidateSet(0).dict()
     tx = validator_set_instance.felony(accounts[0], felony_round, felony_deposit)
     expect_event(tx, 'validatorFelony', {'validator': accounts[0], 'amount': 0})
-    total_margin = Web3.toWei(20000, 'ether') - felony_deposit
+    total_margin = Web3.to_wei(20000, 'ether') - felony_deposit
 
     set_jail = candidate_hub.SET_JAIL()
     set_margin = candidate_hub.SET_MARGIN()
@@ -638,8 +636,8 @@ def test_felony_success_with_validator_set_which_has_0_income(candidate_hub):
 
 
 def test_felony_success_with_validator_set_which_has_income(candidate_hub):
-    candidate_hub.register(accounts[0], accounts[0], 100, {'from': accounts[0], 'value': Web3.toWei(20000, 'ether')})
-    candidate_hub.register(accounts[1], accounts[1], 100, {'from': accounts[1], 'value': Web3.toWei(20000, 'ether')})
+    candidate_hub.register(accounts[0], accounts[0], 100, {'from': accounts[0], 'value': Web3.to_wei(20000, 'ether')})
+    candidate_hub.register(accounts[1], accounts[1], 100, {'from': accounts[1], 'value': Web3.to_wei(20000, 'ether')})
     __fake_validator_set()
     validator_set_instance.updateValidatorSet([accounts[0], accounts[1]], [accounts[0], accounts[1]],
                                               [accounts[0], accounts[1]], [100, 100])
@@ -665,7 +663,7 @@ def test_felony_success_with_validator_set_which_has_income(candidate_hub):
     tx = validator_set_instance.felony(accounts[0], felony_round, felony_deposit)
     expect_event(tx, "validatorFelony", {'validator': accounts[0], "amount": deposit_value})
 
-    total_margin = Web3.toWei(20000, 'ether') - felony_deposit
+    total_margin = Web3.to_wei(20000, 'ether') - felony_deposit
 
     set_jail = candidate_hub.SET_JAIL()
     set_margin = candidate_hub.SET_MARGIN()
@@ -682,7 +680,7 @@ def test_felony_success_with_validator_set_which_has_income(candidate_hub):
         "newStatus": status | set_margin if total_margin < candidate_hub.requiredMargin() else status
     })
     __contract_check(deposit_value, [average_value])
-    __balance_check((deposit_value + Web3.toWei(20000, 'ether')) * -1, deposit_value, felony_deposit, 0)
+    __balance_check((deposit_value + Web3.to_wei(20000, 'ether')) * -1, deposit_value, felony_deposit, 0)
 
 
 def test_subsidy_reduce():

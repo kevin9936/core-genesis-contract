@@ -18,7 +18,7 @@ def teardown_module():
 def set_up(system_reward, btc_light_client):
     register_relayer()
     # deposit to system reward contract
-    accounts[0].transfer(system_reward.address, Web3.toWei(10, 'ether'))
+    accounts[0].transfer(system_reward.address, Web3.to_wei(10, 'ether'))
     # set store block header gas price
     global store_block_header_tx_gas_price
     store_block_header_tx_gas_price = btc_light_client.storeBlockGasPrice()

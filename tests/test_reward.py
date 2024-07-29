@@ -118,7 +118,7 @@ class StateMachine:
         self.felony_threshold = self.slash_indicator.felonyThreshold()
         self.felony_deposit = self.slash_indicator.felonyDeposit()
 
-        accounts[-2].transfer(self.validator_set.address, Web3.toWei(100000, 'ether'))
+        accounts[-2].transfer(self.validator_set.address, Web3.to_wei(100000, 'ether'))
 
     def setup(self):
         global N

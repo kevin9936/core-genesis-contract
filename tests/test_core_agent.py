@@ -2,7 +2,6 @@ import pytest
 import brownie
 from brownie import accounts
 from brownie import *
-from eth_abi import encode_abi
 from web3 import Web3
 from .calc_reward import parse_delegation, set_delegate
 from .utils import random_address, expect_event, expect_event_not_emitted, get_tracker, \
@@ -17,7 +16,7 @@ candidate_hub_instance = None
 core_agent_instance = None
 btc_light_client_instance = None
 required_coin_deposit = 0
-TX_FEE = Web3.toWei(1, 'ether')
+TX_FEE = Web3.to_wei(1, 'ether')
 actual_block_reward = 0
 DENOMINATOR = 10000
 COIN_REWARD = 6772
@@ -50,7 +49,7 @@ def set_up(min_init_delegate_value, core_agent, candidate_hub, btc_light_client,
 
 @pytest.fixture(scope="module", autouse=True)
 def deposit_for_reward(validator_set):
-    accounts[-2].transfer(validator_set.address, Web3.toWei(100000, 'ether'))
+    accounts[-2].transfer(validator_set.address, Web3.to_wei(100000, 'ether'))
 
 
 class TestDelegateCoin:
@@ -994,7 +993,7 @@ def test_claim_without_rewards(core_agent, validator_set):
 def test_successful_proxy_method_call(core_agent, validator_set, operate, pledge_agent):
     delegate_amount = required_coin_deposit * 10
     operators, consensuses = __register_candidates(accounts[2:5])
-    pledge_agent.delegateCoinOld(operators[1], {"value": Web3.toWei(100000, 'ether')})
+    pledge_agent.delegateCoinOld(operators[1], {"value": Web3.to_wei(100000, 'ether')})
     tx = core_agent.proxyDelegate(operators[0], accounts[0], {'from': pledge_agent, 'value': delegate_amount})
     assert tx.events['delegatedCoin']['amount'] == delegate_amount
     coin_reward = COIN_REWARD
@@ -1066,7 +1065,7 @@ def test_reward_claim_after_current_round_additional_stake(core_agent, validator
 
 def test_init_hard_fork_round_success(core_agent, pledge_agent):
     operators, consensuses = __register_candidates(accounts[2:5])
-    pledge_agent.delegateCoinOld(operators[1], {"value": Web3.toWei(100000, 'ether')})
+    pledge_agent.delegateCoinOld(operators[1], {"value": Web3.to_wei(100000, 'ether')})
     candidates = [accounts[0], accounts[1]]
     amounts = [1000, 2000]
     real_amounts = [4000, 5000]
@@ -1079,7 +1078,7 @@ def test_init_hard_fork_round_success(core_agent, pledge_agent):
 def test_move_data_success(core_agent, pledge_agent):
     turn_round()
     operators, consensuses = __register_candidates(accounts[2:5])
-    pledge_agent.delegateCoinOld(operators[1], {"value": Web3.toWei(100000, 'ether')})
+    pledge_agent.delegateCoinOld(operators[1], {"value": Web3.to_wei(100000, 'ether')})
     candidate = accounts[2]
     delegator0 = accounts[0]
     delegator1 = accounts[1]

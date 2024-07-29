@@ -17,14 +17,14 @@ COIN_REWARD = 0
 POWER_REWARD = 0
 BTC_REWARD = 0
 
-ONE_ETHER = Web3.toWei(1, 'ether')
+ONE_ETHER = Web3.to_wei(1, 'ether')
 TX_FEE = int(1e4)
 
 
 @pytest.fixture(scope="module", autouse=True)
 def deposit_for_reward(validator_set, gov_hub):
-    accounts[-10].transfer(validator_set.address, Web3.toWei(100000, 'ether'))
-    accounts[-10].transfer(gov_hub.address, Web3.toWei(100000, 'ether'))
+    accounts[-10].transfer(validator_set.address, Web3.to_wei(100000, 'ether'))
+    accounts[-10].transfer(gov_hub.address, Web3.to_wei(100000, 'ether'))
 
 
 @pytest.fixture(scope="module", autouse=True)
@@ -517,7 +517,7 @@ def test_delegate_after_power_factor_change(core_agent, btc_light_client, candid
     for operator in operators:
         consensuses.append(register_candidate(operator=operator))
     clients = accounts[:3]
-    hex_value = padding_left(Web3.toHex(power_factor), 64)
+    hex_value = padding_left(Web3.to_hex(power_factor), 64)
     stake_hub.updateParam('hashFactor', hex_value, {'from': gov_hub})
     assert stake_hub.assets(1)[2] == power_factor
     core_agent.delegateCoin(operators[0], {"value": MIN_INIT_DELEGATE_VALUE, "from": clients[0]})
@@ -572,7 +572,7 @@ def test_claim_reward_after_delegate_change_power_factor(core_agent, btc_light_c
     round_time_tag = candidate_hub.roundTag() - 6
     btc_light_client.setMiners(round_time_tag, operators[0], [clients[0]] * 2 + [clients[1]])
     btc_light_client.setMiners(round_time_tag, operators[1], [clients[2]] * 2)
-    hex_value = padding_left(Web3.toHex(power_factor), 64)
+    hex_value = padding_left(Web3.to_hex(power_factor), 64)
     stake_hub.updateParam('hashFactor', hex_value, {'from': gov_hub})
     turn_round()
     _, _, account_rewards, _, _ = parse_delegation([{
@@ -596,7 +596,7 @@ def test_claim_reward_after_delegate_change_power_factor(core_agent, btc_light_c
     tracker3 = get_tracker(clients[2])
 
     turn_round(consensuses, tx_fee=TX_FEE)
-    hex_value = padding_left(Web3.toHex(power_factor + 1000), 64)
+    hex_value = padding_left(Web3.to_hex(power_factor + 1000), 64)
     stake_hub.updateParam('hashFactor', hex_value, {'from': gov_hub})
     turn_round()
 
@@ -621,7 +621,7 @@ def test_claim_reward_after_change_power_factor(core_agent, btc_light_client, ca
         consensuses.append(register_candidate(operator=operator))
     clients = accounts[:3]
     round_time_tag = candidate_hub.roundTag() - 6
-    hex_value = padding_left(Web3.toHex(power_factor), 64)
+    hex_value = padding_left(Web3.to_hex(power_factor), 64)
     stake_hub.updateParam('hashFactor', hex_value, {'from': gov_hub})
     btc_light_client.setMiners(round_time_tag, operators[0], [clients[0]] * 2 + [clients[1]] * 2)
     turn_round()
@@ -659,7 +659,7 @@ def test_update_power_factor_in_next_round_and_claim_rewards(core_agent, btc_lig
     btc_light_client.setMiners(round_time_tag, operators[1], [clients[2]] * 2)
     turn_round()
     power_factor = 200
-    hex_value = padding_left(Web3.toHex(power_factor), 64)
+    hex_value = padding_left(Web3.to_hex(power_factor), 64)
     stake_hub.updateParam('hashFactor', hex_value, {'from': gov_hub})
     actual_power_factor = 500
     _, _, account_rewards, _, _ = parse_delegation([{
