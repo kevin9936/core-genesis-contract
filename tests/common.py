@@ -70,7 +70,9 @@ def register_relayer(relayer_address=None):
 
 
 def get_current_round():
-    return CandidateHubMock[0].roundTag()
+    round_tag = CandidateHubMock[0].roundTag()
+    print('get_current_round>>>>>>>>>>>>>',round_tag)
+    return round_tag
 
 
 def set_last_round_tag(rount_tag):

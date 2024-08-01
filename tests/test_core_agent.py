@@ -1070,7 +1070,7 @@ def test_init_hard_fork_round_success(core_agent, pledge_agent):
     candidates = [accounts[0], accounts[1]]
     amounts = [1000, 2000]
     real_amounts = [4000, 5000]
-    core_agent.initHardforkRound(candidates, amounts, real_amounts, {'from': pledge_agent})
+    core_agent._initializeFromPledgeAgent(candidates, amounts, real_amounts, {'from': pledge_agent})
     for index, c in enumerate(candidates):
         assert core_agent.candidateMap(c)['amount'] == amounts[index]
         assert core_agent.candidateMap(c)['realtimeAmount'] == real_amounts[index]
@@ -1110,7 +1110,7 @@ def test_move_data_success(core_agent, pledge_agent):
 def test_function_call_access_control(core_agent):
     # Only the pledge agent can be called
     with brownie.reverts("the sender must be PledgeAgent contract"):
-        core_agent.initHardforkRound([], [], [], {'from': accounts[0]})
+        core_agent._initializeFromPledgeAgent([], [], [], {'from': accounts[0]})
     with brownie.reverts("the sender must be PledgeAgent contract"):
         core_agent.moveData(accounts[0], accounts[0], 0, 0, 0, {'from': accounts[0], 'value': 1000})
     # Only the Stake Hub can be called

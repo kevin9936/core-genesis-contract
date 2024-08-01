@@ -164,7 +164,7 @@ def test_move_agent_success(pledge_agent, validator_set, stake_hub, core_agent):
             'coin': delegate_amount + i,
             'moved': False,
         })
-    pledge_agent.moveAgent(operators)
+    pledge_agent.moveCandidateData(operators)
     for i in range(candidate_size):
         __check_candidate_map_info(operators[i], {
             'amount': delegate_amount + i,

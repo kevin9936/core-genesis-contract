@@ -79,7 +79,7 @@ def test_distribute_power_reward_during_turn_round(core_agent, hash_power_agent,
     tracker2 = get_tracker(clients[2])
     discount = stake_hub.stateMap(hash_power_agent)
     tx = turn_round(consensuses, tx_fee=TX_FEE)
-    delegator_coin_reward, delegator_power_reward, account_rewards, collateral_reward, collateral_state = parse_delegation(
+    rewards, _, account_rewards, collateral_reward, collateral_state = parse_delegation(
         [{
             "address": operators[0],
             "active": True,
@@ -102,8 +102,8 @@ def test_distribute_power_reward_during_turn_round(core_agent, hash_power_agent,
     stake_hub.claimReward({'from': clients[0]})
     stake_hub.claimReward({'from': clients[1]})
     stake_hub.claimReward({'from': clients[2]})
-    assert tracker0.delta() == delegator_power_reward[accounts[0]] + delegator_coin_reward[accounts[0]]
-    assert tracker1.delta() == delegator_power_reward[accounts[1]] + delegator_coin_reward[accounts[1]]
+    assert tracker0.delta() == rewards[1][accounts[0]] + rewards[0][accounts[0]]
+    assert tracker1.delta() == rewards[1][accounts[1]] + rewards[0][accounts[1]]
     assert tracker2.delta() == account_rewards[accounts[2]]
 
 

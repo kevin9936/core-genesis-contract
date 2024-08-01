@@ -10,9 +10,14 @@ contract BitcoinLSTStakeMock is BitcoinLSTStake {
     }
 
 
-    function setTotalAmount(uint64 value) external {
-//        totalAmount = value;
+    
+    function setInitRound(uint256 value) external {
+        initRound = value;
     }
+   function setRoundTag(uint256 value) external {
+        roundTag = value;
+    }
+
 
 
 }

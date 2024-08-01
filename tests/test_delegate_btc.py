@@ -4,7 +4,7 @@ import brownie
 import pytest
 from brownie.network import gas_price
 from web3 import Web3
-from brownie import accounts, TransferBtcReentry, ClaimBtcRewardReentry
+from brownie import *
 from .btc_block_data import *
 from .calc_reward import set_delegate, parse_delegation
 from .common import register_candidate, turn_round, get_current_round, set_last_round_tag, stake_hub_claim_reward
@@ -22,7 +22,7 @@ ZERO_ADDRESS = '0x0000000000000000000000000000000000000000'
 TX_FEE = 100
 public_key = "0223dd766d6e38eaf9c044dcb18d8221fe8c9a5763ca331e93fadc8f55949b8e12"
 lock_time = 1736956800
-chain_id = 1116
+chain_id = 1112
 lock_script_type = 'hash'
 FEE = 0
 core_hardcap = 6000
@@ -34,6 +34,7 @@ COIN_REWARD = 0
 POWER_REWARD = 0
 BTC_REWARD = 0
 BTC_REWARD1 = 0
+STAKE_ROUND = 3
 
 
 @pytest.fixture(scope="module", autouse=True)
@@ -43,16 +44,15 @@ def deposit_for_reward(validator_set, gov_hub):
 
 
 @pytest.fixture(scope="module", autouse=True)
-def set_block_reward(validator_set, candidate_hub, btc_light_client, btc_stake, stake_hub):
+def set_block_reward(validator_set, candidate_hub, btc_light_client, btc_stake, stake_hub, core_agent):
     global BLOCK_REWARD, btcFactor, MIN_BTC_LOCK_ROUND, FEE, BTC_AMOUNT, POWER_REWARD, BTC_REWARD, COIN_REWARD
-    global BTC_STAKE, BTC_REWARD1, STAKE_HUB
+    global BTC_STAKE, BTC_REWARD1, STAKE_HUB, CORE_AGENT
     FEE = FEE * 100
     block_reward = validator_set.blockReward()
     block_reward_incentive_percent = validator_set.blockRewardIncentivePercent()
     total_block_reward = block_reward + TX_FEE
     BLOCK_REWARD = total_block_reward * ((100 - block_reward_incentive_percent) / 100)
     btcFactor = stake_hub.INIT_BTC_FACTOR() * stake_hub.BTC_UNIT_CONVERSION()
-    print('stake_hub.BTC_UNIT_CONVERSION()', stake_hub.BTC_UNIT_CONVERSION())
     BTC_AMOUNT = BTC_VALUE * btcFactor
     MIN_BTC_LOCK_ROUND = btc_stake.minBtcLockRound()
     candidate_hub.setControlRoundTimeTag(True)
@@ -68,6 +68,7 @@ def set_block_reward(validator_set, candidate_hub, btc_light_client, btc_stake, 
     COIN_REWARD = total_reward * core_hardcap // sum_hardcap
     BTC_STAKE = btc_stake
     STAKE_HUB = stake_hub
+    CORE_AGENT = core_agent
 
 
 @pytest.fixture(scope="module", autouse=True)
@@ -105,7 +106,7 @@ def test_delegate_btc_with_lock_time_in_tx(btc_stake, set_candidate, stake_hub, 
         "020000000188f5ba21514a0c32cbf90baab2b48feeeb0f200bfe7388730d80bf7f78ad27cd020000006a473044022066314a4e78bda5f9cb448d867ef3e8ef0678f7e0865f188e5cb362f5b40aed5c02203df085a6f742129a78729e8ca710a3065eb13cc01cb175457f947cbb6f3f89c701210223dd766d6e38eaf9c044dcb18d8221fe8c9a5763ca331e93fadc8f55949b8e12"
         "feffffff02d007"
         "00000000000017a914f8f68b9543eaf5a9306090fde09ac765e1412e4587"
-        "0000000000000000366a345341542b01045c9fb29aac15b9a4b7f17c3385939b007540f4d791ccf7e1DAb7D90A0a91f8B1f6A693Bf0bb3a979a00180db8767"
+        "0000000000000000366a345341542b0104589fb29aac15b9a4b7f17c3385939b007540f4d791ccf7e1DAb7D90A0a91f8B1f6A693Bf0bb3a979a00180db8767"
         "00000000")
     tx_id = get_transaction_txid(btc_tx)
     tx = btc_stake.delegate(btc_tx, 1, [], 0, lock_script, {"from": accounts[1]})
@@ -168,7 +169,7 @@ def __get_candidate_map_info(candidate):
     uint256 realtimeAmount;
     """
     candidate_map = BTC_STAKE.candidateMap(candidate)
-    print('__get_candidate_map_info>>>>', candidate_map)
+    print(f'__get_candidate_map_info>>>>{candidate}', candidate_map)
     return candidate_map
 
 
@@ -192,7 +193,7 @@ def __get_btc_tx_map_info(tx_id):
     uint32 usedHeight;
     """
     data = BTC_STAKE.btcTxMap(tx_id)
-    print('__get_candidate_map_info>>>>', data)
+    print('__get_btc_tx_map_info>>>>', data)
     return data
 
 
@@ -267,7 +268,7 @@ def test_delegate_btc_with_lock_script_in_tx(btc_stake, set_candidate):
         "0200000001dd94cb72979c528593cb1188f4e3bf43a52f5570edab981e3d303ff24166afe5000000006b483045022100f2f069e37929cdfafffa79dcc1cf478504875fbe2a41704a96aee88ec604c0e502207259c56c67de8de6bb8c15e9d14b6ad16acd86d6a834fbb0531fd27bee7e5e3301210223dd766d6e38eaf9c044dcb18d8221fe8c9a5763ca331e93fadc8f55949b8e12"
         "feffffff03b80b00"
         "000000000017a914c0958c8d9357598c5f7a6eea8a807d81683f9bb687"
-        "0000000000000000536a4c505341542b01045c9fb29aac15b9a4b7f17c3385939b007540f4d791ccf7e1DAb7D90A0a91f8B1f6A693Bf0bb3a979a0010480db8767b17576a914574fdd26858c28ede5225a809f747c01fcc1f92a88ac"
+        "0000000000000000536a4c505341542b0104589fb29aac15b9a4b7f17c3385939b007540f4d791ccf7e1DAb7D90A0a91f8B1f6A693Bf0bb3a979a0010480db8767b17576a914574fdd26858c28ede5225a809f747c01fcc1f92a88ac"
         "3cd20000000000001976a914574fdd26858c28ede5225a809f747c01fcc1f92a88ac00000000")
     tx_id = get_transaction_txid(btc_tx)
     tx = btc_stake.delegate(btc_tx, 0, [], 0, lock_script, {"from": accounts[2]})
@@ -377,7 +378,7 @@ def test_delegate_btc_success_multi_sig_script(btc_stake, set_candidate):
         "020000000188f5ba21514a0c32cbf90baab2b48feeeb0f200bfe7388730d80bf7f78ad27cd020000006a473044022066314a4e78bda5f9cb448d867ef3e8ef0678f7e0865f188e5cb362f5b40aed5c02203df085a6f742129a78729e8ca710a3065eb13cc01cb175457f947cbb6f3f89c701210223dd766d6e38eaf9c044dcb18d8221fe8c9a5763ca331e93fadc8f55949b8e12"
         "feffffff02d007"
         "00000000000017a914f8f68b9543eaf5a9306090fde09ac765e1412e4587"
-        "0000000000000000366a345341542b01045c9fb29aac15b9a4b7f17c3385939b007540f4d791ccf7e1DAb7D90A0a91f8B1f6A693Bf0bb3a979a00180db8767"
+        "0000000000000000366a345341542b0104589fb29aac15b9a4b7f17c3385939b007540f4d791ccf7e1DAb7D90A0a91f8B1f6A693Bf0bb3a979a00180db8767"
         "00000000")
     btc_stake.delegate(btc_tx, 1, [], 0, lock_script, {"from": accounts[1]})
     turn_round()
@@ -394,7 +395,7 @@ def test_delegate_btc_with_witness_transaction_hash_script(btc_stake, set_candid
         "0200000001ac5d10fc2c7fde4aa105a740e0ae00dafa66a87f472d0395e71c4d70c4d698ba020000006b4830450221009b0f6b1f2cdb0125f166245064d18f026dc77777a657b83d6f56c79101c269b902206c84550b64755ec2eba1893e81b22a57350b003aa5a3a8915ac7c2eb905a1b7501210223dd766d6e38eaf9c044dcb18d8221fe8c9a5763ca331e93fadc8f55949b8e12"
         "feffffff03140500"
         "0000000000220020aee9137b4958e35085907caaa2d5a9e659b0b1037e06f04280e2e98520f7f16a"
-        "0000000000000000536a4c505341542b01045c9fb29aac15b9a4b7f17c3385939b007540f4d791ccf7e1DAb7D90A0a91f8B1f6A693Bf0bb3a979a0010480db8767b17576a914574fdd26858c28ede5225a809f747c01fcc1f92a88ac"
+        "0000000000000000536a4c505341542b0104589fb29aac15b9a4b7f17c3385939b007540f4d791ccf7e1DAb7D90A0a91f8B1f6A693Bf0bb3a979a0010480db8767b17576a914574fdd26858c28ede5225a809f747c01fcc1f92a88ac"
         "bcc00000000000001976a914574fdd26858c28ede5225a809f747c01fcc1f92a88ac00000000")
     btc_amount = 1300
     tx_id = get_transaction_txid(btc_tx)
@@ -438,10 +439,10 @@ def test_delegate_btc_with_witness_transaction_key_script(btc_stake, set_candida
     operators, consensuses = set_candidate
     lock_script = get_lock_script(lock_time, public_key, 'key')
     btc_tx = (
-        "02000000015f6488617362efed9f022b8aa0ddb048607640232a118e684dea38a2141c45c9020000006b483045022100b2ecc85951154d98a6134293bc1a1e294cb6df98f8c3dd78da8da9b88ffc4ba002205c919bfa76bbe5e0e102f85bb46db797bd046ae21a437ed7886e1c47eda228de01210223dd766d6e38eaf9c044dcb18d8221fe8c9a5763ca331e93fadc8f55949b8e12"
+        "02000000015f6488617362efed9f022b8aa0ddb048607640232a118e684dea38a2141c4589020000006b483045022100b2ecc85951154d98a6134293bc1a1e294cb6df98f8c3dd78da8da9b88ffc4ba002205c919bfa76bbe5e0e102f85bb46db797bd046ae21a437ed7886e1c47eda228de01210223dd766d6e38eaf9c044dcb18d8221fe8c9a5763ca331e93fadc8f55949b8e12"
         "feffffff03780500"
         "00000000002200204fe5871daeae16742a2f56b616d7db1335f1a13637ddc4daa53cbd6b6ad397f7"
-        "0000000000000000366a345341542b01045c9fb29aac15b9a4b7f17c3385939b007540f4d791ccf7e1DAb7D90A0a91f8B1f6A693Bf0bb3a979a00180db8767"
+        "0000000000000000366a345341542b0104589fb29aac15b9a4b7f17c3385939b007540f4d791ccf7e1DAb7D90A0a91f8B1f6A693Bf0bb3a979a00180db8767"
         "faaf0000000000001976a914574fdd26858c28ede5225a809f747c01fcc1f92a88ac00000000")
     btc_amount = 1400
     tx_id = get_transaction_txid(btc_tx)
@@ -578,7 +579,7 @@ def test_revert_on_invalid_witness_btc_tx_output(btc_stake, set_candidate, outpu
         "0200000001ac5d10fc2c7fde4aa105a740e0ae00dafa66a87f472d0395e71c4d70c4d698ba020000006b4830450221009b0f6b1f2cdb0125f166245064d18f026dc77777a657b83d6f56c79101c269b902206c84550b64755ec2eba1893e81b22a57350b003aa5a3a8915ac7c2eb905a1b7501210223dd766d6e38eaf9c044dcb18d8221fe8c9a5763ca331e93fadc8f55949b8e12"
         "feffffff03140500"
         f"000000000022{output_view}"
-        "0000000000000000536a4c505341542b01045c9fb29aac15b9a4b7f17c3385939b007540f4d791ccf7e1DAb7D90A0a91f8B1f6A693Bf0bb3a979a0010480db8767b17576a914574fdd26858c28ede5225a809f747c01fcc1f92a88ac"
+        "0000000000000000536a4c505341542b0104589fb29aac15b9a4b7f17c3385939b007540f4d791ccf7e1DAb7D90A0a91f8B1f6A693Bf0bb3a979a0010480db8767b17576a914574fdd26858c28ede5225a809f747c01fcc1f92a88ac"
         "bcc00000000000001976a914574fdd26858c28ede5225a809f747c01fcc1f92a88ac00000000")
     with brownie.reverts("staked value is zero"):
         btc_stake.delegate(btc_tx, 0, [], 0, lock_script)
@@ -590,7 +591,7 @@ def test_revert_on_insufficient_payload_length(btc_stake, set_candidate, delegat
                  'witness_btc_tx_block_data'] + (
                  f"03b80b00"
                  f"0000000000220020aee9137b4958e35085907caaa2d5a9e659b0b1037e06f04280e2e98520f7f16a"
-                 f"00000000000000002c6a2a045cccf7e1dab7d90a0a91f8b1f6a693bf0bb3a979a09fb29aac15b9a4b7f17c3385939b007540f4d791"
+                 f"00000000000000002c6a2a0458ccf7e1dab7d90a0a91f8b1f6a693bf0bb3a979a09fb29aac15b9a4b7f17c3385939b007540f4d791"
                  "8e440100000000001976a914574fdd26858c28ede5225a809f747c01fcc1f92a88ac00000000")
     with brownie.reverts("payload length is too small"):
         btc_stake.delegate(btc_tx, 0, [], 0, lock_script)
@@ -630,7 +631,6 @@ def test_claim_rewards_with_max_delegate_btc(btc_stake, set_candidate):
     stake_hub_claim_reward(accounts[0])
     assert tracker0.delta() == sum_reward
     assert tracker1.delta() == FEE * 12
-
 
 
 def test_collect_porter_fee_success(btc_stake, set_candidate, delegate_btc_valid_tx):
@@ -714,7 +714,7 @@ def test_claim_rewards_and_deduct_porter_fees_after_transfer(btc_stake, set_cand
     btc_stake.delegateCoin(operators[0], {"value": delegate_amount, "from": accounts[1]})
     turn_round()
     assert btc_stake.btcReceiptMap(tx_id_list[0])["endRound"] == end_round
-    btc_stake.transferBtc(tx_id_list[0], operators[1])
+    btc_stake.transfer(tx_id_list[0], operators[1])
     turn_round(consensuses)
     tracker0 = get_tracker(accounts[0])
     tracker1 = get_tracker(accounts[1])
@@ -737,7 +737,7 @@ def test_transfer_with_nonexistent_stake_certificate(btc_stake, set_candidate, d
     set_last_round_tag(end_round - MIN_BTC_LOCK_ROUND - 1)
     turn_round()
     with brownie.reverts("btc tx not found"):
-        btc_stake.transferBtc(tx_id, operators[1])
+        btc_stake.transfer(tx_id, operators[1])
 
 
 def test_transfer_btc_to_current_validator(btc_stake, set_candidate, delegate_btc_valid_tx):
@@ -748,7 +748,7 @@ def test_transfer_btc_to_current_validator(btc_stake, set_candidate, delegate_bt
     btc_stake.delegate(delegate_btc_tx0, 0, [], 0, lock_script, {'from': accounts[1]})
     turn_round()
     with brownie.reverts("can not transfer to the same validator"):
-        btc_stake.transferBtc(tx_id_list[0], operators[0])
+        btc_stake.transfer(tx_id_list[0], operators[0])
 
 
 def test_transfer_btc_to_validator_with_lock_period_ending(btc_stake, set_candidate, delegate_btc_valid_tx):
@@ -757,60 +757,94 @@ def test_transfer_btc_to_validator_with_lock_period_ending(btc_stake, set_candid
     set_last_round_tag(end_round - MIN_BTC_LOCK_ROUND - 1)
     lock_script, delegate_btc_tx0, tx_id_list = delegate_btc_valid_tx
     btc_stake.delegate(delegate_btc_tx0, 0, [], 0, lock_script, {'from': accounts[1]})
-    turn_round(consensuses, round_count=3)
-    with brownie.reverts("insufficient locking rounds"):
-        btc_stake.transferBtc(tx_id_list[0], operators[1])
     turn_round(consensuses, round_count=1)
-    assert btc_stake.btcReceiptMap(tx_id_list[0])['agent'] == operators[0]
     with brownie.reverts("insufficient locking rounds"):
-        btc_stake.transferBtc(tx_id_list[0], operators[1])
-    btc_stake.claimBtcReward(tx_id_list)
+        btc_stake.transfer(tx_id_list[0], operators[1])
+    turn_round(consensuses, round_count=1)
+    __check_btc_tx_map_info(tx_id_list[0], {
+        'amount': BTC_VALUE,
+        'outputIndex': 0,
+        'lockTime': lock_time,
+        'usedHeight': 0,
+    })
+    __check_receipt_map_info(tx_id_list[0], {
+        'candidate': operators[0],
+        'delegator': accounts[0],
+        'round': get_current_round() - 2
+    })
+    with brownie.reverts("insufficient locking rounds"):
+        btc_stake.transfer(tx_id_list[0], operators[1])
+    stake_hub_claim_reward(accounts[0])
     # after the lockout period expires, the recorded data will be reset to zero.
-    assert btc_stake.btcReceiptMap(tx_id_list[0])['agent'] == ZERO_ADDRESS
+    __check_receipt_map_info(tx_id_list[0], {
+        'candidate': ZERO_ADDRESS,
+        'delegator': ZERO_ADDRESS,
+        'round': 0
+    })
+
+
+def __set_last_round_tag(stake_round, time0=None):
+    if time0 is None:
+        time0 = lock_time
+    end_round0 = time0 // ROUND_INTERVAL
+    current_round = end_round0 - MIN_BTC_LOCK_ROUND - stake_round
+    CandidateHubMock[0].setRoundTag(current_round)
+    BitcoinStakeMock[0].setRoundTag(current_round)
+    BitcoinLSTStakeMock[0].setInitRound(current_round)
+    # BitcoinLSTStakeMock[0].setRoundTag(current_round)
+    print(f'__set_last_round_tag>>>>>>>>>>>>>>>>>{end_round0},{current_round}')
+    return end_round0, current_round
 
 
 def test_transfer_to_non_validator_target(btc_stake, set_candidate, delegate_btc_valid_tx):
     operators, consensuses = set_candidate
-    end_round = lock_time // ROUND_INTERVAL
-    set_last_round_tag(end_round - MIN_BTC_LOCK_ROUND - 1)
+    __set_last_round_tag(2)
     lock_script, delegate_btc_tx0, tx_id_list = delegate_btc_valid_tx
     btc_stake.delegate(delegate_btc_tx0, 0, [], 0, lock_script, {'from': accounts[1]})
     turn_round(consensuses)
-    error_msg = encode_args_with_signature("InactiveAgent(address)", [accounts[2].address])
+    error_msg = encode_args_with_signature("InactiveCandidate(address)", [accounts[2].address])
     with brownie.reverts(f"{error_msg}"):
-        btc_stake.transferBtc(tx_id_list[0], accounts[2])
-    assert btc_stake.btcReceiptMap(tx_id_list[0])['value'] == BTC_VALUE
+        btc_stake.transfer(tx_id_list[0], accounts[2])
+    __check_candidate_map_info(operators[0], {
+        'stakedAmount': BTC_VALUE,
+        'realtimeAmount': BTC_VALUE
+    })
+    __check_btc_tx_map_info(tx_id_list[0], {
+        'amount': BTC_VALUE,
+        'outputIndex': 0,
+        'lockTime': lock_time,
+        'usedHeight': 0,
+    })
 
 
-def test_transfer_btc_between_different_validators(btc_stake, candidate_hub, set_candidate, delegate_btc_valid_tx):
+def __get_delegator_btc_map(delegator):
+    data = BTC_STAKE.getDelegatorBtcMap(delegator)
+    print('__get_delegator_btc_map>>>>>>>>>>', data)
+    return data
+
+
+def test_transfer_btc_between_different_validators(btc_stake, core_agent, candidate_hub, set_candidate,
+                                                   delegate_btc_valid_tx, btc_lst_stake):
     operators, consensuses = set_candidate
-    end_round = lock_time // ROUND_INTERVAL
-    set_last_round_tag(end_round - MIN_BTC_LOCK_ROUND - 1)
+    end_round, _ = __set_last_round_tag(STAKE_ROUND)
     lock_script, delegate_btc_tx0, tx_id_list = delegate_btc_valid_tx
     tx_id = tx_id_list[0]
     btc_stake.delegate(delegate_btc_tx0, 0, [], 0, lock_script, {'from': accounts[1]})
     turn_round()
-    btc_stake.transferBtc(tx_id, operators[1])
-    btc_stake.transferBtc(tx_id, operators[2])
-    btc_stake.transferBtc(tx_id, operators[0])
-    btc_stake.transferBtc(tx_id, operators[1])
-    addr_list = btc_stake.getAgentAddrList(end_round)
-    for index, addr in enumerate(addr_list):
-        assert addr == operators[index]
-    assert len(addr_list) == 3
-    assert btc_stake.getReward(operators[0], 0)[3] == 0
+    btc_stake.transfer(tx_id, operators[1])
+    btc_stake.transfer(tx_id, operators[2])
+    btc_stake.transfer(tx_id, operators[0])
+    btc_stake.transfer(tx_id, operators[1])
+    assert __get_delegator_btc_map(accounts[0])[0] == tx_id
     turn_round(consensuses, round_count=2)
-    tx = btc_stake.claimBtcReward(tx_id_list)
-    expect_event(tx, "claimedReward", {
-        "amount": BLOCK_REWARD // 2 - FEE,
-        "success": True
-    })
-    assert btc_stake.btcReceiptMap(tx_id)['agent'] == operators[1]
-    turn_round(consensuses)
-    tx = btc_stake.claimBtcReward(tx_id_list)
-    expect_event(tx, "claimedReward", {
-        "amount": BLOCK_REWARD // 2,
-    })
+    __check_btc_tx_map_info(tx_id, {})
+    __check_receipt_map_info(tx_id, {})
+    __check_candidate_map_info(operators[0], {})
+    __check_candidate_map_info(operators[1], {})
+    __check_candidate_map_info(operators[2], {})
+    tracker = get_tracker(accounts[0])
+    stake_hub_claim_reward(accounts[0])
+    assert tracker.delta() == __calculate_btc_only_rewards(BTC_VALUE)
 
 
 def test_claim_rewards_with_insufficient_porter_funds(btc_stake, set_candidate, delegate_btc_valid_tx):
@@ -874,11 +908,11 @@ def test_duplicate_transfer_success(btc_stake, set_candidate, delegate_btc_valid
     lock_script, delegate_btc_tx0, tx_id_list = delegate_btc_valid_tx
     btc_stake.delegate(delegate_btc_tx0, 0, [], 0, lock_script, {'from': accounts[1]})
     turn_round()
-    tx = btc_stake.transferBtc(tx_id_list[0], operators[1])
+    tx = btc_stake.transfer(tx_id_list[0], operators[1])
     assert 'transferredBtc' in tx.events
-    tx = btc_stake.transferBtc(tx_id_list[0], operators[2])
+    tx = btc_stake.transfer(tx_id_list[0], operators[2])
     assert 'transferredBtc' in tx.events
-    tx = btc_stake.transferBtc(tx_id_list[0], operators[0])
+    tx = btc_stake.transfer(tx_id_list[0], operators[0])
     assert 'transferredBtc' in tx.events
     addr_list = btc_stake.getAgentAddrList(end_round)
     assert len(addr_list) == 3
@@ -899,10 +933,10 @@ def test_claim_rewards_success_with_max_stake_certificates(btc_stake, set_candid
         before_transfer_agent = btc_stake.btcReceiptMap(tx_id)['agent']
         assert btc_stake.btcReceiptMap(tx_id)['agent'] == before_transfer_agent
         if i % 2 == 0:
-            btc_stake.transferBtc(tx_id, operators[1])
+            btc_stake.transfer(tx_id, operators[1])
             agent = operators[1]
         else:
-            btc_stake.transferBtc(tx_id, operators[2])
+            btc_stake.transfer(tx_id, operators[2])
             agent = operators[2]
         assert btc_stake.btcReceiptMap(tx_id)['agent'] == agent
     turn_round(consensuses)
@@ -916,7 +950,7 @@ def test_revert_on_invalid_btc_transaction(btc_stake, set_candidate):
     lock_script = get_lock_script(lock_time, public_key, lock_script_type)
     btc_tx = (delegate_btc_block_data['btc_tx_block_data'] +
               "03a9149ca26c6aa5a614836d041193ab7df1b6d650791387"
-              "00000000000000002c6a2a045c96c42c56fdb78294f96b0cfa33c92be"
+              "00000000000000002c6a2a045896c42c56fdb78294f96b0cfa33c92be"
               "d7d75f96a9fb29aac15b9a4b7f17c3385939b007540f4d7914e930100000000001976a914574fdd26858c28ede5225a809f747c"
               "01fcc1f92a88ac00000000")
     with brownie.reverts("BitcoinHelper: invalid tx"):
@@ -931,12 +965,12 @@ def test_claim_btc_staking_rewards_success(btc_stake, set_candidate, delegate_bt
     turn_round()
     turn_round(consensuses)
     tracker = get_tracker(accounts[0])
-    tx = btc_stake.claimBtcReward(tx_id_list)
+    tx = stake_hub_claim_reward(accounts[0])
     expect_event(tx, "claimedReward", {
-        "amount": BLOCK_REWARD // 2 - FEE,
-        "success": True
+        "delegator": accounts[0],
+        "amount": __calculate_btc_only_rewards(BTC_VALUE)
     })
-    assert tracker.delta() == BLOCK_REWARD // 2
+    assert tracker.delta() == __calculate_btc_only_rewards(BTC_VALUE)
 
 
 @pytest.mark.parametrize("internal", [
@@ -1044,7 +1078,7 @@ def test_single_validator_multiple_stakes(btc_stake, set_candidate):
     delegate_btc_tx1 = (delegate_btc_block_data['witness_btc_tx_block_data']
                         + ("03c40900"
                            "000000000022002043c1a535b8941dbb2945ab932abb99995ffc7a5c3ea680b121ef9ca99b7dee45"
-                           "0000000000000000536a4c505341542b01045c9fb29aac15b9a4b7f17c3385939b007540f4d791ccf7e1DAb7D90A0a91f8B1f6A693Bf0bb3a979a0010480db8767b17576a914574fdd26858c28ede5225a809f747c01fcc1f92a88ac"
+                           "0000000000000000536a4c505341542b0104589fb29aac15b9a4b7f17c3385939b007540f4d791ccf7e1DAb7D90A0a91f8B1f6A693Bf0bb3a979a0010480db8767b17576a914574fdd26858c28ede5225a809f747c01fcc1f92a88ac"
                            "bcc00000000000001976a914574fdd26858c28ede5225a809f747c01fcc1f92a88ac00000000"))
     tx_id_list = []
     btc_stake.delegate(delegate_btc_tx0, 0, [], 0, lock_script0)
@@ -1100,7 +1134,7 @@ def test_multiple_users_staking_to_same_validator(btc_stake, set_candidate):
     delegate_btc_tx1 = delegate_btc_block_data[
                            'witness_btc_tx_block_data'] + ("03c40900"
                                                            "000000000022002043c1a535b8941dbb2945ab932abb99995ffc7a5c3ea680b121ef9ca99b7dee45"
-                                                           "0000000000000000536a4c505341542b01045c9fb29aac15b9a4b7f17c3385939b007540f4d791ccf7e1DAb7D90A0a91f8B1f6A693Bf0bb3a979a0010480db8767b17576a914574fdd26858c28ede5225a809f747c01fcc1f92a88ac"
+                                                           "0000000000000000536a4c505341542b0104589fb29aac15b9a4b7f17c3385939b007540f4d791ccf7e1DAb7D90A0a91f8B1f6A693Bf0bb3a979a0010480db8767b17576a914574fdd26858c28ede5225a809f747c01fcc1f92a88ac"
                                                            "722f0000000000001976a914574fdd26858c28ede5225a809f747c01fcc1f92a88ac00000000")
     delegate_btc_tx2, tx_id2 = get_btc_tx(btc_amount0 // btcFactor, chain_id, operators[0], accounts[0],
                                           lock_script_type)
@@ -1207,7 +1241,7 @@ def test_transfer_btc_success(btc_stake, set_candidate, delegate_btc_valid_tx):
     turn_round()
     voucher = btc_stake.btcReceiptMap(tx_id_list[0])
     assert voucher["endRound"] == end_round
-    tx = btc_stake.transferBtc(tx_id_list[0], operators[1])
+    tx = btc_stake.transfer(tx_id_list[0], operators[1])
     btc_stake.transferCoin(operators[0], operators[2], {'from': accounts[1]})
     expect_event(tx, 'transferredBtc', {
         'txid': tx_id_list[0],
@@ -1236,7 +1270,7 @@ def test_transfer_btc_when_no_rewards_in_current_round(btc_stake, set_candidate,
     btc_stake.delegate(delegate_btc_tx0, 0, [], 0, lock_script)
     btc_stake.delegateCoin(operators[0], {"value": delegate_amount, "from": accounts[1]})
     turn_round()
-    btc_stake.transferBtc(tx_id_list[0], operators[1])
+    btc_stake.transfer(tx_id_list[0], operators[1])
     voucher0 = btc_stake.btcReceiptMap(tx_id_list[0])
     assert voucher0["endRound"] == end_round
     turn_round(consensuses, round_count=1)
@@ -1362,7 +1396,7 @@ def test_claim_rewards_with_different_fees_after_transfer_success(btc_stake, set
     delegate_btc_tx0, tx_id = get_btc_tx(BTC_VALUE, chain_id, operators[0], accounts[0], lock_script_type, core_fee=fee)
     btc_stake.delegate(delegate_btc_tx0, 0, [], 0, lock_script, {"from": accounts[1]})
     turn_round()
-    btc_stake.transferBtc(tx_id, operators[1])
+    btc_stake.transfer(tx_id, operators[1])
     turn_round(consensuses, round_count=3)
     tracker1 = get_tracker(accounts[1])
     tx = btc_stake.claimBtcReward([tx_id])
@@ -1390,8 +1424,8 @@ def test_multiple_btc_receipts_to_single_address(btc_stake, set_candidate, deleg
     btc_stake.delegate(delegate_btc_tx1, round_tag, [], 0, lock_script, {'from': accounts[2]})
     btc_stake.delegateCoin(operators[2], {"value": delegate_amount, "from": accounts[1]})
     turn_round()
-    btc_stake.transferBtc(tx_id0, operators[2])
-    btc_stake.transferBtc(tx_id1, operators[2])
+    btc_stake.transfer(tx_id0, operators[2])
+    btc_stake.transfer(tx_id1, operators[2])
     turn_round(consensuses)
     tx = btc_stake.claimBtcReward(tx_id_list)
     assert 'claimedReward' not in tx.events
@@ -1429,7 +1463,7 @@ def test_multiple_reward_transfers_in_multiple_rounds(btc_stake, set_candidate, 
                       'rewardIndex': 0,
                       'feeReceiver': accounts[1],
                       'fee': FEE})
-        tx = btc_stake.transferBtc(tx_id_list[index], operators[index - 1])
+        tx = btc_stake.transfer(tx_id_list[index], operators[index - 1])
         before_amount = BTC_VALUE + index
         target_agent_amount = 0
         if index == 0:
@@ -1780,7 +1814,7 @@ def test_operations_with_coin_power_and_btc_staking(btc_stake, set_candidate, bt
     transfer_amount = delegate_amount // 2
     btc_stake.transferCoin(operators[0], operators[2], transfer_amount, {'from': accounts[1]})
     btc_stake.undelegateCoin(operators[2], undelegate_amount, {'from': accounts[1]})
-    btc_stake.transferBtc(tx_id_list[0], operators[1])
+    btc_stake.transfer(tx_id_list[0], operators[1])
     turn_round(consensuses)
     total_score = total_delegate * 3
     tracker0 = get_tracker(accounts[0])
@@ -1820,7 +1854,7 @@ def test_transfer_btc_reverts_for_non_delegator(btc_stake, set_candidate, delega
     btc_stake.delegateCoin(operators[0], {"value": delegate_amount, "from": accounts[1]})
     turn_round()
     with brownie.reverts("not the delegator of this btc receipt"):
-        btc_stake.transferBtc(tx_id_list[0], operators[1], {'from': accounts[1]})
+        btc_stake.transfer(tx_id_list[0], operators[1], {'from': accounts[1]})
     with brownie.reverts("not the delegator of this btc receipt"):
         btc_stake.claimBtcReward(tx_id_list, {'from': accounts[1]})
 
@@ -1836,7 +1870,7 @@ def test_claiming_historical_rewards_with_btc_transfer(btc_stake, set_candidate,
     turn_round()
     turn_round(consensuses, round_count=2)
     tracker0 = get_tracker(accounts[0])
-    tx = btc_stake.transferBtc(tx_id_list[0], operators[1], {'from': accounts[0]})
+    tx = btc_stake.transfer(tx_id_list[0], operators[1], {'from': accounts[0]})
     expect_event(tx, "claimedReward", {
         'amount': BLOCK_REWARD // 4 * 2 - FEE
     })
@@ -1854,7 +1888,7 @@ def test_transfer_btc_to_existing_btc_staker(btc_stake, set_candidate, delegate_
     btc_stake.delegate(delegate_btc_tx1, 0, [], 0, lock_script, {'from': accounts[2]})
     btc_stake.delegateCoin(operators[0], {"value": delegate_amount, "from": accounts[1]})
     turn_round()
-    btc_stake.transferBtc(tx_id_list[0], operators[1], {'from': accounts[0]})
+    btc_stake.transfer(tx_id_list[0], operators[1], {'from': accounts[0]})
     agent_map0 = btc_stake.agentsMap(operators[0])
     agent_map1 = btc_stake.agentsMap(operators[1])
     assert agent_map0['totalBtc'] == 0
@@ -1879,7 +1913,7 @@ def test_transfer_btc_from_multiple_btc_stakings(btc_stake, set_candidate, deleg
     btc_stake.delegate(delegate_btc_tx1, 0, [], 0, lock_script, {'from': accounts[2]})
     tx_id_list.append(tx_id1)
     turn_round()
-    btc_stake.transferBtc(tx_id_list[0], operators[1], {'from': accounts[0]})
+    btc_stake.transfer(tx_id_list[0], operators[1], {'from': accounts[0]})
     turn_round(consensuses)
     tracker0 = get_tracker(accounts[0])
     btc_stake.claimBtcReward(tx_id_list, {'from': accounts[0]})
@@ -1895,7 +1929,7 @@ def test_multiple_btc_stakings_in_vout(btc_stake, set_candidate):
         "0200000001dd94cb72979c528593cb1188f4e3bf43a52f5570edab981e3d303ff24166afe5000000006b483045022100f2f069e37929cdfafffa79dcc1cf478504875fbe2a41704a96aee88ec604c0e502207259c56c67de8de6bb8c15e9d14b6ad16acd86d6a834fbb0531fd27bee7e5e3301210223dd766d6e38eaf9c044dcb18d8221fe8c9a5763ca331e93fadc8f55949b8e12"
         "feffffff03b80b00"
         "000000000017a914c0958c8d9357598c5f7a6eea8a807d81683f9bb687"
-        "0000000000000000536a4c505341542b01045c9fb29aac15b9a4b7f17c3385939b007540f4d791ccf7e1DAb7D90A0a91f8B1f6A693Bf0bb3a979a0010480db8767b17576a914574fdd26858c28ede5225a809f747c01fcc1f92a88ac"
+        "0000000000000000536a4c505341542b0104589fb29aac15b9a4b7f17c3385939b007540f4d791ccf7e1DAb7D90A0a91f8B1f6A693Bf0bb3a979a0010480db8767b17576a914574fdd26858c28ede5225a809f747c01fcc1f92a88ac"
         "3cd200000000000017a914c0958c8d9357598c5f7a6eea8a807d81683f9bb68700000000")
     tx_id = get_transaction_txid(btc_tx)
     tx = btc_stake.delegate(btc_tx, 0, [], 0, lock_script, {"from": accounts[2]})
@@ -1970,8 +2004,8 @@ def test_transfer_btc_reentry(btc_stake, set_candidate, delegate_btc_valid_tx):
     btc_stake_proxy.setTargetAgent(operators[1].address)
     turn_round(consensuses)
     tracker = get_tracker(btc_stake_proxy)
-    tx = btc_stake_proxy.transferBtc(tx_id1, operators[1].address)
-    expect_event(tx, "proxyTransferBtc", {
+    tx = btc_stake_proxy.transfer(tx_id1, operators[1].address)
+    expect_event(tx, "proxyTransfer", {
         "success": False
     })
     assert tracker.delta() == 0
@@ -1994,7 +2028,7 @@ def test_claiming_rewards_with_multiple_staking_types(btc_stake, candidate_hub, 
     tracker0 = get_tracker(accounts[0])
     tracker1 = get_tracker(accounts[1])
     tracker2 = get_tracker(accounts[2])
-    btc_stake.transferBtc(tx_id_list[0], operators[1], {'from': accounts[0]})
+    btc_stake.transfer(tx_id_list[0], operators[1], {'from': accounts[0]})
     turn_round(consensuses, tx_fee=TX_FEE)
     btc_stake.claimReward([], {'from': accounts[2]})
     btc_stake.claimBtcReward(tx_id_list, {'from': accounts[0]})
@@ -2012,7 +2046,7 @@ def test_btc_transaction_with_witness_as_output_address(btc_stake, set_candidate
         "020000000001010280516aa5b5fb7bd9b7b94b14145af46f6404da96d5f56e1504e1d9d15ef6520200000017160014a808bc3c1ba547b0ba2df4abf1396f35c4d23b4ffeffffff"
         "03a08601"
         "00000000002200204969dea00948f43ae8f6efb45db768e41b15f4fd70d7fcf366c270c1cbca262a"
-        "0000000000000000536a4c505341542b01045c9fb29aac15b9a4b7f17c3385939b007540f4d791ccf7e1DAb7D90A0a91f8B1f6A693Bf0bb3a979a001041e28fd65b17576a914a808bc3c1ba547b0ba2df4abf1396f35c4d23b4f88ac"
+        "0000000000000000536a4c505341542b0104589fb29aac15b9a4b7f17c3385939b007540f4d791ccf7e1DAb7D90A0a91f8B1f6A693Bf0bb3a979a001041e28fd65b17576a914a808bc3c1ba547b0ba2df4abf1396f35c4d23b4f88ac"
         "a4d81d"
         "000000000017a9144c35996fbf4026de7c8fe79c4320c248a10e4bf28702483045022100e32dd040238c19321407b7dfbba957e5988755779030dbcc52e6ae22a2a2088402202eeb497ae61aee9eba97cc4f5d34ba814c3ad1c0bf3286edaba05f044ab4bba401210386f359aa5a42d821370bf07a5ad86c1ff2d892662699103e462ae04d082d83ac00000000")
     lock_script = '041e28fd65b17576a914a808bc3c1ba547b0ba2df4abf1396f35c4d23b4f88ac'
