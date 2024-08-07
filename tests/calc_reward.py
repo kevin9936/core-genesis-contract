@@ -292,17 +292,7 @@ def parse_delegation(agents, block_reward, power_factor=500, btc_factor=10, core
     update_delegator_total_reward(delegator_coin_reward, account_rewards)
     update_delegator_total_reward(delegator_power_reward, account_rewards)
     update_delegator_total_reward(delegator_btc_reward, account_rewards)
-
-    print('collateral_state>>>>>>>>', collateral_state)
-    print('collateral_reward>>>>>>>>There are different types of total rewards on validators', asset_reward_map)
-    print('delegator_coin_reward>>>>>>>>', delegator_coin_reward)
-    print('delegator_power_reward>>>>>>>', delegator_power_reward)
-    print('delegator_btc_reward>>>>>>>', delegator_btc_reward)
-    print('account_rewards>>>>>>>>', account_rewards)
-    print('unclaimed_reward>>>>>>>>', unclaimed_reward)
-    print('unclaimed_info>>>>>>>>', unclaimed_info)
-    print('rates_core>>>>>>>>>>>>', rates_core)
-    print('round_reward>>>single_reward>>>>>>>>>>>>', asset_unit_reward_map)
+    print(f'delegator rewards : {account_rewards}')
     rewards = [delegator_coin_reward, delegator_power_reward, delegator_btc_reward]
     unclaimed = [unclaimed_reward, unclaimed_info]
     round_reward = [asset_unit_reward_map, asset_reward_map]

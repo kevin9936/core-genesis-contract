@@ -377,7 +377,6 @@ def test_defeated_proposal(gov_hub):
 
 
 def test_execute_proposal_failed_with_invalid_proposal_id(gov_hub):
-    print('proposalCount',gov_hub.proposalCount())
     with brownie.reverts("state: invalid proposal id"):
         gov_hub.execute(1)
 

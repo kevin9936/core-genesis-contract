@@ -303,7 +303,6 @@ def test_migration_scenario_5(pledge_agent, validator_set, stake_hub, operate):
 
 def __init_hybrid_score_mock():
     tx = STAKE_HUB.initHybridScoreMock()
-    print('__init_Hybrid_score_mock>>>>>>>>>', tx.events)
 
 
 def __old_delegate_coin(candidate, account=None, amount=None, old=True):
@@ -315,7 +314,6 @@ def __old_delegate_coin(candidate, account=None, amount=None, old=True):
         tx = PLEDGE_AGENT.delegateCoinOld(candidate, {'value': amount, 'from': account})
     else:
         tx = PLEDGE_AGENT.delegateCoin(candidate, {'value': amount, 'from': account})
-    print('__old_delegate_coin>>>>>>>>>tx', tx.events)
 
 
 def __old_undelegate_coin(candidate, account=None, amount=0, old=True):
@@ -325,7 +323,6 @@ def __old_undelegate_coin(candidate, account=None, amount=0, old=True):
         tx = PLEDGE_AGENT.undelegateCoinOld(candidate, amount, {'from': account})
     else:
         tx = PLEDGE_AGENT.undelegateCoin(candidate, amount, {'from': account})
-    print('__old_undelegate_coin>>>>>>>>>tx', tx.events)
     return tx
 
 
@@ -336,7 +333,6 @@ def __old_transfer_coin(source_agent, target_agent, account=None, amount=0, old=
         tx = PLEDGE_AGENT.transferCoinOld(source_agent, target_agent, amount, {'from': account})
     else:
         tx = PLEDGE_AGENT.transferCoin(source_agent, target_agent, amount, {'from': account})
-    print('__old_transfer_coin>>>>>>>>>tx', tx.events)
     return tx
 
 
@@ -344,94 +340,39 @@ def __old_claim_reward(candidates, account=None):
     if account is None:
         account = accounts[0]
     tx = PLEDGE_AGENT.claimReward(candidates, {'from': account})
-    print('__old_claim_reward>>>>>>>>>tx', tx.events)
 
 
 def __get_old_reward_index_info(candidate, index):
-    """
-    uint256 totalReward;
-    uint256 remainReward;
-    uint256 score;
-    uint256 coin;
-    uint256 round;
-    """
     reward_index = PLEDGE_AGENT.getReward(candidate, index)
-    print('__get_old_reward_index_info>>>>>>>', reward_index)
     return reward_index
 
 
 def __get_old_agent_map_info(candidate):
-    """
-    uint256 totalDeposit;
-    uint256 power;
-    uint256 coin;
-    uint256 btc;
-    uint256 totalBtc;
-    bool    moved;
-    """
     agent_map = PLEDGE_AGENT.agentsMap(candidate)
-    print('__get_old_agent_map_info>>>>>>>', agent_map)
     return agent_map
 
 
 def __get_old_delegator_info(candidate, delegator):
-    """
-    uint256 deposit;
-    uint256 newDeposit;
-    uint256 changeRound;
-    uint256 rewardIndex;
-    uint256 transferOutDeposit;
-    uint256 transferInDeposit;
-    """
     delegator_info = PLEDGE_AGENT.getDelegator(candidate, delegator)
-    print('__get_old_delegator_info>>>>', delegator_info)
     return delegator_info
 
 
 def __get_delegator_info(candidate, delegator):
-    """
-    uint256 stakedAmount;
-    uint256 realtimeAmount;
-    uint256 changeRound;
-    uint256 transferredAmount;
-    """
     delegator_info = CoreAgentMock[0].getDelegator(candidate, delegator)
-    print('__get_delegator_info>>>>', delegator_info)
     return delegator_info
 
 
 def __get_reward_map_info(delegator):
-    """
-    uint256 stakedAmount;
-    uint256 realtimeAmount;
-    uint256 changeRound;
-    uint256 transferredAmount;
-    """
     delegator_info = CoreAgentMock[0].rewardMap(delegator)
-    print('__get_reward_map_info>>>>', delegator_info)
     return delegator_info
 
 
 def __get_candidate_map_info(candidate):
-    """
-    // This value is set in setNewRound
-    uint256 amount;
-    // It is changed when delegate/undelegate/tranfer
-    uint256 realtimeAmount;
-    uint256[] continuousRewardEndRounds;
-    """
     candidate_info = CoreAgentMock[0].candidateMap(candidate)
-    print('__get_candidate_map_info>>>>', candidate_info)
     return candidate_info
 
 
 def __check_candidate_map_info(candidate, result: dict):
-    """
-    candidate_map_info:
-    uint256 amount;
-    uint256 realtimeAmount;
-    """
-    print('__check_candidate_map_info<<<<<<<<<<<<<<<<<<')
     old_info = __get_candidate_map_info(candidate)
     for i in result:
         assert old_info[i] == result[i]
@@ -440,46 +381,23 @@ def __check_candidate_map_info(candidate, result: dict):
 def __get_candidate_amount_map_info(candidate):
     # The order is core, hash, btc.
     candidate_amounts = STAKE_HUB.getCandidateAmounts(candidate)
-    print('__get_candidate_amount_map_info>>>>', candidate_amounts)
     candidate_score = STAKE_HUB.candidateScoreMap(candidate)
     return candidate_amounts, candidate_score
 
 
 def __check_old_delegate_info(candidate, delegator, result: dict):
-    """
-    old_info:
-    uint256 deposit;
-    uint256 newDeposit;
-    uint256 changeRound;
-    uint256 rewardIndex;
-    uint256 transferOutDeposit;
-    uint256 transferInDeposit;
-    """
-    print('__check_old_delegate_info<<<<<<<<<<<<<<<<<<')
     old_info = __get_old_delegator_info(candidate, delegator)
     for i in result:
         assert old_info[i] == result[i]
 
 
 def __check_delegate_info(candidate, delegator, result: dict):
-    """
-    uint256 stakedAmount;
-    uint256 realtimeAmount;
-    uint256 changeRound;
-    uint256 transferredAmount;
-    """
-    print('__check_delegate_info<<<<<<<<<<<<<<<<<<')
     old_info = __get_delegator_info(candidate, delegator)
     for i in result:
         assert old_info[i] == result[i]
 
 
 def __check_candidate_amount_map_info(candidate, result: list, score):
-    """
-        [coin,hash,btc]
-    """
-    print('__check_candidate_amount_map_info<<<<<<<<<<<<<<<<<<')
-
     candidate_amounts, candidate_score = __get_candidate_amount_map_info(candidate)
     if candidate_amounts == ():
         candidate_amounts = [0, 0, 0]
@@ -489,16 +407,6 @@ def __check_candidate_amount_map_info(candidate, result: list, score):
 
 
 def __check_old_agent_map_info(candidate, result: dict):
-    """
-        uint256 totalDeposit;
-        uint256 power;
-        uint256 coin;
-        uint256 btc;
-        uint256 totalBtc;
-        bool    moved;
-    """
-    print('__check_old_agent_map_info<<<<<<<<<<<<<<<<<<')
-
     old_info = __get_old_agent_map_info(candidate)
     for i in result:
         assert old_info[i] == result[i]
@@ -513,7 +421,6 @@ def __old_turn_round(miners: list = None, tx_fee=100, round_count=1):
             ValidatorSetMock[0].deposit(miner, {"value": tx_fee, "from": accounts[-10]})
         tx = CandidateHubMock[0].turnRoundOld()
         chain.sleep(1)
-        print('__old_turn_round>>>>>>>>>>>>>:', get_current_round())
     return tx
 
 
@@ -525,5 +432,4 @@ def __register_candidates(agents=None):
     for operator in agents:
         operators.append(operator)
         consensuses.append(register_candidate(operator=operator))
-    print(f'__register_candidates>>>>>>>>>>operators:{operators},consensuses:{consensuses}')
     return operators, consensuses

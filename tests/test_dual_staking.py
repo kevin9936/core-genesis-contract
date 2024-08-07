@@ -914,7 +914,6 @@ def __delegate_btc(operator, delegator, btc_amount=None, lock_script=None, lock_
     __set_block_time_stamp(stake_duration)
     btc_tx, tx_id = get_btc_tx(btc_amount, Utils.CHAIN_ID, operator, delegator, lock_data=lock_time)
     BTC_STAKE.delegate(btc_tx, 0, [], 0, lock_script)
-    print('__delegate_coin>>>>>>>>>>')
     return lock_script, btc_tx, tx_id
 
 
@@ -929,17 +928,14 @@ def __delegate_coin(candidate, value=None, delegate=None):
     if delegate is None:
         delegate = accounts[0]
     CORE_AGENT.delegateCoin(candidate, {"value": value, "from": delegate})
-    print('__delegate_coin>>>>>>>>>>')
 
 
 def __set_is_btc_stake_active(value=0):
     BTC_STAKE.setIsActive(value)
-    print('__set_is_active>>>>>>>>success', value)
 
 
 def __set_is_stake_hub_active(value):
     STAKE_HUB.setIsActive(value)
-    print('__set_is_active>>>>>>>>success', value)
 
 
 def __set_block_time_stamp(timestamp, stake_lock_time=None, time_type='day'):
@@ -952,13 +948,11 @@ def __set_block_time_stamp(timestamp, stake_lock_time=None, time_type='day'):
     else:
         timestamp = timestamp * 2592000
         time1 = stake_lock_time - timestamp
-    print(f'__set_block_time_stamp>>>>>>>>>{time1},{(stake_lock_time - time1) // 86400}')
     BTC_LIGHT_CLIENT.setCheckResult(True, time1)
 
 
 def __set_btc_pool_rate(value):
     STAKE_HUB.setBtcPoolRate(value)
-    print('__set_btc_pool_rate>>>>>>>', value)
 
 
 def __set_tlp_rates(rates=None):
@@ -968,9 +962,6 @@ def __set_tlp_rates(rates=None):
             tl = r[0]
             tp = r[1]
             BTC_STAKE.setTlpRates(tl, tp)
-        for i in range(0, len(rates)):
-            print(f'lpRates{i}', BTC_STAKE.grades(i))
-    print('__set_tlp_rates>>>>>>>>>>>>>>')
 
 
 def __set_lp_rates(rates=None):
@@ -980,9 +971,6 @@ def __set_lp_rates(rates=None):
             tl = r[0]
             tp = r[1]
             STAKE_HUB.setLpRates(tl, tp)
-        for i in range(0, len(rates)):
-            print(f'lpRates{i}', STAKE_HUB.grades(i))
-    print('__set_lp_rates>>>>>>>>>>>>>>')
 
 
 def __get_candidate_bonus(tx):
@@ -1009,34 +997,21 @@ def __get_candidate_bonus(tx):
                 bonus['btc'][v] = t['amount'][index]
             bonus['btc']['bonus'] = t['bonus']
 
-    print('__get_candidate_bonus>>>>>>>>>>>>>>>', bonus)
     return bonus
 
 
 def __get_candidate_list_by_delegator(delegator):
     candidate_info = CORE_AGENT.getCandidateListByDelegator(delegator)
-    print('__get_candidate_list_by_delegator>>>>', candidate_info)
     return candidate_info
 
 
 def __get_reward_map_info(delegate):
-    """
-    uint256 reward;
-    uint256 unclaimedReward;
-    """
     rewards, unclaimed_reward = BTC_STAKE.getRewardMap(delegate)
-    print(f'__get_reward_map_info>>>>>>>>>>{rewards}:{unclaimed_reward}')
     return rewards, unclaimed_reward
 
 
 def __get_receipt_map_info(tx_id):
-    """
-    address candidate;
-    address delegator;
-    uint256 round; // 
-    """
     receipt_map = BTC_STAKE.receiptMap(tx_id)
-    print('__get_receipt_map_info>>>>', receipt_map)
     return receipt_map
 
 
@@ -1056,8 +1031,6 @@ def __calculate_btc_reward_with_core_discount(btc_reward, coin_reward, unclaimed
             break
     actual_account_btc_reward = btc_reward * stake_duration // Utils.DENOMINATOR
     unclaimed_reward += btc_reward - actual_account_btc_reward
-    print(
-        f'__calculate_btc_reward_with_core_discount>>>>>>>>>{actual_account_btc_reward}:{unclaimed_reward}>>>>>>{stake_duration}')
     return actual_account_btc_reward, unclaimed_reward
 
 
@@ -1092,7 +1065,6 @@ def __distribute_next_round_rewards(candidates, unclaimed, round_reward, btc_poo
             bonus = reward * asset_bonus // total_reward
             candidates_reward[c][i] = bonus
 
-    print(f'__distribute_next_round_rewards>>>>>>>>>>core>>{candidates_reward}>>bonuses>{bonuses}')
     return candidates_reward, bonuses
 
 
@@ -1105,7 +1077,6 @@ def __update_core_accured_reward(candidate, core_rate, claimed_reward, stake_amo
     reward = core_rate * claimed_reward // Utils.DENOMINATOR
     accured_reward = reward * core_value // stake_amount
     CORE_AGENT.setAccuredRewardMap(candidate, get_current_round() - 1, accured_reward)
-    print('__update_core_accured_reward>>>>>>', reward)
     return reward
 
 

@@ -2009,7 +2009,6 @@ def __create_btc_delegate(candidate, account, amount=None, fee=1, scrip_type='ha
     if amount is None:
         amount = BTC_VALUE
     btc_tx, tx_id = get_btc_tx(amount, Utils.CHAIN_ID, candidate, account, scrip_type, lock_time, core_fee=fee)
-    print(f'__create_btc_delegate>>>>>>>>>>>{lock_script}:{btc_tx}')
     return lock_script, btc_tx, tx_id
 
 
@@ -2021,7 +2020,6 @@ def __set_last_round_tag(stake_round, time0=None):
     CandidateHubMock[0].setRoundTag(current_round)
     BTC_STAKE.setRoundTag(current_round)
     BitcoinLSTStakeMock[0].setInitRound(current_round)
-    print(f'__set_last_round_tag>>>>>>>>>>>>>>>>>{end_round0},{current_round}')
     return end_round0, current_round
 
 
@@ -2037,98 +2035,56 @@ def __calculate_btc_only_rewards(total_btc, claim_btc=None, validator_score=None
             validator_score * btc_factor) * collateral_state_btc // Utils.DENOMINATOR
     reward1 = reward * Utils.BTC_DECIMAL // total_btc
     reward2 = reward1 * claim_btc // Utils.BTC_DECIMAL
-    print('__calculate_btc_only_rewards>>>>', reward2)
     return reward2
 
 
 def __get_receipt_map_info(tx_id):
-    """
-    address candidate;
-    address delegator;
-    uint256 round; // 
-    """
     receipt_map = BTC_STAKE.receiptMap(tx_id)
-    print('__get_receipt_map_info>>>>', receipt_map)
     return receipt_map
 
 
 def __get_candidate_map_info(candidate):
-    """
-    uint256 stakedAmount;
-    uint256 realtimeAmount;
-    """
     candidate_map = BTC_STAKE.candidateMap(candidate)
-    print(f'__get_candidate_map_info>>>>{candidate}', candidate_map)
     return candidate_map
 
 
 def __get_btc_tx_map_info(tx_id):
-    """
-    uint64 amount;
-    uint32 outputIndex;
-    uint64 blockTimestamp;
-    uint32 lockTime;
-    uint32 usedHeight;
-    """
     data = BTC_STAKE.btcTxMap(tx_id)
-    print('__get_btc_tx_map_info>>>>', data)
     return data
 
 
 def __get_delegator_btc_map(delegator):
     data = BTC_STAKE.getDelegatorBtcMap(delegator)
-    print('__get_delegator_btc_map>>>>>>>>>>', data)
     return data
 
 
 def __get_accured_reward_per_btc_map(validate, round):
     data = BTC_STAKE.accuredRewardPerBTCMap(validate, round)
-    print(f'__get_accured_reward_per_btc_map>>>>>>>>>>>>>>>>>>>{validate}::', data)
 
 
 def __get_payable_notes_info(relayer):
     data = STAKE_HUB.payableNotes(relayer)
-    print('__get_payable_notes_info>>>>', data)
     return data
 
 
 def __get_debts_notes_info(delegator):
-    """
-    [ address contributor,uint256 amount;]
-    """
     debts = STAKE_HUB.getDebts(delegator)
-    print('__get_debts_notes_info>>>>', debts)
     return debts
 
 
 def __check_candidate_map_info(candidate, result: dict):
-    """
-    uint256 stakedAmount;
-    uint256 realtimeAmount;
-    """
-    print('__check_candidate_map_info<<<<<<<<<<<<<<<<<<')
     data = __get_candidate_map_info(candidate)
     for i in result:
         assert data[i] == result[i]
 
 
 def __check_receipt_map_info(tx_id, result: dict):
-    """
-    address candidate;
-    address delegator;
-    uint256 round; // 
-    """
-    print('__check_receipt_map_info<<<<<<<<<<<<<<<<<<')
     data = __get_receipt_map_info(tx_id)
     for i in result:
         assert data[i] == result[i]
 
 
 def __check_debts_notes_info(delegator, result: list):
-    """
-    [{'contributor': accounts[2],'amount': 100}]
-    """
-    print('__check_debts_notes_info<<<<<<<<<<<<<<<<<<')
     data = __get_debts_notes_info(delegator)
     if len(result) == 0 and len(data) == 0:
         return
@@ -2138,20 +2094,11 @@ def __check_debts_notes_info(delegator, result: list):
 
 
 def __check_payable_notes_info(relayer, amount):
-    print('__check_payable_notes_info<<<<<<<<<<<<<<<<<<')
     data = __get_payable_notes_info(relayer)
     assert data == amount
 
 
 def __check_btc_tx_map_info(tx_id, result: dict):
-    """
-    uint64 amount;
-    uint32 outputIndex;
-    uint64 blockTimestamp;
-    uint32 lockTime;
-    uint32 usedHeight;
-    """
-    print('__check_btc_tx_map_info<<<<<<<<<<<<<<<<<<')
     data = __get_btc_tx_map_info(tx_id)
     for i in result:
         assert data[i] == result[i]

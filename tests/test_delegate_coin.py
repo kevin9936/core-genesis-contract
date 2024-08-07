@@ -2335,4 +2335,3 @@ def test_claim_rewards_after_transfer_and_undelegate_in_multiple_rounds(core_age
 
 def __get_delegator_info(candidate, delegator):
     delegator_info = CoreAgentMock[0].getDelegator(candidate, delegator)
-    print('__get_delegator_info>>>>', delegator_info)

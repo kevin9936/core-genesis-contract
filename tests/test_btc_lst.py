@@ -18,51 +18,6 @@ BTC_REWARD = 0
 STAKE_ROUND = 3
 utxo_fee = 100
 
-# delegate
-"""
-P2SH
-rpk '025615000708918f33f8743b2284558ac9d89e7b8d0df0d692ed48859eea73de93'
-locking script: 0xa91454f0594a167b8226a2f4905e70f272fee9f5360387
-pay address: 2MzzLg89yvATGtFJxZJEiYZK88QHYM9hBXQ
-"""
-
-"""
-P2PKH
-rpk '025615000708918f33f8743b2284558ac9d89e7b8d0df0d692ed48859eea73de93'
-locking script: 0x76a914cdf3d02dd323c14bea0bed94962496c80c09334488ac
-pay address: mzHvtpMjf2Y5niNrRKcy6rs1AS6vWmV66m
-"""
-
-"""
-P2WPKH
-rpk '025615000708918f33f8743b2284558ac9d89e7b8d0df0d692ed48859eea73de93'
-locking script: 0x0014cdf3d02dd323c14bea0bed94962496c80c093344
-pay address: tb1qeheaqtwny0q5h6stak2fvfykeqxqjv6y52hw52
-
-"""
-
-# redeem
-"""
-P2SH
-rpk '023821629dad3e7bad594d183f27bfca34511bedb319aec33faea6f71c2c821fe8'
-redeem script: 0xa9143941c1d0eb3cdf633ef9b9c898bf37efe55412cc87
-pay address: 2MxTyH6py2GmVjjQRLiFBPZknuwq6t1CQc3
-"""
-
-"""
-P2PKH
-rpk '023821629dad3e7bad594d183f27bfca34511bedb319aec33faea6f71c2c821fe8'
-redeem script: 0x76a914047b9ba09367c1b213b5ba2184fba3fababcdc0288ac
-pay address: mfvf5FTeJyoPSysLXoy5FLNfg7Ut9ALnV2
-"""
-
-"""
-P2WPKH
-rpk '023821629dad3e7bad594d183f27bfca34511bedb319aec33faea6f71c2c821fe8'
-redeem script: 0x0014047b9ba09367c1b213b5ba2184fba3fababcdc02
-pay address: tb1qeheaqtwny0q5h6stak2fvfykeqxqjv6y52hw52
-"""
-
 
 @pytest.fixture(scope="module", autouse=True)
 def deposit_for_reward(validator_set, gov_hub):
@@ -381,5 +336,4 @@ def __set_block_time_stamp(timestamp, lock_time1=None, time_type='day'):
     else:
         timestamp = timestamp * 2592000
         time1 = lock_time1 - timestamp
-    print(f'__set_block_time_stamp>>>>>>>>>{time1},{(lock_time1 - time1) // 86400}')
     BTC_LIGHT_CLIENT.setCheckResult(True, time1)

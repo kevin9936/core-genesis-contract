@@ -1121,13 +1121,11 @@ def test_function_call_access_control(core_agent):
 
 def __get_delegator_info(candidate, delegator):
     delegator_info = CoreAgentMock[0].getDelegator(candidate, delegator)
-    print('__get_delegator_info>>>>', delegator_info)
     return delegator_info
 
 
 def __get_candidate_list_by_delegator(delegator):
     candidate_info = CoreAgentMock[0].getCandidateListByDelegator(delegator)
-    print('__get_candidate_list_by_delegator>>>>', candidate_info)
     return candidate_info
 
 
