@@ -289,7 +289,7 @@ def test_proxy_claim_reward_success(core_agent, stake_hub):
     assert core_agent.rewardMap(pledge_agent_proxy.address) == 0
 
 
-def test_claim_reward_failed(core_agent, stake_hub):
+def test_proxy_claim_reward_failed(core_agent, stake_hub):
     core_agent_proxy = PledgeAgentProxy.deploy(core_agent.address, stake_hub.address, {'from': accounts[0]})
     operator = accounts[1]
     consensus = register_candidate(operator=operator)

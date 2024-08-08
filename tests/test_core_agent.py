@@ -333,9 +333,8 @@ def test_get_coin_score_success(candidate_hub, validator_set, stake_hub, btc_lig
         __delegate_coin_success(operators[i], accounts[i], 0, required_coin_deposit + i)
     candidate_hub.getScoreMock(operators, get_current_round())
     scores = candidate_hub.getScores()
-    coin_hard_cap = 6000
-    hard_cap_sum = 12000
-    discount = coin_hard_cap * sum(scores) * Utils.DENOMINATOR // (hard_cap_sum * sum(scores))
+
+    discount = HardCap.CORE_HARD_CAP * sum(scores) * Utils.DENOMINATOR // (HardCap.SUM_HARD_CAP * sum(scores))
     assert len(scores) == 5
     for i in range(5):
         expected_score = required_coin_deposit + i
@@ -357,9 +356,7 @@ def test_get_power_score_success(candidate_hub, validator_set, stake_hub, btc_li
     power = 500
     candidate_hub.getScoreMock(operators, get_current_round())
     scores = candidate_hub.getScores()
-    power_hard_cap = 2000
-    hard_cap_sum = 12000
-    discount = power_hard_cap * sum(scores) * Utils.DENOMINATOR // (hard_cap_sum * power * 5)
+    discount = HardCap.POWER_HARD_CAP * sum(scores) * Utils.DENOMINATOR // (HardCap.SUM_HARD_CAP * power * 5)
     assert len(scores) == 5
     for i in range(5):
         expected_score = power
@@ -585,7 +582,9 @@ def test_claim_reward_success_with_one_agent(core_agent, validator_set):
     validator_set.deposit(consensus_address, {'value': TX_FEE})
     turn_round()
     stake_hub_claim_reward(delegator)
-    assert actual_block_reward * 2 * 900 // 1000 // 2 == tracker.delta()
+    denominator = 1000
+    commission = 100
+    assert actual_block_reward * 2 * (denominator - commission) // denominator // 2 == tracker.delta()
 
 
 def test_claim_reward_with_multi_agent(core_agent, validator_set):
@@ -614,8 +613,11 @@ def test_claim_reward_with_transfer_coin(core_agent, validator_set):
     agent1 = accounts[1]
     agent2 = accounts[2]
     delegator = accounts[3]
-    consensus_addr1 = __candidate_register(agent1, 100)
-    consensus_addr2 = __candidate_register(agent2, 500)
+    commission_percentage1 = 100
+    commission_percentage2 = 500
+    denominator = 1000
+    consensus_addr1 = __candidate_register(agent1, commission_percentage1)
+    consensus_addr2 = __candidate_register(agent2, commission_percentage2)
     core_agent.delegateCoin(agent1, {'from': delegator, 'value': required_coin_deposit})
     core_agent.delegateCoin(agent2, {'from': delegator, 'value': required_coin_deposit})
 
@@ -634,9 +636,10 @@ def test_claim_reward_with_transfer_coin(core_agent, validator_set):
     turn_round()
 
     stake_hub_claim_reward(delegator)
-    expect_reward1 = actual_block_reward * 900 // 1000
-    expect_reward2 = actual_block_reward * 500 // 1000 * 2
-    assert (expect_reward1 + expect_reward2 + expect_reward1) // 2 == tracker.delta()
+    # the actual reward is subject to the deduction of the validator commission
+    expect_reward1 = actual_block_reward * (denominator - commission_percentage1) // denominator * 2
+    expect_reward2 = actual_block_reward * (denominator - commission_percentage2) // denominator * 2
+    assert (expect_reward1 + expect_reward2) // 2 == tracker.delta()
 
 
 @pytest.mark.parametrize("operate", ['undelegate', 'transfer'])
@@ -1024,8 +1027,8 @@ def test_only_pledge_agent_can_call_proxy(core_agent, validator_set, operate):
             core_agent.proxyTransfer(operators[0], operators[1], accounts[0], delegate_amount, {'from': accounts[2]})
 
 
-@pytest.mark.parametrize("operate", ['delegate', 'undelegate', 'transfer'])
-def test_reward_claim_after_current_round_additional_stake(core_agent, validator_set, operate):
+@pytest.mark.parametrize("operate", ['delegate', 'undelegate', 'transfer', 'claim'])
+def test_change_round_success_after_additional_stake(core_agent, validator_set, operate):
     turn_round()
     delegate_amount = required_coin_deposit * 10
     operators, consensuses = __register_candidates(accounts[2:5])

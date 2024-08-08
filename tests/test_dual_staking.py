@@ -193,7 +193,7 @@ def test_core_rewards_discount_btc_rewards(btc_stake, candidate_hub, btc_light_c
     turn_round()
     turn_round(consensuses)
     tracker = get_tracker(accounts[0])
-    reward, unclaimed_reward = __calculate_btc_reward_with_core_discount(BLOCK_REWARD // 2, BLOCK_REWARD // 4 * 2, 0)
+    reward, unclaimed_reward = __calculate_btc_reward_with_core_discount(BLOCK_REWARD // 2, BLOCK_REWARD // 4 * 2)
     tx = claim_stake_and_relay_reward(accounts[0])
     assert "claimedReward" in tx.events
     assert tracker.delta() == reward + BLOCK_REWARD // 4 * 2
@@ -216,11 +216,219 @@ def test_each_bracket_discounted_rewards_accuracy(btc_stake, candidate_hub, btc_
     turn_round(consensuses)
     reward1 = __update_core_accured_reward(operators[1], core_rate, BLOCK_REWARD // 2, MIN_INIT_DELEGATE_VALUE * 1000)
     tracker = get_tracker(accounts[0])
-    reward, unclaimed_reward = __calculate_btc_reward_with_core_discount(BLOCK_REWARD // 2, reward1, 0)
+    reward, unclaimed_reward = __calculate_btc_reward_with_core_discount(BLOCK_REWARD // 2, reward1)
     tx = claim_stake_and_relay_reward(accounts[0])
     assert "claimedReward" in tx.events
     assert tracker.delta() == reward + reward1
     assert STAKE_HUB.unclaimedReward() == unclaimed_reward
+
+
+def test_core_reward_claim_discounted_by_core_ratio(btc_stake, candidate_hub, btc_light_client, set_candidate,
+                                                    core_agent):
+    __set_tlp_rates()
+    __set_is_stake_hub_active(1)
+    operators, consensuses = set_candidate
+    __delegate_coin(operators[1], MIN_INIT_DELEGATE_VALUE, delegate=accounts[0])
+    turn_round()
+    turn_round(consensuses)
+    tracker = get_tracker(accounts[0])
+    reward, unclaimed_reward = __calculate_btc_reward_with_core_discount(BLOCK_REWARD // 4, BLOCK_REWARD // 4)
+    tx = claim_stake_and_relay_reward(accounts[0])
+    assert "claimedReward" in tx.events
+    assert tracker.delta() == reward
+    assert STAKE_HUB.unclaimedReward() == unclaimed_reward
+
+
+@pytest.mark.parametrize("core_rate", [0, 4500, 5000, 6000, 7000, 11000, 12001, 13000])
+def test_hash_reward_claim_discounted_by_core_ratio(btc_stake, candidate_hub, btc_light_client, set_candidate,
+                                                    core_agent, core_rate):
+    btc_value = 200000
+    __set_tlp_rates()
+    __set_is_stake_hub_active(2)
+    operators, consensuses = set_candidate
+    __delegate_coin(operators[1], MIN_INIT_DELEGATE_VALUE * 1000, delegate=accounts[0])
+    __delegate_power(operators[2], accounts[0])
+    __delegate_btc(operators[0], accounts[1], btc_value)
+    turn_round()
+    turn_round(consensuses)
+    reward1 = __update_core_accured_reward(operators[1], core_rate, BLOCK_REWARD // 2, MIN_INIT_DELEGATE_VALUE * 1000)
+    tracker = get_tracker(accounts[0])
+    reward, unclaimed_reward = __calculate_btc_reward_with_core_discount(BLOCK_REWARD // 2, reward1)
+    tx = claim_stake_and_relay_reward(accounts[0])
+    assert "claimedReward" in tx.events
+    assert tracker.delta() == reward + reward1
+    assert STAKE_HUB.unclaimedReward() == unclaimed_reward
+
+
+@pytest.mark.parametrize("core_rate", [0, 500, 5000, 9000, 11000, 23000])
+def test_claim_core_and_btc_rewards_with_core_ratio_discount(btc_stake, candidate_hub, btc_light_client, set_candidate,
+                                                             core_agent, core_rate):
+    btc_value = 50
+    __set_tlp_rates()
+    __set_is_stake_hub_active(5)
+    operators, consensuses = set_candidate
+    __delegate_coin(operators[0], MIN_INIT_DELEGATE_VALUE, delegate=accounts[0])
+    __delegate_btc(operators[2], accounts[0], btc_value)
+    turn_round()
+    turn_round(consensuses)
+    rewards, _, account_rewards, _, _ = parse_delegation([{
+        "address": operators[0],
+        "active": True,
+        "power": [],
+        "coin": [set_delegate(accounts[2], MIN_INIT_DELEGATE_VALUE)],
+        "btc": [],
+    }, {
+        "address": operators[2],
+        "active": True,
+        "power": [],
+        "coin": [],
+        "btc": [set_delegate(accounts[0], btc_value)]
+    }], BLOCK_REWARD // 2)
+    delegator_btc_reward = rewards[2][accounts[0]]
+    claimed_core_reward = __update_core_accured_reward(operators[0], core_rate, delegator_btc_reward,
+                                                       MIN_INIT_DELEGATE_VALUE)
+    tracker = get_tracker(accounts[0])
+    claimed_core_reward, unclaimed_core = __calculate_btc_reward_with_core_discount(claimed_core_reward,
+                                                                                    claimed_core_reward)
+    claimed_btc_reward, unclaimed_btc = __calculate_btc_reward_with_core_discount(delegator_btc_reward,
+                                                                                  claimed_core_reward)
+    claim_stake_and_relay_reward(accounts[0])
+    assert tracker.delta() == claimed_core_reward + claimed_btc_reward
+    assert STAKE_HUB.unclaimedReward() == unclaimed_core + unclaimed_btc
+
+
+@pytest.mark.parametrize("core_rate", [0, 5000, 9000, 11000, 23000])
+def test_claim_core_and_power_rewards_with_core_ratio_discount(btc_stake, candidate_hub, btc_light_client,
+                                                               set_candidate,
+                                                               core_agent, core_rate):
+    power_value = 50
+    __set_tlp_rates()
+    __set_is_stake_hub_active(3)
+    operators, consensuses = set_candidate
+    __delegate_coin(operators[0], MIN_INIT_DELEGATE_VALUE, delegate=accounts[0])
+    __delegate_power(operators[2], accounts[0], power_value)
+    turn_round()
+    turn_round(consensuses)
+    rewards, _, account_rewards, _, _ = parse_delegation([{
+        "address": operators[0],
+        "active": True,
+        "power": [],
+        "coin": [set_delegate(accounts[2], MIN_INIT_DELEGATE_VALUE)],
+        "btc": [],
+    }, {
+        "address": operators[2],
+        "active": True,
+        "power": [set_delegate(accounts[0], power_value)],
+        "coin": [],
+        "btc": []
+    }], BLOCK_REWARD // 2)
+    delegator_power_reward = rewards[1][accounts[0]]
+    claimed_core_reward = __update_core_accured_reward(operators[0], core_rate, delegator_power_reward,
+                                                       MIN_INIT_DELEGATE_VALUE)
+    tracker = get_tracker(accounts[0])
+    claimed_core_reward, unclaimed_core = __calculate_btc_reward_with_core_discount(claimed_core_reward,
+                                                                                    claimed_core_reward)
+    claimed_btc_reward, unclaimed_btc = __calculate_btc_reward_with_core_discount(delegator_power_reward,
+                                                                                  claimed_core_reward)
+    claim_stake_and_relay_reward(accounts[0])
+    assert tracker.delta() == claimed_core_reward + claimed_btc_reward
+    assert STAKE_HUB.unclaimedReward() == unclaimed_core + unclaimed_btc
+
+
+@pytest.mark.parametrize("core_rate", [0, 500, 4500, 5000, 6000, 6500, 9000, 12001, 13000])
+def test_claim_hash_and_btc_rewards_with_core_ratio_discount(btc_stake, candidate_hub, btc_light_client,
+                                                             core_agent, core_rate):
+    btc_value = 50
+    __set_tlp_rates()
+    __set_is_stake_hub_active(6)
+    operators = []
+    consensuses = []
+    for operator in accounts[5:10]:
+        operators.append(operator)
+        consensuses.append(register_candidate(operator=operator))
+    __delegate_coin(operators[0], MIN_INIT_DELEGATE_VALUE, delegate=accounts[0])
+    __delegate_power(operators[1], accounts[0], value=1)
+    __delegate_btc(operators[2], accounts[0], btc_value)
+    turn_round()
+    turn_round(consensuses)
+    rewards, _, account_rewards, _, _ = parse_delegation([{
+        "address": operators[0],
+        "active": True,
+        "power": [],
+        "coin": [set_delegate(accounts[2], MIN_INIT_DELEGATE_VALUE)],
+        "btc": [],
+    }, {
+        "address": operators[1],
+        "active": True,
+        "power": [set_delegate(accounts[0], 1)],
+        "coin": [],
+        "btc": []
+    }, {
+        "address": operators[2],
+        "active": True,
+        "power": [],
+        "coin": [],
+        "btc": [set_delegate(accounts[0], btc_value)]
+    }], BLOCK_REWARD // 2)
+    delegator_power_reward = rewards[1][accounts[0]]
+    delegator_btc_reward = rewards[2][accounts[0]]
+    claimed_core_reward = __update_core_accured_reward(operators[0], core_rate, delegator_btc_reward,
+                                                       MIN_INIT_DELEGATE_VALUE)
+    tracker = get_tracker(accounts[0])
+    claimed_btc_reward, unclaimed_btc = __calculate_btc_reward_with_core_discount(delegator_btc_reward,
+                                                                                  claimed_core_reward)
+    claimed_power_reward, unclaimed_power = __calculate_btc_reward_with_core_discount(delegator_power_reward,
+                                                                                      claimed_core_reward)
+    claim_stake_and_relay_reward(accounts[0])
+    assert tracker.delta() == claimed_btc_reward + claimed_power_reward + claimed_core_reward
+    assert STAKE_HUB.unclaimedReward() == unclaimed_btc + unclaimed_power
+
+
+@pytest.mark.parametrize("core_rate", [0, 2001, 4500, 5000, 6500, 7000, 9000, 11000, 12001, 13000])
+def test_core_hash_btc_rewards_discounted_by_core_ratio(btc_stake, candidate_hub, btc_light_client, set_candidate,
+                                                        core_agent, core_rate):
+    btc_value = 50
+    __set_tlp_rates()
+    __set_is_stake_hub_active(7)
+    operators, consensuses = set_candidate
+    __delegate_coin(operators[0], MIN_INIT_DELEGATE_VALUE, delegate=accounts[0])
+    __delegate_power(operators[1], accounts[0], value=1)
+    __delegate_btc(operators[2], accounts[0], btc_value)
+    turn_round()
+    turn_round(consensuses)
+    rewards, _, account_rewards, _, _ = parse_delegation([{
+        "address": operators[0],
+        "active": True,
+        "power": [],
+        "coin": [set_delegate(accounts[2], MIN_INIT_DELEGATE_VALUE)],
+        "btc": [],
+    }, {
+        "address": operators[1],
+        "active": True,
+        "power": [set_delegate(accounts[0], 1)],
+        "coin": [],
+        "btc": []
+    }, {
+        "address": operators[2],
+        "active": True,
+        "power": [],
+        "coin": [],
+        "btc": [set_delegate(accounts[0], btc_value)]
+    }], BLOCK_REWARD // 2)
+    delegator_power_reward = rewards[1][accounts[0]]
+    delegator_btc_reward = rewards[2][accounts[0]]
+    claimed_core_reward = __update_core_accured_reward(operators[0], core_rate, delegator_btc_reward,
+                                                       MIN_INIT_DELEGATE_VALUE)
+    tracker = get_tracker(accounts[0])
+    claimed_core_reward, unclaimed_core = __calculate_btc_reward_with_core_discount(claimed_core_reward,
+                                                                                    claimed_core_reward)
+    claimed_btc_reward, unclaimed_btc = __calculate_btc_reward_with_core_discount(delegator_btc_reward,
+                                                                                  claimed_core_reward)
+    claimed_power_reward, unclaimed_power = __calculate_btc_reward_with_core_discount(delegator_power_reward,
+                                                                                      claimed_core_reward)
+    claim_stake_and_relay_reward(accounts[0])
+    assert tracker.delta() == claimed_btc_reward + claimed_power_reward + claimed_core_reward
+    assert STAKE_HUB.unclaimedReward() == unclaimed_core + unclaimed_btc + unclaimed_power
 
 
 def test_discount_applied_to_core_total_rewards(btc_stake, candidate_hub, btc_light_client, set_candidate,
@@ -710,6 +918,11 @@ def __delegate_btc(operator, delegator, btc_amount=None, lock_script=None, lock_
     return lock_script, btc_tx, tx_id
 
 
+def __delegate_power(candidate, delegator, value=1, stake_round=0):
+    stake_round = get_current_round() - 6 + stake_round
+    BTC_LIGHT_CLIENT.setMiners(stake_round, candidate, [delegator] * value)
+
+
 def __delegate_coin(candidate, value=None, delegate=None):
     if value is None:
         value = MIN_INIT_DELEGATE_VALUE
@@ -827,12 +1040,14 @@ def __get_receipt_map_info(tx_id):
     return receipt_map
 
 
-def __calculate_btc_reward_with_core_discount(btc_reward, coin_reward, unclaimed_reward):
+def __calculate_btc_reward_with_core_discount(btc_reward, coin_reward, unclaimed_reward=0):
     lp_rates = {
         12000: 10000,
         5000: 6000,
         0: 1000
     }
+    if btc_reward == 0:
+        return 0, 0
     stake_duration = Utils.DENOMINATOR
     core_reward_rate = coin_reward * Utils.DENOMINATOR // btc_reward
     for i in lp_rates:
@@ -881,9 +1096,13 @@ def __distribute_next_round_rewards(candidates, unclaimed, round_reward, btc_poo
     return candidates_reward, bonuses
 
 
-def __update_core_accured_reward(candidate, core_rate, btc_reward, stake_amount):
+def __update_core_accured_reward(candidate, core_rate, claimed_reward, stake_amount):
+    """
+    Increase BTC staking amount to avoid hard caps on coin and power rewards. Then,
+    adjust data in AccruedRewardMap to control the distributable Core reward and the ratio between Core reward and hash reward.
+    """
     core_value = 1e6
-    reward = core_rate * btc_reward // Utils.DENOMINATOR
+    reward = core_rate * claimed_reward // Utils.DENOMINATOR
     accured_reward = reward * core_value // stake_amount
     CORE_AGENT.setAccuredRewardMap(candidate, get_current_round() - 1, accured_reward)
     print('__update_core_accured_reward>>>>>>', reward)
@@ -939,7 +1158,7 @@ def __calculate_btc_staking_duration_discount(total_btc, duration=360, claim_btc
             1 * Utils.MONTH_TIMESTAMP: 4000,
             0: 2000
         }
-    stake_duration = 10000
+    stake_duration = Utils.DENOMINATOR
     if len(tlp_rates) == 1:
         for t in tlp_rates:
             stake_duration = tlp_rates[t]
@@ -957,6 +1176,6 @@ def __calculate_btc_staking_duration_discount(total_btc, duration=360, claim_btc
     reward = total_reward * (total_btc * btc_factor) // (
             validator_score * btc_factor) * collateral_state_btc // Utils.DENOMINATOR
     btc_reward = reward * Utils.BTC_DECIMAL // total_btc * claim_btc // Utils.BTC_DECIMAL
-    btc_reward_claimed = btc_reward * stake_duration // 10000
+    btc_reward_claimed = btc_reward * stake_duration // Utils.DENOMINATOR
     unclaim_amount = btc_reward - btc_reward_claimed
     return btc_reward_claimed, unclaim_amount

@@ -1837,14 +1837,14 @@ def test_claiming_rewards_after_turn_round_failure(btc_stake, candidate_hub, btc
     _, _, account_rewards, _, _ = parse_delegation([{
         "address": operators[0],
         "active": True,
-        "power": [],
+        "power": [set_delegate(accounts[2], 1)],
         "coin": [set_delegate(accounts[1], delegate_amount)],
         "btc": [set_delegate(accounts[0], BTC_VALUE)]
     }], BLOCK_REWARD)
     claim_relayer_reward(accounts[0])
     assert tracker0.delta() == account_rewards[accounts[0]]
     assert tracker1.delta() == account_rewards[accounts[1]]
-    assert tracker2.delta() == 0
+    assert tracker2.delta() == account_rewards[accounts[2]]
     chain.mine(timestamp=block_time + Utils.ROUND_INTERVAL * 4)
     turn_round(consensuses)
     stake_hub_claim_reward(accounts[:3])
@@ -1904,7 +1904,7 @@ def test_restaking_after_btc_staking_expiry(btc_stake, candidate_hub, set_candid
     lock_script, btc_tx, tx_id_list = delegate_btc_valid_tx
     btc_stake.delegate(btc_tx, 0, [], 0, lock_script, {'from': accounts[1]})
     turn_round()
-    with brownie.reverts("btc tx confirmed"):
+    with brownie.reverts("btc tx is already delegated."):
         btc_stake.delegate(btc_tx, 0, [], 0, lock_script, {'from': accounts[1]})
     turn_round(consensuses, round_count=4)
     stake_hub_claim_reward(accounts[0])
@@ -1913,7 +1913,7 @@ def test_restaking_after_btc_staking_expiry(btc_stake, candidate_hub, set_candid
 
 
 @pytest.mark.parametrize("round", [0, 1, 2, 3, 4])
-def test_restaking_after_btc_staking_expiry(btc_stake, candidate_hub, set_candidate, delegate_btc_valid_tx, round):
+def test_delegate_after_fixed_lock_time_different_rounds(btc_stake, candidate_hub, set_candidate, delegate_btc_valid_tx, round):
     operators, consensuses = set_candidate
     __set_last_round_tag(3)
     lock_script, btc_tx, tx_id_list = delegate_btc_valid_tx
