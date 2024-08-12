@@ -8,15 +8,22 @@ class Opcode:
     OP_0 = 0x00
     OP_1 = 0x51
     OP_EQUAL = 0x87
+    OP_RETURN = 0x6a
+    OP_PUSHDATA1 = 0x4c
 
 
 class AddressType:
     TYPE_P2PKH = 1
     TYPE_P2SH = 2
-    TYPE_P2WPKH = 3
-    TYPE_P2WSH = 4
-    TYPE_P2TAPROOT = 5
+    TYPE_P2WPKH = 4
+    TYPE_P2WSH = 8
+    TYPE_P2TAPROOT = 16
     TYPE_UNKNOWN = 0
+    P2SH = 'p2sh'
+    P2PKH = 'p2pkh'
+    P2WPKH = 'p2wpkh'
+    P2WSH = 'p2wsh'
+    P2TAPROOT = 'p2tr'
 
 
 class Utils:
@@ -24,6 +31,7 @@ class Utils:
     CHAIN_ID = 1112
     ROUND_INTERVAL = 86400
     MONTH_TIMESTAMP = 2592000
+    MONTH = 30
     # calculate the BTC porter fee
     CORE_DECIMAL = 100
     # accuredRewardMap the record is a reward of 1000000 cores per round

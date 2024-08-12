@@ -13,6 +13,7 @@ contract PledgeAgentMock is PledgeAgent {
     );
     event undelegatedCoinOld(address indexed candidate, address indexed delegator, uint256 amount);
     event roundReward(address indexed agent, uint256 coinReward, uint256 powerReward, uint256 btcReward);
+    event delegatedBtcOld(bytes32 indexed txid, address indexed agent, address indexed delegator, bytes script, uint256 btcvalue);
 
     error InactiveAgent(address candidate);
     error InactiveCandidate(address candidate);
@@ -22,6 +23,7 @@ contract PledgeAgentMock is PledgeAgent {
         requiredCoinDeposit = requiredCoinDeposit / 1e16;
         btcFactor = 2;
         minBtcLockRound = 3;
+        minBtcValue = 100;
         roundTag = 1;
     }
 
@@ -201,6 +203,39 @@ contract PledgeAgentMock is PledgeAgent {
         uint256 newDeposit = delegateCoinOld(targetAgent, msg.sender, deposit, deductedDeposit);
 
         emit transferredCoinOld(sourceAgent, targetAgent, msg.sender, deposit, newDeposit);
+    }
+
+
+    function addExpire(BtcReceipt storage br) internal {
+        BtcExpireInfo storage expireInfo = round2expireInfoMap[br.endRound];
+        if (expireInfo.agentExistMap[br.agent] == 0) {
+            expireInfo.agentAddrList.push(br.agent);
+            expireInfo.agentExistMap[br.agent] = 1;
+        }
+        expireInfo.agent2valueMap[br.agent] += br.value;
+    }
+
+
+    function delegateBtcMock(bytes32 txId, uint256 btcValue, address agent, address delegator, bytes memory script, uint32 lockTime, uint256 fee) external {
+        BtcReceipt storage br = btcReceiptMap[txId];
+        require(br.value == 0, "btc tx confirmed");
+        br.endRound = lockTime / ROUND_INTERVAL;
+        br.value = btcValue;
+        require(br.value >= (minBtcValue == 0 ? INIT_MIN_BTC_VALUE : minBtcValue), "staked value does not meet requirement");
+        br.delegator = delegator;
+        br.agent = agent;
+        if (!ICandidateHub(CANDIDATE_HUB_ADDR).isCandidateByOperate(br.agent)) {
+            revert InactiveAgent(br.agent);
+        }
+        emit delegatedBtcOld(txId, br.agent, br.delegator, script, btcValue);
+        if (fee != 0) {
+            br.fee = fee;
+            br.feeReceiver = payable(msg.sender);
+        }
+        Agent storage a = agentsMap[br.agent];
+        br.rewardIndex = a.rewardSet.length;
+        addExpire(br);
+        a.totalBtc += br.value;
     }
 
     function distributePowerRewardOld(address candidate, address[] calldata miners) external onlyCandidate {

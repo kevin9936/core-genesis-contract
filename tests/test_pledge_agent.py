@@ -1,8 +1,12 @@
+import time
+
 import pytest
 from web3 import Web3
+import brownie
 from brownie import *
 from .common import register_candidate, turn_round, stake_hub_claim_reward, get_current_round
-from .utils import get_tracker, expect_event, expect_query, encode_args_with_signature
+from .delegate import *
+from .utils import get_tracker, random_address, expect_event, update_system_contract_address
 from .calc_reward import *
 
 MIN_INIT_DELEGATE_VALUE = 0
@@ -36,6 +40,247 @@ def set_block_reward(validator_set, pledge_agent, stake_hub):
     COIN_REWARD = TOTAL_REWARD * HardCap.CORE_HARD_CAP // HardCap.SUM_HARD_CAP
     PLEDGE_AGENT = pledge_agent
     STAKE_HUB = stake_hub
+
+
+def test_reinit(pledge_agent):
+    with brownie.reverts("the contract already init"):
+        pledge_agent.init()
+
+
+@pytest.mark.parametrize("store_old_data", [True, False])
+def test_delegate_coin(pledge_agent, store_old_data: bool):
+    if store_old_data:
+        operator = accounts[1]
+        consensus = register_candidate(operator=operator)
+        pledge_agent.delegateCoinOld(operator, {"value": MIN_INIT_DELEGATE_VALUE})
+        __old_turn_round()
+        __old_turn_round([consensus])
+        pledge_agent.delegateCoin(operator, {"value": MIN_INIT_DELEGATE_VALUE})
+        with brownie.reverts("No old data."):
+            pledge_agent.delegateCoin(operator, {"value": MIN_INIT_DELEGATE_VALUE})
+    else:
+        with brownie.reverts("No old data."):
+            pledge_agent.delegateCoin(random_address(), {"value": web3.to_wei(1, 'ether')})
+
+
+@pytest.mark.parametrize("is_validator", [True, False])
+@pytest.mark.parametrize("partial", [True, False])
+def test_undelegate_coin(pledge_agent, candidate_hub, is_validator: bool, partial: bool):
+    operators = accounts[1:3]
+    consensus = []
+    for operator in operators:
+        consensus.append(register_candidate(operator=operator))
+        pledge_agent.delegateCoinOld(operator, {"value": MIN_INIT_DELEGATE_VALUE * 2})
+    __old_turn_round()
+    __old_turn_round(consensus)
+    __init_hybrid_score_mock()
+    turn_round(round_count=2)
+
+    undelegate_amount = MIN_INIT_DELEGATE_VALUE if partial else 0
+    if is_validator:
+        pledge_agent.undelegateCoin(operators[0], undelegate_amount)
+        with brownie.reverts("No old data."):
+            pledge_agent.undelegateCoin(operators[0], undelegate_amount)
+    else:
+        candidate_hub.refuseDelegate({'from': operators[0]})
+        turn_round()
+        candidate_hub.unregister({'from': operators[0]})
+        turn_round()
+        pledge_agent.undelegateCoin(operators[0], undelegate_amount)
+        with brownie.reverts("No old data."):
+            pledge_agent.undelegateCoin(operators[0], undelegate_amount)
+
+
+@pytest.mark.parametrize("is_validator", [True, False])
+@pytest.mark.parametrize("partial", [True, False])
+def test_transfer_coin(pledge_agent, candidate_hub, is_validator: bool, partial: bool):
+    operators = accounts[1:3]
+    consensus = []
+    for operator in operators:
+        consensus.append(register_candidate(operator=operator))
+        pledge_agent.delegateCoinOld(operator, {"value": MIN_INIT_DELEGATE_VALUE * 2})
+    __old_turn_round()
+    __old_turn_round(consensus)
+    __init_hybrid_score_mock()
+    turn_round(round_count=2)
+
+    transfer_amount = MIN_INIT_DELEGATE_VALUE if partial else 0
+    if is_validator:
+        pledge_agent.transferCoin(operators[0], operators[1], transfer_amount)
+        with brownie.reverts("No old data."):
+            pledge_agent.transferCoin(operators[0], operators[1], transfer_amount)
+    else:
+        candidate_hub.refuseDelegate({'from': operators[0]})
+        turn_round()
+        candidate_hub.unregister({'from': operators[0]})
+        turn_round()
+        pledge_agent.transferCoin(operators[0], operators[1], transfer_amount)
+        with brownie.reverts("No old data."):
+            pledge_agent.transferCoin(operators[0], operators[1], transfer_amount)
+
+
+@pytest.mark.parametrize("agents_type", ["empty", "all", "partial", "none"])
+def test_claim_reward(pledge_agent, candidate_hub, agents_type: str):
+    operators = accounts[1:4]
+    consensus = []
+    for operator in operators:
+        consensus.append(register_candidate(operator=operator))
+        pledge_agent.delegateCoinOld(operator, {"value": MIN_INIT_DELEGATE_VALUE})
+    __old_turn_round()
+    __old_turn_round(consensus)
+    __init_hybrid_score_mock()
+    turn_round(round_count=2)
+
+    if agents_type == "empty":
+        pledge_agent.claimReward([])
+    elif agents_type == "all":
+        pledge_agent.claimReward(operators)
+    elif agents_type == "none":
+        pledge_agent.claimReward([random_address()])
+    elif agents_type == "partial":
+        pledge_agent.claimReward(operators[:2] + [random_address()])
+
+
+@pytest.mark.parametrize("agents_type", ["empty", "all", "partial", "none"])
+def test_calculate_reward(pledge_agent, candidate_hub, agents_type: str):
+    operators = accounts[1:4]
+    consensus = []
+    for operator in operators:
+        consensus.append(register_candidate(operator=operator))
+        pledge_agent.delegateCoinOld(operator, {"value": MIN_INIT_DELEGATE_VALUE})
+    __old_turn_round()
+    __old_turn_round(consensus)
+    __init_hybrid_score_mock()
+    turn_round(round_count=2)
+
+    if agents_type == "empty":
+        pledge_agent.calculateReward([], accounts[0])
+    elif agents_type == "all":
+        pledge_agent.calculateReward(operators, accounts[0])
+    elif agents_type == "none":
+        pledge_agent.calculateReward([random_address()], accounts[0])
+    elif agents_type == "partial":
+        pledge_agent.calculateReward(operators[:2] + [random_address()], accounts[0])
+
+
+def test_claim_btc_reward(pledge_agent):
+    operator = accounts[1]
+    consensus = register_candidate(operator=operator)
+    pledge_agent.delegateCoinOld(operator, {"value": MIN_INIT_DELEGATE_VALUE})
+    __old_turn_round()
+
+    tx_id = "88c233d8d6980d2c486a055c804544faa8de93eadc4a00d5bd075d19f3190b4d"
+    btc_value = 1000000
+    agent = operator
+    delegator = accounts[0]
+    script = "0x1234"
+    lock_time = int(time.time()) + 3600
+    fee = 0
+    pledge_agent.delegateBtcMock(tx_id, btc_value, agent, delegator, script, lock_time, fee)
+    __old_turn_round()
+    __old_turn_round([consensus])
+    tx = pledge_agent.claimBtcReward([tx_id])
+    expect_event(tx, "claimedReward")
+
+
+def test_move_btc_data(pledge_agent, btc_stake):
+    operator = accounts[1]
+    consensus = register_candidate(operator=operator)
+    pledge_agent.delegateCoinOld(operator, {"value": MIN_INIT_DELEGATE_VALUE})
+    __old_turn_round()
+    tx_id = "88c233d8d6980d2c486a055c804544faa8de93eadc4a00d5bd075d19f3190b4d"
+    btc_value = 1000000
+    agent = operator
+    delegator = accounts[0]
+    script = "0x1234"
+    lock_time = int(time.time()) + 3600
+    fee = 0
+    pledge_agent.delegateBtcMock(tx_id, btc_value, agent, delegator, script, lock_time, fee)
+    __old_turn_round()
+    __old_turn_round([consensus])
+    update_system_contract_address(pledge_agent, btc_stake=accounts[0])
+    pledge_agent.moveBtcData(tx_id, {'from': accounts[0]})
+    assert pledge_agent.rewardMap(delegator) > 0
+
+
+def test_move_candidate_data(pledge_agent, core_agent, btc_stake, btc_agent, candidate_hub):
+    operator = accounts[1]
+    consensus = register_candidate(operator=operator)
+    pledge_agent.delegateCoinOld(operator, {"value": MIN_INIT_DELEGATE_VALUE})
+
+    tx_id = "88c233d8d6980d2c486a055c804544faa8de93eadc4a00d5bd075d19f3190b4d"
+    btc_value = 1000000
+    agent = operator
+    delegator = accounts[0]
+    script = "0x1234"
+    lock_time = int(time.time()) + 3600
+    fee = 0
+    pledge_agent.delegateBtcMock(tx_id, btc_value, agent, delegator, script, lock_time, fee)
+
+    __old_turn_round()
+    assert operator in candidate_hub.getCandidates()
+    __old_turn_round([consensus])
+
+    pledge_agent.moveCandidateData([operator])
+    agent = pledge_agent.agentsMap(operator)
+    assert agent[-1] is True
+
+    candidate_in_core_agent = core_agent.candidateMap(operator)
+    assert candidate_in_core_agent[0] == MIN_INIT_DELEGATE_VALUE
+    assert candidate_in_core_agent[1] == MIN_INIT_DELEGATE_VALUE
+
+    candidate_in_btc_stake = btc_stake.candidateMap(operator)
+    assert candidate_in_btc_stake[0] == btc_value
+    assert candidate_in_btc_stake[1] == btc_value
+
+    candidate_in_btc_agent = btc_agent.candidateMap(operator)
+    assert candidate_in_btc_agent[1] == btc_value
+
+
+def test_move_core_data(pledge_agent, core_agent):
+    operator = accounts[1]
+    operator2 = accounts[2]
+    consensus = register_candidate(operator=operator)
+    register_candidate(operator=operator2)
+    pledge_agent.delegateCoinOld(operator, {"value": MIN_INIT_DELEGATE_VALUE * 2})
+    pledge_agent.delegateCoinOld(operator2, {"value": MIN_INIT_DELEGATE_VALUE})
+    __old_turn_round()
+    __old_turn_round([consensus])
+    pledge_agent.delegateCoinOld(operator, {"value": MIN_INIT_DELEGATE_VALUE})
+    pledge_agent.transferCoinOld(operator, operator2, MIN_INIT_DELEGATE_VALUE * 2)
+
+    __init_hybrid_score_mock()
+    turn_round(round_count=2)
+
+    pledge_agent.moveCOREData(operator, accounts[0])
+
+    delegator_info_in_core_agent = core_agent.getDelegator(operator, accounts[0])
+    _staked_amount, _realtime_amount, _, _transferred_amount = delegator_info_in_core_agent
+    assert _staked_amount == MIN_INIT_DELEGATE_VALUE
+    assert _realtime_amount == MIN_INIT_DELEGATE_VALUE
+    assert _transferred_amount == 0
+
+
+def test_get_stake_info(pledge_agent):
+    operator = accounts[1]
+    consensus = register_candidate(operator=operator)
+    pledge_agent.delegateCoinOld(operator, {"value": MIN_INIT_DELEGATE_VALUE})
+
+    tx_id = "88c233d8d6980d2c486a055c804544faa8de93eadc4a00d5bd075d19f3190b4d"
+    btc_value = 1000000
+    agent = operator
+    delegator = accounts[0]
+    script = "0x1234"
+    lock_time = int(time.time()) + 3600
+    fee = 0
+    pledge_agent.delegateBtcMock(tx_id, btc_value, agent, delegator, script, lock_time, fee)
+
+    __old_turn_round()
+    __old_turn_round([consensus])
+
+    stake_info = pledge_agent.getStakeInfo([operator])
+    assert stake_info[0][0] == MIN_INIT_DELEGATE_VALUE
+    assert stake_info[2][0] == btc_value
 
 
 @pytest.mark.parametrize("operate", ['delegate', 'undelegate', 'transfer', 'claim'])
@@ -123,14 +368,13 @@ def test_init_hybrid_score_success():
             'btc': 0,
             'totalBtc': 0,
             'moved': False,
-
         })
     __init_hybrid_score_mock()
     for i in range(candidate_size):
         core_amount = delegate_amount + i
         if operators[i] == operators[-1]:
             core_amount = 0
-        __check_candidate_amount_map_info(operators[i], [core_amount, 0, 0], core_amount)
+        __check_candidate_amount_map_info(operators[i], [core_amount, core_amount, 0, 0])
 
 
 def test_move_agent_success(pledge_agent, validator_set, stake_hub, core_agent):
@@ -284,7 +528,7 @@ def test_migration_scenario_5(pledge_agent, validator_set, stake_hub, operate):
     assert tracker0.delta() == BLOCK_REWARD
     turn_round(consensuses, round_count=1)
     stake_hub_claim_reward(accounts[0])
-    _, _, account_rewards, _, _ = parse_delegation([{
+    _, _, account_rewards, _ = parse_delegation([{
         "address": operators[0],
         "active": True,
         "power": [],
@@ -302,7 +546,7 @@ def test_migration_scenario_5(pledge_agent, validator_set, stake_hub, operate):
 
 
 def __init_hybrid_score_mock():
-    tx = STAKE_HUB.initHybridScoreMock()
+    STAKE_HUB.initHybridScoreMock()
 
 
 def __old_delegate_coin(candidate, account=None, amount=None, old=True):
@@ -340,6 +584,18 @@ def __old_claim_reward(candidates, account=None):
     if account is None:
         account = accounts[0]
     tx = PLEDGE_AGENT.claimReward(candidates, {'from': account})
+
+
+def __old_turn_round(miners: list = None, tx_fee=100, round_count=1):
+    if miners is None:
+        miners = []
+    tx = None
+    for _ in range(round_count):
+        for miner in miners:
+            ValidatorSetMock[0].deposit(miner, {"value": tx_fee, "from": accounts[-10]})
+        tx = CandidateHubMock[0].turnRoundOld()
+        chain.sleep(1)
+    return tx
 
 
 def __get_old_reward_index_info(candidate, index):
@@ -380,9 +636,8 @@ def __check_candidate_map_info(candidate, result: dict):
 
 def __get_candidate_amount_map_info(candidate):
     # The order is core, hash, btc.
-    candidate_amounts = STAKE_HUB.getCandidateAmounts(candidate)
-    candidate_score = STAKE_HUB.candidateScoreMap(candidate)
-    return candidate_amounts, candidate_score
+    candidate_score = STAKE_HUB.getCandidateScoresMap(candidate)
+    return candidate_score
 
 
 def __check_old_delegate_info(candidate, delegator, result: dict):
@@ -397,31 +652,18 @@ def __check_delegate_info(candidate, delegator, result: dict):
         assert old_info[i] == result[i]
 
 
-def __check_candidate_amount_map_info(candidate, result: list, score):
-    candidate_amounts, candidate_score = __get_candidate_amount_map_info(candidate)
+def __check_candidate_amount_map_info(candidate, result: list):
+    candidate_amounts = __get_candidate_amount_map_info(candidate)
     if candidate_amounts == ():
-        candidate_amounts = [0, 0, 0]
+        candidate_amounts = [0, 0, 0, 0]
     for index, r in enumerate(result):
         assert candidate_amounts[index] == r
-    assert score == candidate_score
 
 
 def __check_old_agent_map_info(candidate, result: dict):
     old_info = __get_old_agent_map_info(candidate)
     for i in result:
         assert old_info[i] == result[i]
-
-
-def __old_turn_round(miners: list = None, tx_fee=100, round_count=1):
-    if miners is None:
-        miners = []
-    tx = None
-    for _ in range(round_count):
-        for miner in miners:
-            ValidatorSetMock[0].deposit(miner, {"value": tx_fee, "from": accounts[-10]})
-        tx = CandidateHubMock[0].turnRoundOld()
-        chain.sleep(1)
-    return tx
 
 
 def __register_candidates(agents=None):
