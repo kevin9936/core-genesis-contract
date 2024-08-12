@@ -7,12 +7,13 @@ contract CoreAgentMock is CoreAgent {
 
     function developmentInit() external {
         requiredCoinDeposit = requiredCoinDeposit / 1e16;
-        roundTag = 1;
+        roundTag = 7;
     }
 
     function setRoundTag(uint value) external {
         roundTag = value;
     }
+
 
     function getDelegatorMap(address delegator) external view returns (address[] memory, uint256) {
         address[] memory candidates = delegatorMap[delegator].candidates;
@@ -29,22 +30,38 @@ contract CoreAgentMock is CoreAgent {
         accuredRewardMap[candidate][round] = amount;
     }
 
+    function setCoreRewardMap(address delegator, uint256 reward, uint256 accStakedAmount) external {
+        rewardMap[delegator] = Reward(reward, accStakedAmount);
+    }
 
-    function setCandidateMapAmount(address candidate, uint256 amount, uint256 realAmount) external {
+
+    function getContinuousRewardEndRounds(address candidate) external view returns (uint256[] memory) {
+        return candidateMap[candidate].continuousRewardEndRounds;
+    }
+
+
+    function setCandidateMapAmount(address candidate, uint256 amount, uint256 realAmount, uint256 endRound) external {
         candidateMap[candidate].amount = amount;
         candidateMap[candidate].realtimeAmount = realAmount;
+        if (endRound > 0) {
+            candidateMap[candidate].continuousRewardEndRounds.push(endRound);
+        }
     }
 
     function getRewardAmount() external view returns (uint256) {
         return rewardAmountM;
     }
 
+//    function setRewardMap(address delegator, uint256 reward, uint256 accStakedAmount) external {
+//        rewardMap[delegator] = Reward(reward, accStakedAmount);
+//    }
 
-    function collectCoinRewardMock(address agent, address delegator) external returns (uint256) {
+    function collectCoinRewardMock(address agent, address delegator) external returns (uint256, uint256) {
+        uint256 avgStakedAmount;
         Candidate storage a = candidateMap[agent];
         CoinDelegator storage d = a.cDelegatorMap[delegator];
-        rewardAmountM = collectCoinReward(agent, d);
-        return rewardAmountM;
+        (rewardAmountM, avgStakedAmount) = _collectRewardFromCandidate(agent, d);
+        return (rewardAmountM, avgStakedAmount);
     }
 
 

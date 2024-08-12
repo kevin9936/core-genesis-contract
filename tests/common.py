@@ -39,6 +39,7 @@ def turn_round(miners: list = None, tx_fee=100, round_count=1):
             ValidatorSetMock[0].deposit(miner, {"value": tx_fee, "from": accounts[-10]})
         tx = CandidateHubMock[0].turnRound()
         chain.sleep(1)
+        print(f'turn_round>>>>>>>{get_current_round()}', tx.events)
     return tx
 
 
@@ -61,12 +62,17 @@ def register_relayer(relayer_address=None):
 
 def get_current_round():
     round_tag = CandidateHubMock[0].roundTag()
+    print('get_current_round', round_tag)
     return round_tag
 
 
-def set_last_round_tag(rount_tag):
-    CandidateHubMock[0].setRoundTag(rount_tag)
-    BitcoinStakeMock[0].setRoundTag(rount_tag)
+def set_round_tag(round_tag):
+    CandidateHubMock[0].setRoundTag(round_tag)
+    BitcoinStakeMock[0].setRoundTag(round_tag)
+    CoreAgentMock[0].setRoundTag(round_tag)
+    BitcoinLSTStakeMock[0].setRoundTag(round_tag)
+    BitcoinLSTStakeMock[0].setInitRound(round_tag)
+    PledgeAgentMock[0].setRoundTag(round_tag)
 
 
 def stake_hub_claim_reward(account):
@@ -74,14 +80,22 @@ def stake_hub_claim_reward(account):
     if isinstance(account, list):
         for i in account:
             tx = StakeHubMock[0].claimReward({'from': i})
+            print('stake_hub_claim_reward>>>>>', tx.events)
     else:
         tx = StakeHubMock[0].claimReward({'from': account})
+        print('stake_hub_claim_reward>>>>>', tx.events)
     return tx
 
 
 def claim_stake_and_relay_reward(account):
-    tx0 = stake_hub_claim_reward(account)
-    tx1 = claim_relayer_reward(account)
+    tx0 = None
+    if isinstance(account, list):
+        for a in account:
+            tx0 = stake_hub_claim_reward(a)
+            tx1 = claim_relayer_reward(a)
+    else:
+        tx0 = stake_hub_claim_reward(account)
+        tx1 = claim_relayer_reward(account)
     return tx0
 
 
@@ -90,6 +104,8 @@ def claim_relayer_reward(account):
     if isinstance(account, list):
         for i in account:
             tx = StakeHubMock[0].claimRelayerReward({'from': i})
+            print('claim_relayer_reward>>>>>>>>>>>>>>>>', tx.events)
     else:
         tx = StakeHubMock[0].claimRelayerReward({'from': account})
+        print('claim_relayer_reward>>>>>>>>>>>>>>>>', tx.events)
     return tx
