@@ -289,10 +289,16 @@ def test_failed_stake_with_invalid_version(btc_lst_stake, lst_token):
         btc_lst_stake.delegate(btc_tx, 1, [], 0, lock_script, {"from": accounts[1]})
 
 
-def test_stake_error_with_address_zero(btc_lst_stake, lst_token, set_candidate, btc_light_client):
+def test_btc_lst_stake_address_zero(btc_lst_stake, lst_token, set_candidate, btc_light_client):
+    operators, consensuses = set_candidate
+    turn_round()
     btc_tx, lock_script = __create_btc_lst_delegate(constants.ADDRESS_ZERO, BTC_VALUE)
-    with brownie.reverts("ERC20: mint to the zero address"):
-        btc_lst_stake.delegate(btc_tx, 1, [], 0, lock_script, {"from": accounts[2]})
+    tx = btc_lst_stake.delegate(btc_tx, 1, [], 0, lock_script, {"from": accounts[2]})
+    assert 'Transfer' not in tx.events
+    assert btc_lst_stake.realtimeAmount() == 0
+    turn_round(consensuses, round_count=2)
+    tx = stake_hub_claim_reward(constants.ADDRESS_ZERO)
+    assert len(tx.events) == 0
 
 
 def test_btc_stake_with_zero_amount_fails(btc_lst_stake, lst_token):
@@ -301,13 +307,18 @@ def test_btc_stake_with_zero_amount_fails(btc_lst_stake, lst_token):
         btc_lst_stake.delegate(btc_tx, 1, [], 0, lock_script, {"from": accounts[1]})
 
 
-def test_btc_transaction_without_op_return_fails(btc_lst_stake, lst_token):
+def test_stake_without_opreturn_success(btc_lst_stake, lst_token):
     btc_tx = (
         "010000000103ad821b58ab29c462009c53bf427fb121446e27f3c2cc2b11c1070dabb5bea0020000006a473044022041b7d5402a979672ec75021f7ad4d337347a63dc3135a175c02e07ed360f7d5d02207491acdc2d521596b1dcadf554038be17a2630e99b35e2d19f73acd1e5469f7b01210270e4215fbe540cab09ac91c9586eba4fc797537859489f4a23d3e22356f1732"
         "fffffffff026c0700000000000017a914cdf3d02dd323c14bea0bed94962496c80c09334487159b9e"
         "00000000001976a914e1c5ba4d1fef0a3c7806603de565929684f9c2b188ac00000000")
-    with brownie.reverts("no opreturn"):
-        btc_lst_stake.delegate(btc_tx, 1, [], 0, LOCK_SCRIPT, {"from": accounts[1]})
+    btc_lst_stake.delegate(btc_tx, 1, [], 0, LOCK_SCRIPT, {"from": accounts[1]})
+    tx_id = get_transaction_txid(btc_tx)
+    __check_btc_lst_tx_map_info(tx_id, {
+        'amount': 1900,
+        'outputIndex': 0,
+        'blockHeight': 1,
+    })
 
 
 def test_address_mismatch_leads_to_zero_stake_value(btc_lst_stake, lst_token):
@@ -422,7 +433,7 @@ def test_multisig_wallet_self_staking_reverts(btc_lst_stake, stake_hub, set_cand
     turn_round()
     tx_id = delegate_btc_lst_success(accounts[0], BTC_VALUE, LOCK_SCRIPT)
     btc_tx = build_btc_lst_tx(accounts[0], BTC_VALUE, LOCK_SCRIPT, tx_id)
-    with brownie.reverts("forbid self delegated"):
+    with brownie.reverts("should not delegate from whitelisted multisig wallets"):
         btc_lst_stake.delegate(btc_tx, 1, [], 0, LOCK_SCRIPT, {"from": accounts[1]})
     turn_round(consensuses)
 
@@ -435,7 +446,7 @@ def test_cross_multisig_wallet_staking(btc_lst_stake, stake_hub, set_candidate):
     btc_lst_stake.updateParam('add', lock_script)
     tx_id = delegate_btc_lst_success(accounts[0], BTC_VALUE, LOCK_SCRIPT)
     btc_tx = build_btc_lst_tx(accounts[0], BTC_VALUE, lock_script, tx_id)
-    with brownie.reverts("forbid self delegated"):
+    with brownie.reverts("should not delegate from whitelisted multisig wallets"):
         btc_lst_stake.delegate(btc_tx, 1, [], 0, lock_script, {"from": accounts[1]})
     turn_round(consensuses)
 
@@ -448,7 +459,7 @@ def test_multisig_wallet_multi_input_self_staking_reverts(btc_lst_stake, stake_h
         set_outputs([BTC_VALUE, LOCK_SCRIPT], [BTC_VALUE * 3, REDEEM_SCRIPT]),
         set_inputs([random_btc_tx_id()], [tx_id]),
         set_op_return([accounts[0]]))
-    with brownie.reverts("forbid self delegated"):
+    with brownie.reverts("should not delegate from whitelisted multisig wallets"):
         btc_lst_stake.delegate(btc_tx, 1, [], 0, LOCK_SCRIPT, {"from": accounts[1]})
     turn_round(consensuses)
 
@@ -467,14 +478,14 @@ def test_non_staked_utxo_self_staking_by_multisig_wallet(btc_lst_stake, stake_hu
     operators, consensuses = set_candidate
     btc_tx = btc_delegate.build_btc_lst(
         set_outputs([BTC_VALUE, REDEEM_SCRIPT], [BTC_VALUE * 3, LOCK_SCRIPT]))
-    btc_lst_stake.handleTxOut(btc_tx, 1, [], 2, LOCK_SCRIPT)
+    btc_lst_stake.delegate(btc_tx, 1, [], 2, LOCK_SCRIPT)
     tx_id = get_transaction_txid(btc_tx)
     turn_round()
     btc_tx = btc_delegate.build_btc_lst(
         set_outputs([BTC_VALUE, LOCK_SCRIPT], [BTC_VALUE * 3, REDEEM_SCRIPT]),
         set_inputs([tx_id, 1], [random_btc_tx_id()]),
         set_op_return([accounts[0]]))
-    with brownie.reverts("forbid self delegated"):
+    with brownie.reverts("should not delegate from whitelisted multisig wallets"):
         btc_lst_stake.delegate(btc_tx, 1, [], 0, LOCK_SCRIPT, {"from": accounts[1]})
     turn_round(consensuses)
 
@@ -488,14 +499,14 @@ def test_non_staked_utxo_staking_from_multisig_to_another_multisig(btc_lst_stake
     btc_tx = btc_delegate.build_btc_lst(
         set_outputs([BTC_VALUE, lock_script1], [BTC_VALUE * 3, lock_script0])
     )
-    btc_lst_stake.handleTxOut(btc_tx, 1, [], 2, lock_script0)
+    btc_lst_stake.delegate(btc_tx, 1, [], 2, lock_script0)
     tx_id = get_transaction_txid(btc_tx)
     turn_round()
     btc_tx = btc_delegate.build_btc_lst(set_outputs([BTC_VALUE, LOCK_SCRIPT], [BTC_VALUE * 3, REDEEM_SCRIPT]),
                                         set_inputs([tx_id, 1], [random_btc_tx_id()]),
                                         set_op_return([accounts[0]])
                                         )
-    with brownie.reverts("forbid self delegated"):
+    with brownie.reverts("should not delegate from whitelisted multisig wallets"):
         btc_lst_stake.delegate(btc_tx, 1, [], 0, LOCK_SCRIPT, {"from": accounts[1]})
     turn_round(consensuses)
 
@@ -507,7 +518,8 @@ def test_successful_staking_with_non_staked_utxos_from_different_vouts(btc_lst_s
     lock_script1 = random_btc_lst_lock_script()
     btc_lst_stake.updateParam('add', lock_script0)
     btc_tx = btc_delegate.build_btc_lst(set_outputs([BTC_VALUE, lock_script1], [BTC_VALUE * 3, lock_script0]))
-    btc_lst_stake.handleTxOut(btc_tx, 1, [], 2, lock_script0)
+    tx = btc_lst_stake.delegate(btc_tx, 1, [], 2, lock_script0)
+    assert 'delegated' in tx.events
     tx_id = get_transaction_txid(btc_tx)
     turn_round()
     btc_tx = btc_delegate.build_btc_lst(
@@ -516,7 +528,7 @@ def test_successful_staking_with_non_staked_utxos_from_different_vouts(btc_lst_s
         set_op_return([accounts[0]])
     )
     tx = btc_lst_stake.delegate(btc_tx, 1, [], 0, LOCK_SCRIPT, {"from": accounts[1]})
-    assert 'delegated' in tx.events
+    assert 'Transfer' in tx.events
     turn_round(consensuses)
 
 
@@ -564,6 +576,23 @@ def test_stake_success_with_no_validators(btc_lst_stake, stake_hub):
     tracker0 = get_tracker(accounts[0])
     claim_stake_and_relay_reward(accounts[0])
     assert tracker0.delta() == 0
+
+
+def test_delegate_non_zero_valid_stake(btc_lst_stake, stake_hub, set_candidate):
+    operators, consensuses = set_candidate
+    turn_round()
+    delegate_btc_tx0 = btc_delegate.build_btc_lst(
+        set_outputs([BTC_VALUE, LOCK_SCRIPT], [BTC_VALUE * 3, REDEEM_SCRIPT]),
+        opreturn=set_op_return([constants.ADDRESS_ZERO])
+    )
+    tx = btc_lst_stake.delegate(delegate_btc_tx0, 1, [], 0, LOCK_SCRIPT, {"from": accounts[1]})
+    expect_event(tx, 'delegated', {
+        'amount': BTC_VALUE,
+    })
+    assert 'Transfer' not in tx.events
+    turn_round(consensuses, round_count=2)
+    tx = claim_stake_and_relay_reward(constants.ADDRESS_ZERO)
+    assert len(tx.events) == 0
 
 
 def test_lst_btc_undelegate_success(btc_lst_stake, lst_token, set_candidate):
@@ -1030,7 +1059,7 @@ def test_undelegate_non_staked_utxo(btc_lst_stake, stake_hub, set_candidate):
         set_outputs([BTC_VALUE + 1, address0], [BTC_VALUE + 2, LOCK_SCRIPT])
     )
     tx_id = get_transaction_txid(transfer_btc_tx)
-    btc_lst_stake.handleTxOut(transfer_btc_tx, 1, [], 2, LOCK_SCRIPT)
+    btc_lst_stake.delegate(transfer_btc_tx, 1, [], 2, LOCK_SCRIPT)
     redeem_btc_lst_success(accounts[0], BTC_VALUE, REDEEM_SCRIPT)
     turn_round()
     redeem_btc_tx = btc_delegate.build_btc_lst(
@@ -1052,9 +1081,10 @@ def test_undelegate_non_staked_utxo_different_vouts(btc_lst_stake, stake_hub, se
     address0 = random_btc_lst_lock_script()
     transfer_btc_tx = btc_delegate.build_btc_lst(
         set_outputs([BTC_VALUE + 1, LOCK_SCRIPT], [BTC_VALUE + 2, address0]),
+        opreturn=set_op_return([constants.ADDRESS_ZERO])
     )
     tx_id = get_transaction_txid(transfer_btc_tx)
-    btc_lst_stake.handleTxOut(transfer_btc_tx, 1, [], 2, LOCK_SCRIPT)
+    btc_lst_stake.delegate(transfer_btc_tx, 1, [], 2, LOCK_SCRIPT)
     redeem_btc_lst_success(accounts[0], BTC_VALUE, REDEEM_SCRIPT)
     turn_round()
     redeem_btc_tx = btc_delegate.build_btc_lst(
@@ -1075,7 +1105,7 @@ def test_multiple_inputs_with_non_staked_utxo_undelegate(btc_lst_stake, set_cand
         set_outputs([BTC_VALUE + 1, address0], [BTC_VALUE + 2, LOCK_SCRIPT])
     )
     tx_id = get_transaction_txid(transfer_btc_tx)
-    btc_lst_stake.handleTxOut(transfer_btc_tx, 1, [], 2, LOCK_SCRIPT)
+    btc_lst_stake.delegate(transfer_btc_tx, 1, [], 2, LOCK_SCRIPT)
     redeem_btc_lst_success(accounts[0], BTC_VALUE, REDEEM_SCRIPT)
     turn_round()
     redeem_btc_tx = btc_delegate.build_btc_lst(
@@ -1098,16 +1128,16 @@ def test_handle_tx_out_success(btc_lst_stake, set_candidate):
     )
     tx_id0 = get_transaction_txid(transfer_btc_tx0)
     tx_id1 = get_transaction_txid(transfer_btc_tx1)
-    btc_lst_stake.handleTxOut(transfer_btc_tx0, 1, [], 3, LOCK_SCRIPT)
-    btc_lst_stake.handleTxOut(transfer_btc_tx1, 2, [], 4, LOCK_SCRIPT)
+    btc_lst_stake.delegate(transfer_btc_tx0, 1, [], 3, LOCK_SCRIPT)
+    btc_lst_stake.delegate(transfer_btc_tx1, 2, [], 4, LOCK_SCRIPT)
     __check_btc_lst_tx_map_info(tx_id0, {
         'amount': BTC_VALUE,
         'outputIndex': 1,
-        'blockHeight': 0, })
+        'blockHeight': 1, })
     __check_btc_lst_tx_map_info(tx_id1, {
         'amount': BTC_VALUE - 1,
         'outputIndex': 0,
-        'blockHeight': 0,
+        'blockHeight': 2,
     })
     turn_round(consensuses)
 
@@ -1133,11 +1163,10 @@ def test_revert_when_handle_tx_out_with_non_wallet_script(btc_lst_stake, set_can
     transfer_btc_tx0 = btc_delegate.build_btc_lst(
         set_outputs([BTC_VALUE - 1, lock_script1], [BTC_VALUE, lock_script0]))
     with brownie.reverts("Wallet not found"):
-        btc_lst_stake.handleTxOut(transfer_btc_tx0, 1, [], 3, lock_script0)
+        btc_lst_stake.delegate(transfer_btc_tx0, 1, [], 3, lock_script0)
 
 
 def test_transfer_to_two_wallet_addresses(btc_lst_stake, set_candidate):
-    operators, consensuses = set_candidate
     update_system_contract_address(btc_lst_stake, gov_hub=accounts[0])
     lock_script0 = random_btc_lst_lock_script()
     lock_script1 = random_btc_lst_lock_script()
@@ -1146,17 +1175,13 @@ def test_transfer_to_two_wallet_addresses(btc_lst_stake, set_candidate):
         set_outputs([BTC_VALUE, LOCK_SCRIPT], [BTC_VALUE * 2, lock_script0], [BTC_VALUE * 3, lock_script1])
     )
     tx_id = get_transaction_txid(transfer_btc_tx0)
-    btc_lst_stake.handleTxOut(transfer_btc_tx0, 1, [], 3, LOCK_SCRIPT)
+    btc_lst_stake.delegate(transfer_btc_tx0, 1, [], 3, LOCK_SCRIPT)
     __check_btc_lst_tx_map_info(tx_id, {
         'amount': BTC_VALUE,
         'outputIndex': 0
     })
-    btc_lst_stake.handleTxOut(transfer_btc_tx0, 1, [], 3, lock_script0)
-    __check_btc_lst_tx_map_info(tx_id, {
-        'amount': BTC_VALUE * 2,
-        'outputIndex': 1
-    })
-    turn_round(consensuses)
+    with brownie.reverts("btc tx is already delegated."):
+        btc_lst_stake.delegate(transfer_btc_tx0, 1, [], 3, lock_script0)
 
 
 def test_vout_pair_with_identical_script(btc_lst_stake, set_candidate):
@@ -1165,7 +1190,7 @@ def test_vout_pair_with_identical_script(btc_lst_stake, set_candidate):
         set_outputs([BTC_VALUE, LOCK_SCRIPT], [BTC_VALUE * 2, LOCK_SCRIPT], [BTC_VALUE * 3, LOCK_SCRIPT])
     )
     tx_id = get_transaction_txid(transfer_btc_tx0)
-    btc_lst_stake.handleTxOut(transfer_btc_tx0, 1, [], 3, LOCK_SCRIPT)
+    btc_lst_stake.delegate(transfer_btc_tx0, 1, [], 3, LOCK_SCRIPT)
     __check_btc_lst_tx_map_info(tx_id, {
         'amount': BTC_VALUE * 3,
         'outputIndex': 2
@@ -1177,7 +1202,22 @@ def test_handle_tx_out_unconfirmed_transaction_revert(btc_lst_stake, btc_light_c
     transfer_btc_tx0 = btc_delegate.build_btc_lst(set_outputs([BTC_VALUE, LOCK_SCRIPT]))
     btc_light_client.setCheckResult(False, 0)
     with brownie.reverts("btc tx isn't confirmed"):
-        btc_lst_stake.handleTxOut(transfer_btc_tx0, 1, [], 3, LOCK_SCRIPT)
+        btc_lst_stake.delegate(transfer_btc_tx0, 1, [], 3, LOCK_SCRIPT)
+
+
+@pytest.mark.parametrize("btc_amount", [1, 100, 1200, 13000, 1e8, 10e8])
+def test_stake_no_opreturn_different_amount(btc_lst_stake, set_candidate, btc_amount):
+    operators, consensuses = set_candidate
+    transfer_btc_tx0 = btc_delegate.build_btc_lst(
+        set_outputs([BTC_VALUE, REDEEM_SCRIPT], [BTC_VALUE * 2, REDEEM_SCRIPT], [int(btc_amount), LOCK_SCRIPT])
+    )
+    tx_id = get_transaction_txid(transfer_btc_tx0)
+    btc_lst_stake.delegate(transfer_btc_tx0, 1, [], 3, LOCK_SCRIPT)
+    __check_btc_lst_tx_map_info(tx_id, {
+        'amount': int(btc_amount),
+        'outputIndex': 2
+    })
+    turn_round(consensuses)
 
 
 def test_distribute_reward_success(btc_lst_stake, btc_agent):
