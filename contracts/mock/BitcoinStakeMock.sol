@@ -52,8 +52,8 @@ contract BitcoinStakeMock is BitcoinStake {
         return grades.length;
     }
 
-    function setBtcRewardMap(address delegator, uint256 reward, uint256 unclaimed) external {
-        rewardMap[delegator] = Reward(reward, unclaimed);
+    function setBtcRewardMap(address delegator, uint256 reward, uint256 unclaimed, uint256 accStakedAmount) external {
+        rewardMap[delegator] = Reward(reward, unclaimed, accStakedAmount);
     }
 
     function setIsActive(uint256 value) external {

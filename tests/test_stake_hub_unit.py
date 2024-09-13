@@ -65,7 +65,7 @@ def set_up(min_init_delegate_value, core_agent, candidate_hub, btc_light_client,
 
 @pytest.fixture(scope="module", autouse=True)
 def deposit_for_reward(validator_set):
-    accounts[-11].transfer(validator_set.address, Web3.to_wei(100000, 'ether'))
+    accounts[-10].transfer(validator_set.address, Web3.to_wei(100000, 'ether'))
 
 
 def test_reinit(pledge_agent):
@@ -358,7 +358,7 @@ def test_add_note_payable_success(stake_hub, core_agent, btc_lst_stake, btc_stak
 
 
 def test_only_pledge_agent_can_call(stake_hub):
-    with brownie.reverts("only debt operators"):
+    with brownie.reverts("the sender must be pledge agent contract"):
         stake_hub.proxyClaimReward(accounts[0])
 
 
@@ -875,7 +875,7 @@ def test_stake_hup_calculate_reward(stake_hub, validator_set, candidate_hub, cor
         print(f'case{tests.index(test)}:', test)
         if 'add_core' in test:
             for delegator, v1, v2 in test['add_core']:
-                core_agent.setRewardMap(delegator, v1, v2)
+                core_agent.setCoreRewardMap(delegator, v1, v2)
         # if 'add_pow' in test:
         #     for v1, v2 in test['add_pow']:
         #         btc_light_client.setMiners(test['round']-7, v1, v2)

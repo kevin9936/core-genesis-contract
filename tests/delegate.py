@@ -315,7 +315,8 @@ def old_delegate_coin_success(candidate, account=None, amount=None, old=True):
         tx = PledgeAgentMock[0].delegateCoinOld(candidate, {'value': amount, 'from': account})
     else:
         tx = PledgeAgentMock[0].delegateCoin(candidate, {'value': amount, 'from': account})
-        assert 'delegatedCoin' in tx.events
+        assert 'delegatedCoinOld' in tx.events
+    return tx
 
 
 def old_undelegate_coin_success(candidate, account=None, amount=0, old=True):

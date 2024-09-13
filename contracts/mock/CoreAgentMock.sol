@@ -7,7 +7,7 @@ contract CoreAgentMock is CoreAgent {
 
     function developmentInit() external {
         requiredCoinDeposit = requiredCoinDeposit / 1e16;
-        roundTag = 1;
+        roundTag = 7;
     }
 
     function setRoundTag(uint value) external {
@@ -30,8 +30,8 @@ contract CoreAgentMock is CoreAgent {
         accuredRewardMap[candidate][round] = amount;
     }
 
-    function setCoreRewardMap(address delegator, uint256 reward) external {
-        rewardMap[delegator] = reward;
+    function setCoreRewardMap(address delegator, uint256 reward, uint256 accStakedAmount) external {
+        rewardMap[delegator] = Reward(reward, accStakedAmount);
     }
 
 
@@ -52,15 +52,16 @@ contract CoreAgentMock is CoreAgent {
         return rewardAmountM;
     }
 
-    function setRewardMap(address delegator, uint256 reward, uint256 unclaimedReward) external {
-        rewardMap[delegator] = reward;
-    }
+//    function setRewardMap(address delegator, uint256 reward, uint256 accStakedAmount) external {
+//        rewardMap[delegator] = Reward(reward, accStakedAmount);
+//    }
 
-    function collectCoinRewardMock(address agent, address delegator, bool clearRewardMap) external returns (uint256) {
+    function collectCoinRewardMock(address agent, address delegator, bool clearRewardMap) external returns (uint256, uint256) {
+        uint256 avgStakedAmount;
         Candidate storage a = candidateMap[agent];
         CoinDelegator storage d = a.cDelegatorMap[delegator];
-        rewardAmountM = calculateRewardInternal(delegator, clearRewardMap);
-        return rewardAmountM;
+        (rewardAmountM, avgStakedAmount) = calculateRewardInternal(delegator, clearRewardMap);
+        return (rewardAmountM, avgStakedAmount);
     }
 
 

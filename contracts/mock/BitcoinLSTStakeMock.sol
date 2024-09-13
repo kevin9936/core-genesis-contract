@@ -22,8 +22,8 @@ contract BitcoinLSTStakeMock is BitcoinLSTStake {
         roundTag = value;
     }
 
-    function setBtcLstRewardMap(address delegator, uint256 reward) external {
-        rewardMap[delegator] = reward;
+    function setBtcLstRewardMap(address delegator, uint256 reward, uint256 accStakedAmount) external {
+        rewardMap[delegator] = Reward(reward, accStakedAmount);
     }
 
     function setPercentage(uint256 value) external {

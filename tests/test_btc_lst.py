@@ -1148,12 +1148,9 @@ def test_revert_when_tx_lacks_wallet_script(btc_lst_stake, set_candidate):
     lock_script1 = random_btc_lst_lock_script()
     transfer_btc_tx0 = btc_delegate.build_btc_lst(
         set_outputs([BTC_VALUE - 1, lock_script1], [BTC_VALUE, lock_script0]))
-    tx_id = get_transaction_txid(transfer_btc_tx0)
-    btc_lst_stake.handleTxOut(transfer_btc_tx0, 1, [], 3, LOCK_SCRIPT)
-    __check_btc_lst_tx_map_info(tx_id, {
-        'amount': 0,
-        'outputIndex': 0
-    })
+    get_transaction_txid(transfer_btc_tx0)
+    with brownie.reverts("staked value is zero"):
+        btc_lst_stake.delegate(transfer_btc_tx0, 1, [], 3, LOCK_SCRIPT)
     turn_round(consensuses)
 
 

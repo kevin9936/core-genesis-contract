@@ -24,7 +24,7 @@ contract BaseProxy {
     function _callC(bytes memory _payload) virtual internal returns (bool, string memory) {
         (bool success, bytes memory returnData) = stakeHub.call{value: msg.value}(_payload);
         string memory _msg;
-        if (!success) _msg = _getRevertMsg(returnData);
+//        if (!success) _msg = _getRevertMsg(returnData);
         return (success, _msg);
     }
 }

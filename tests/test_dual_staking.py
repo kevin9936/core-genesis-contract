@@ -1062,7 +1062,7 @@ def test_both_btc_lst_and_core_have_no_rewards(btc_stake, set_candidate, btc_lst
     turn_round(consensuses)
 
 
-def test_core_reward_ratio_too_low_to_claim_rewards(btc_stake, set_candidate, btc_lst_stake, stake_hub):
+def test_core_reward_ratio_too_low_to_claim_rewards(set_candidate):
     __set_is_btc_lst_stake_active()
     __set_is_btc_stake_active()
     __set_lp_rates([[0, 0]])
@@ -1077,7 +1077,7 @@ def test_core_reward_ratio_too_low_to_claim_rewards(btc_stake, set_candidate, bt
     turn_round(consensuses)
 
 
-def test_validator_joining_midway_and_claiming_rewards(btc_stake, set_candidate, btc_lst_stake, stake_hub):
+def test_validator_joining_midway_and_claiming_rewards(set_candidate):
     operators, consensuses = set_candidate
     turn_round()
     delegate_btc_lst_success(accounts[0], BTC_VALUE, BTCLST_LOCK_SCRIPT, Utils.DENOMINATOR)

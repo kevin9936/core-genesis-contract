@@ -3,7 +3,7 @@ pragma solidity 0.8.4;
 import "../PledgeAgent.sol";
 
 contract PledgeAgentMock is PledgeAgent {
-    event delegatedCoin(address indexed agent, address indexed delegator, uint256 amount, uint256 totalAmount);
+    event delegatedCoinOld(address indexed agent, address indexed delegator, uint256 amount, uint256 totalAmount);
     event transferredCoinOld(
         address indexed sourceCandidate,
         address indexed targetCandidate,
@@ -47,8 +47,14 @@ contract PledgeAgentMock is PledgeAgent {
         return agentsMap[agent].rewardSet.length;
     }
 
-    function getAgentAddrList(uint256 index) external view returns (address[] memory) {
-        BtcExpireInfo storage expireInfo = round2expireInfoMap[index];
+    function getAgent2valueMap(uint256 round, address agent) external view returns (uint256 value) {
+        BtcExpireInfo storage expireInfo = round2expireInfoMap[round];
+        value = expireInfo.agent2valueMap[agent];
+        return value;
+    }
+
+    function getAgentAddrList(uint256 round) external view returns (address[] memory) {
+        BtcExpireInfo storage expireInfo = round2expireInfoMap[round];
         uint256 length = expireInfo.agentAddrList.length;
         address[] memory agentAddresses = new address[](length);
         for (uint256 i = 0; i < length; i++) {
@@ -174,7 +180,7 @@ contract PledgeAgentMock is PledgeAgent {
             revert InactiveAgent(agent);
         }
         uint256 newDeposit = delegateCoinOld(agent, msg.sender, msg.value, 0);
-        emit delegatedCoin(agent, msg.sender, msg.value, newDeposit);
+        emit delegatedCoinOld(agent, msg.sender, msg.value, newDeposit);
     }
 
 
@@ -371,6 +377,9 @@ contract PledgeAgentMock is PledgeAgent {
             uint256 btcReward = rewardList[i] * a.btc * rs.btcFactor * rs.power / roundScore;
             emit roundReward(agentList[i], coinReward, powerReward, btcReward);
         }
+    }
+
+    receive() external payable {
     }
 
 

@@ -55,10 +55,10 @@ def test_core_agent_distribute_reward(core_agent, stake_hub):
         {'status': 'success', 'validators': [], 'reward_list': [], 'round': 100, 'amout_list': [],
          'real_amout_list': [], 'expect_round_reward': []},
         {'status': 'success', 'validators': [accounts[1]], 'reward_list': [100], 'round': 101, 'amout_list': [100],
-         'real_amout_list': [100], 'expect_round_reward': [1000000000000000000000000]},
+         'real_amout_list': [100], 'expect_round_reward': [1000000]},
         {'status': 'success', 'validators': [accounts[1], accounts[2]], 'reward_list': [100, 200], 'round': 102,
          'amout_list': [100, 100], 'real_amout_list': [100, 100],
-         'expect_round_reward': [2000000000000000000000000, 2000000000000000000000000]},
+         'expect_round_reward': [2000000, 2000000]},
         {'status': 'failed', 'validators': [accounts[1], accounts[2]], 'reward_list': [100], 'round': 102,
          'amout_list': [100, 100], 'real_amout_list': [100, 100], 'expect_round_reward': []},
     ]
