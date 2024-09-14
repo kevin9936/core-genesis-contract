@@ -1005,7 +1005,7 @@ class UpdateCoreStakeGrades(TaskBuilder):
         multiple = random.randint(1, constants.MAX_CORE_STAKE_GRADE_PERCENT // constants.PERCENT_DECIMALS)
         if multiple > 1:
             percent = constants.PERCENT_DECIMALS * multiple
-            level = constants.PERCENT_DECIMALS * multiple * 10
+            level = constants.PERCENT_DECIMALS * multiple * (constants.MAX_CORE_STAKE_GRADE_LEVEL // constants.MAX_CORE_STAKE_GRADE_PERCENT)
             grades.append(level)
             grades.append(percent)
 

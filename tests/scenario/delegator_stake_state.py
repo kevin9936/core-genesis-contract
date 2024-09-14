@@ -100,10 +100,17 @@ class DelegatorStakeState:
 
         # history reward
         self.delegator_core_history_reward = {}
+        self.delegator_core_history_accured_stake_amount = {}
+
         self.delegator_btc_lst_history_reward = {}
+        self.delegator_btc_lst_history_accured_stake_amount = {}
+
         self.delegator_btc_stake_history_reward = {}
         self.delegator_btc_stake_history_unclaimable_reward = {}
+        self.delegator_btc_stake_history_accured_stake_amount = {}
+
         self.delegator_power_history_reward = {}
+        self.delegator_power_history_accured_stake_amount = {}
 
         # (delegator=>[(relayer1,amount1),(relayer2,amount2)])
         self.debts = {}
@@ -313,6 +320,19 @@ class DelegatorStakeState:
         assert amount >= 0
         self.delegator_btc_lst_history_reward[delegator] = amount
 
+    def get_btc_lst_history_accured_stake_amount(self, delegator):
+        return self.delegator_btc_lst_history_accured_stake_amount.get(delegator, 0)
+
+    def add_btc_lst_history_accured_stake_amount(self, delegator, delta_amount):
+        self.delegator_btc_lst_history_accured_stake_amount[delegator] = \
+            self.get_btc_lst_history_accured_stake_amount(delegator) + delta_amount
+
+        assert self.delegator_btc_lst_history_accured_stake_amount[delegator] >= 0
+
+    def update_btc_lst_history_accured_stake_amount(self, delegator, amount):
+        assert amount >= 0
+        self.delegator_btc_lst_history_accured_stake_amount[delegator] = amount
+
     def get_btc_stake_history_reward(self, delegator):
         return self.delegator_btc_stake_history_reward.get(delegator, 0)
 
@@ -339,6 +359,19 @@ class DelegatorStakeState:
         assert amount >= 0
         self.delegator_btc_stake_history_unclaimable_reward[delegator] = amount
 
+    def get_btc_stake_history_accured_stake_amount(self, delegator):
+        return self.delegator_btc_stake_history_accured_stake_amount.get(delegator, 0)
+
+    def add_btc_stake_history_accured_stake_amount(self, delegator, delta_amount):
+        self.delegator_btc_stake_history_accured_stake_amount[delegator] = \
+            self.get_btc_stake_history_accured_stake_amount(delegator) + delta_amount
+
+        assert self.delegator_btc_stake_history_accured_stake_amount[delegator] >= 0
+
+    def update_btc_stake_history_accured_stake_amount(self, delegator, amount):
+        assert amount >= 0
+        self.delegator_btc_stake_history_accured_stake_amount[delegator] = amount
+
     def get_power_history_reward(self, delegator):
         return self.delegator_power_history_reward.get(delegator, 0)
 
@@ -352,6 +385,19 @@ class DelegatorStakeState:
         assert amount >= 0
         self.delegator_power_history_reward[delegator] = amount
 
+    def get_power_history_accured_stake_amount(self, delegator):
+        return self.delegator_power_history_accured_stake_amount.get(delegator, 0)
+
+    def add_power_history_accured_stake_amount(self, delegator, delta_amount):
+        self.delegator_power_history_accured_stake_amount[delegator] = \
+            self.get_power_history_accured_stake_amount(delegator) + delta_amount
+
+        assert self.delegator_power_history_accured_stake_amount[delegator] >= 0
+
+    def update_power_history_accured_stake_amount(self, delegator, amount):
+        assert amount >= 0
+        self.delegator_power_history_accured_stake_amount[delegator] = amount
+
     def get_core_history_reward(self, delegator):
         return self.delegator_core_history_reward.get(delegator, 0)
 
@@ -364,6 +410,20 @@ class DelegatorStakeState:
     def update_core_history_reward(self, delegator, amount):
         assert amount >= 0
         self.delegator_core_history_reward[delegator] = amount
+
+    def get_core_history_accured_stake_amount(self, delegator):
+        return self.delegator_core_history_accured_stake_amount.get(delegator, 0)
+
+    def add_core_history_accured_stake_amount(self, delegator, delta_amount):
+        self.delegator_core_history_accured_stake_amount[delegator] = \
+            self.get_core_history_accured_stake_amount(delegator) + delta_amount
+
+        assert self.delegator_core_history_accured_stake_amount[delegator] >= 0
+
+    def update_core_history_accured_stake_amount(self, delegator, amount):
+        assert amount >= 0
+        self.delegator_core_history_accured_stake_amount[delegator] = amount
+
 
     def get_btc_lst_stake_tx(self, txid):
         return self.btc_lst_stake_txs.get(txid)

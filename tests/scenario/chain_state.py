@@ -258,7 +258,7 @@ class ChainState:
 
     def init_candidates(self):
         operator_addr_list = CandidateHubMock[0].getCandidates()
-        assert len(operator_addr_list) == 0
+        assert len(operator_addr_list) == 0, f"{operator_addr_list}"
         self.candidates = {}
 
     def init_validators(self):
@@ -497,7 +497,7 @@ class ChainState:
         return CoreAgentMock[0].getCandidateListByDelegator(delegator)
 
     def get_core_history_reward_on_chain(self, delegator):
-        return CoreAgentMock[0].rewardMap(delegator)
+        return CoreAgentMock[0].rewardMap(delegator)[0]
 
     def get_btc_lst_stake_tx_on_chain(self, txid):
         return BitcoinLSTStakeMock[0].btcTxMap(txid)
@@ -512,13 +512,13 @@ class ChainState:
         return BitcoinLSTStakeMock[0].userStakeInfo(delegator)
 
     def get_btc_lst_history_reward_on_chain(self, delegator):
-        return BitcoinLSTStakeMock[0].rewardMap(delegator)
+        return BitcoinLSTStakeMock[0].rewardMap(delegator)[0]
 
     def get_btc_stake_history_reward_on_chain(self, delegator):
         return BitcoinStakeMock[0].rewardMap(delegator)
 
     def get_power_history_reward_on_chain(self, delegator):
-        return HashPowerAgentMock[0].rewardMap(delegator)
+        return HashPowerAgentMock[0].rewardMap(delegator)[0]
 
     def get_btc_stake_tx_on_chain(self, txid):
         return BitcoinStakeMock[0].btcTxMap(txid)

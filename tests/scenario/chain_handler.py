@@ -358,9 +358,10 @@ class ChainHandler:
         delegator_stake_state = self.chain.get_delegator_stake_state()
         candidates = self.chain.get_candidates()
         assets = self.chain.get_assets()
-        core_asset_reward = 0
+        core_accured_stake_amount = 0
+        core_decimals = 0
         for asset in assets:
-            claimable_reward, unclaimable_reward = asset.claim_reward(
+            claimable_reward, unclaimable_reward, accured_stake_amount = asset.claim_reward(
                 round,
                 delegator,
                 delegator_stake_state,
@@ -368,11 +369,19 @@ class ChainHandler:
             )
 
             if asset == assets[0]:
-                core_asset_reward = claimable_reward
+                core_accured_stake_amount = accured_stake_amount
+                core_decimals = asset.get_decimals()
 
             print(f"claim {asset.get_name()} reward, claimable={claimable_reward}, unclaimable={unclaimable_reward}")
             claimable_reward, unclaimable_reward = \
-                asset.apply_dual_stake_reward(claimable_reward, unclaimable_reward, delegator_stake_state, core_asset_reward)
+                asset.apply_dual_stake_reward(
+                    claimable_reward,
+                    unclaimable_reward,
+                    accured_stake_amount,
+                    delegator_stake_state,
+                    core_accured_stake_amount,
+                    core_decimals
+                )
 
             total_claimable_reward += claimable_reward
             total_unclaimable_reward += unclaimable_reward
@@ -444,9 +453,12 @@ class ChainHandler:
 
         # collect reward
         if change_round < round:
-            reward = core_asset.collect_reward_in_candidate(round, delegator, candidate)
+            reward, accured_stake_amount = core_asset.collect_reward_in_candidate(round, delegator, candidate)
             if reward > 0:
                 delegator_stake_state.add_core_history_reward(delegator, reward)
+
+            if accured_stake_amount > 0:
+                delegator_stake_state.add_core_history_accured_stake_amount(delegator, accured_stake_amount)
 
         # update candidate's total realtime amount
         candidate_stake_state.add_realtime_amount(asset_name, amount)
@@ -476,9 +488,12 @@ class ChainHandler:
 
         # collect reward
         if change_round < round:
-            reward = core_asset.collect_reward_in_candidate(round, delegator, candidate)
+            reward, accured_stake_amount = core_asset.collect_reward_in_candidate(round, delegator, candidate)
             if reward > 0:
                 delegator_stake_state.add_core_history_reward(delegator, reward)
+
+            if accured_stake_amount > 0:
+                delegator_stake_state.add_core_history_accured_stake_amount(delegator, accured_stake_amount)
 
         stake_amount = candidate_stake_state.get_delegator_stake_amount(asset_name, delegator)
         assert stake_amount >= amount
@@ -539,12 +554,15 @@ class ChainHandler:
         assert unlock_round - round >= 2
 
         btc_asset = self.chain.get_btc_asset()
-        claimable_reward, unclaimable_reward, expired = btc_asset.collect_btc_stake_tx_reward(tx, delegator_stake_state, round)
+        claimable_reward, unclaimable_reward, accured_stake_amount, expired = btc_asset.collect_btc_stake_tx_reward(tx, delegator_stake_state, round)
         if claimable_reward > 0:
             delegator_stake_state.add_btc_stake_history_reward(delegator, claimable_reward)
 
         if unclaimable_reward > 0:
             delegator_stake_state.add_btc_stake_history_unclaimable_reward(delegator, unclaimable_reward)
+
+        if accured_stake_amount > 0:
+            delegator_stake_state.add_btc_stake_history_accured_stake_amount(delegator, accured_stake_amount)
 
         # if expired:
         #     delegator_stake_state.remove_delegator_txid(delegator, txid)
@@ -592,9 +610,12 @@ class ChainHandler:
         btc_asset = self.chain.get_btc_asset()
         if change_round < round:
             # need check history reward
-            reward = btc_asset.collect_btc_lst_reward(round, delegator, delegator_stake_state)
+            reward, accured_stake_amount = btc_asset.collect_btc_lst_reward(round, delegator, delegator_stake_state)
             if reward > 0:
                 delegator_stake_state.add_btc_lst_history_reward(delegator, reward)
+
+            if accured_stake_amount > 0:
+                delegator_stake_state.add_btc_lst_history_accured_stake_amount(delegator, accured_stake_amount)
 
             delegator_stake_state.update_btc_lst_change_round(delegator, round)
 
@@ -630,9 +651,12 @@ class ChainHandler:
         btc_asset = self.chain.get_btc_asset()
         round = self.chain.get_round()
 
-        history_reward = btc_asset.collect_btc_lst_reward(round, delegator, delegator_stake_state)
+        history_reward, accured_stake_amount = btc_asset.collect_btc_lst_reward(round, delegator, delegator_stake_state)
         if history_reward > 0:
             delegator_stake_state.add_btc_lst_history_reward(delegator, history_reward)
+
+        if accured_stake_amount > 0:
+            delegator_stake_state.add_btc_lst_history_accured_stake_amount(delegator, accured_stake_amount)
 
         # update delegator realtime amount
         burn_amount = amount+utxo_fee
