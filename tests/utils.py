@@ -296,3 +296,12 @@ def extract_pk_script_addr(pk_script: bytes):
     return b'\x00' * 20, AddressType.TYPE_UNKNOWN
 
 
+def get_asset_weight(asset):
+    if asset == 'coin':
+        return AssetWeight.CORE_WEIGHT
+    elif asset == 'power':
+        return AssetWeight.POWER_WEIGHT
+    elif asset == 'btc':
+        return AssetWeight.BTC_WEIGHT
+    else:
+        return None

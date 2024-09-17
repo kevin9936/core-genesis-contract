@@ -379,9 +379,9 @@ def test_calculate_reward_success(stake_hub, core_agent, btc_lst_stake, btc_stak
     accounts[3].transfer(stake_hub, Web3.to_wei(1, 'ether'))
     reward = 10000
     actual_rewards = [reward, reward, reward // 2]
-    core_agent.setCoreRewardMap(accounts[0], reward)
-    btc_lst_stake.setBtcLstRewardMap(accounts[0], reward)
-    hash_power_agent.setPowerRewardMap(accounts[0], reward)
+    core_agent.setCoreRewardMap(accounts[0], reward,0)
+    btc_lst_stake.setBtcLstRewardMap(accounts[0], reward,0)
+    hash_power_agent.setPowerRewardMap(accounts[0], reward,0)
     stake_hub.setIsActive(7)
     stake_hub.setLpRates(0, 5000)
     stake_hub.setOperators(accounts[3], True)
@@ -393,6 +393,8 @@ def test_calculate_reward_success(stake_hub, core_agent, btc_lst_stake, btc_stak
     assert debt_amount == amount
     actual_bonuses = [-(x // 2) for x in actual_rewards]
     assert bonuses == actual_bonuses
+    tx = stake_hub_claim_reward(accounts[0])
+    
 
 
 @pytest.mark.parametrize("lp_rates", [[
@@ -881,7 +883,7 @@ def test_stake_hup_calculate_reward(stake_hub, validator_set, candidate_hub, cor
         #         btc_light_client.setMiners(test['round']-7, v1, v2)
         if 'add_btc' in test:
             for validator, v1, v2 in test['add_btc']:
-                btc_stake.setRewardMap(validator, v1, v2)
+                btc_stake.setCoreRewardMap(validator, v1, v2)
         if 'set_grades' in test:
             stake_hub.setInitLpRates(*test['set_grades'])
         if test['status'] == 'success':

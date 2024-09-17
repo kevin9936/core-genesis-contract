@@ -313,9 +313,10 @@ def old_delegate_coin_success(candidate, account=None, amount=None, old=True):
         amount = 10000
     if old is True:
         tx = PledgeAgentMock[0].delegateCoinOld(candidate, {'value': amount, 'from': account})
+        assert 'delegatedCoinOld' in tx.events
     else:
         tx = PledgeAgentMock[0].delegateCoin(candidate, {'value': amount, 'from': account})
-        assert 'delegatedCoinOld' in tx.events
+        assert 'delegatedCoin' in tx.events
     return tx
 
 
@@ -372,6 +373,12 @@ def old_delegate_btc_success(btc_value, agent, delegator, lock_time=None, tx_id=
     if tx_id is None:
         tx_id = random_btc_tx_id()
     PledgeAgentMock[0].delegateBtcMock(tx_id, btc_value, agent, delegator, script, lock_time, fee)
+    return tx_id
+
+
+def old_trannsfer_btc_success(tx_id, agent):
+    tx = PledgeAgentMock[0].transferBtcOld(tx_id, agent)
+    print('old_trannsfer_btc_success>>>>>>>', tx.events)
     return tx_id
 
 

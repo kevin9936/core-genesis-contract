@@ -56,11 +56,11 @@ contract CoreAgentMock is CoreAgent {
 //        rewardMap[delegator] = Reward(reward, accStakedAmount);
 //    }
 
-    function collectCoinRewardMock(address agent, address delegator, bool clearRewardMap) external returns (uint256, uint256) {
+    function collectCoinRewardMock(address agent, address delegator) external returns (uint256, uint256) {
         uint256 avgStakedAmount;
         Candidate storage a = candidateMap[agent];
         CoinDelegator storage d = a.cDelegatorMap[delegator];
-        (rewardAmountM, avgStakedAmount) = calculateRewardInternal(delegator, clearRewardMap);
+        (rewardAmountM, avgStakedAmount) = collectRewardFromCandidate(agent, d);
         return (rewardAmountM, avgStakedAmount);
     }
 

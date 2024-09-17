@@ -7,6 +7,7 @@ contract BitcoinLSTStakeMock is BitcoinLSTStake {
 
     function developmentInit() external {
         utxoFee = INIT_UTXO_FEE / 100;
+//        percentage = 5000;
     }
 
 
@@ -37,11 +38,7 @@ contract BitcoinLSTStakeMock is BitcoinLSTStake {
     function setStakedAmount(uint64 value) external {
         stakedAmount = value;
     }
-
-    function setIsActive(uint256 value) external {
-        gradeActive = value;
-    }
-
+    
     function setRealtimeAmount(uint64 value) external {
         realtimeAmount = value;
     }

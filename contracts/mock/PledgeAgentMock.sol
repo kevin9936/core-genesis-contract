@@ -11,6 +11,14 @@ contract PledgeAgentMock is PledgeAgent {
         uint256 amount,
         uint256 realAmount
     );
+    event transferredBtcOld(
+        bytes32 indexed txid,
+        address sourceAgent,
+        address targetAgent,
+        address delegator,
+        uint256 amount,
+        uint256 totalAmount
+    );
     event undelegatedCoinOld(address indexed candidate, address indexed delegator, uint256 amount);
     event roundReward(address indexed agent, uint256 coinReward, uint256 powerReward, uint256 btcReward);
     event delegatedBtcOld(bytes32 indexed txid, address indexed agent, address indexed delegator, bytes script, uint256 btcvalue);
@@ -242,6 +250,40 @@ contract PledgeAgentMock is PledgeAgent {
         br.rewardIndex = a.rewardSet.length;
         addExpire(br);
         a.totalBtc += br.value;
+    }
+
+    /// @param targetAgent the new validator address to stake to
+    function transferBtcOld(bytes32 txid, address targetAgent) external {
+        BtcReceipt storage br = btcReceiptMap[txid];
+        require(br.value != 0, "btc tx not found");
+        require(br.delegator == msg.sender, "not the delegator of this btc receipt");
+        address agent = br.agent;
+        require(agent != targetAgent, "can not transfer to the same validator");
+        require(br.endRound > roundTag + 1, "insufficient locking rounds");
+        if (!ICandidateHub(CANDIDATE_HUB_ADDR).canDelegate(targetAgent)) {
+            revert InactiveAgent(targetAgent);
+        }
+        (uint256 reward) = collectBtcReward(txid);
+        Agent storage a = agentsMap[agent];
+        a.totalBtc -= br.value;
+        round2expireInfoMap[br.endRound].agent2valueMap[agent] -= br.value;
+
+        Reward storage r = a.rewardSet[a.rewardSet.length - 1];
+        if (r.round == roundTag && br.rewardIndex < a.rewardSet.length) {
+            r.coin -= br.value * stateMap[roundTag].btcFactor;
+        }
+
+        Agent storage ta = agentsMap[targetAgent];
+        br.agent = targetAgent;
+        br.rewardIndex = ta.rewardSet.length;
+        addExpire(br);
+        ta.totalBtc += br.value;
+
+        if (reward != 0) {
+            Address.sendValue(payable(msg.sender), reward);
+        }
+
+        emit transferredBtcOld(txid, agent, targetAgent, msg.sender, br.value, ta.totalBtc);
     }
 
     function distributePowerRewardOld(address candidate, address[] calldata miners) external onlyCandidate {

@@ -9,6 +9,7 @@ contract BitcoinStakeMock is BitcoinStake {
 
     function developmentInit() external {
         minBtcLockRound = 1;
+        gradeActive = 1;
     }
 
     function getDelegatorBtcMap(address delegator) external view returns (bytes32[] memory) {

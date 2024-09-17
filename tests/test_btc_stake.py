@@ -661,9 +661,10 @@ def test_btc_claim_reward_success(btc_stake, set_candidate):
     turn_round()
     turn_round(consensuses)
     update_system_contract_address(btc_stake, btc_agent=accounts[0])
-    reward, reward_unclaimed = btc_stake.claimReward(accounts[0]).return_value
+    reward, reward_unclaimed, acc_staked_amount = btc_stake.claimReward(accounts[0]).return_value
     assert reward == TOTAL_REWARD * 3
     assert reward_unclaimed == 0
+    assert acc_staked_amount == BTC_VALUE * 3
 
 
 def test_reward_increase_with_longer_stake_duration(btc_stake, set_candidate, btc_light_client):
@@ -677,32 +678,36 @@ def test_reward_increase_with_longer_stake_duration(btc_stake, set_candidate, bt
     turn_round()
     turn_round(consensuses)
     update_system_contract_address(btc_stake, btc_agent=accounts[0])
-    reward, reward_unclaimed = btc_stake.claimReward(accounts[0]).return_value
+    reward, reward_unclaimed, acc_staked_amount = btc_stake.claimReward(accounts[0]).return_value
     assert reward == TOTAL_REWARD // 2 * 3
     assert reward_unclaimed == TOTAL_REWARD * 3 - TOTAL_REWARD // 2 * 3
-    assert btc_stake.rewardMap(accounts[0]) == (0, 0)
+    assert acc_staked_amount == BTC_VALUE * 3
+    assert btc_stake.rewardMap(accounts[0]) == (0, 0, 0)
     assert len(btc_stake.getDelegatorBtcMap(accounts[0])) == 3
 
 
 def test_claim_expired_stake_btc_reward(btc_stake, set_candidate, btc_agent):
     operators, consensuses = set_candidate
+    set_last_round_tag(1)
     lock_script0 = __get_stake_lock_script(PUBLIC_KEY, LOCK_TIME + Utils.ROUND_INTERVAL * 2)
     lock_script1 = __get_stake_lock_script(PUBLIC_KEY, LOCK_TIME + Utils.ROUND_INTERVAL * 2)
     delegate_btc_success(operators[0], accounts[0], BTC_VALUE, LOCK_SCRIPT)
     tx_id0 = delegate_btc_success(operators[1], accounts[0], BTC_VALUE, lock_script0)
     tx_id1 = delegate_btc_success(operators[2], accounts[0], BTC_VALUE, lock_script1)
-    set_last_round_tag(1)
+    __get_receipt_map_info(tx_id0)
     turn_round()
     update_system_contract_address(btc_stake, btc_agent=accounts[0])
     tx_ids = btc_stake.getDelegatorBtcMap(accounts[0])
-    reward, _ = btc_stake.claimReward(accounts[0]).return_value
+    reward, _, acc_staked_amount = btc_stake.claimReward(accounts[0]).return_value
     assert reward == 0
+    assert acc_staked_amount == 0
     assert len(tx_ids) == 3
     update_system_contract_address(btc_stake, btc_agent=btc_agent)
     turn_round(consensuses)
     update_system_contract_address(btc_stake, btc_agent=accounts[0])
-    reward, reward_unclaimed = btc_stake.claimReward(accounts[0]).return_value
+    reward, reward_unclaimed, acc_staked_amount = btc_stake.claimReward(accounts[0]).return_value
     assert reward == TOTAL_REWARD * 3
+    assert acc_staked_amount == BTC_VALUE * 3
     tx_ids = btc_stake.getDelegatorBtcMap(accounts[0])
     assert tx_ids == [tx_id1, tx_id0]
 
@@ -714,25 +719,28 @@ def test_claim_multiple_rounds_of_btc_rewards(btc_stake, set_candidate, btc_agen
     turn_round()
     turn_round(consensuses, round_count=3)
     update_system_contract_address(btc_stake, btc_agent=accounts[0])
-    reward, reward_unclaimed = btc_stake.claimReward(accounts[0]).return_value
+    reward, reward_unclaimed, acc_staked_amount = btc_stake.claimReward(accounts[0]).return_value
     assert reward == TOTAL_REWARD * 9
+    assert acc_staked_amount == BTC_VALUE * 9
     update_system_contract_address(btc_stake, btc_agent=btc_agent)
     turn_round(consensuses, round_count=2)
     update_system_contract_address(btc_stake, btc_agent=accounts[0])
-    reward, reward_unclaimed = btc_stake.claimReward(accounts[0]).return_value
+    reward, reward_unclaimed, acc_staked_amount = btc_stake.claimReward(accounts[0]).return_value
     assert reward == TOTAL_REWARD * 6
+    assert acc_staked_amount == BTC_VALUE * 6
 
 
 def test_claim_rewards_after_multiple_expired_stake_rounds(btc_stake, set_candidate, btc_agent):
     operators, consensuses = set_candidate
+    set_last_round_tag(1)
     for index, o in enumerate(operators):
         delegate_btc_success(o, accounts[0], BTC_VALUE, LOCK_SCRIPT)
-    set_last_round_tag(1)
     turn_round()
     turn_round(consensuses, round_count=3)
     update_system_contract_address(btc_stake, btc_agent=accounts[0])
-    reward, reward_unclaimed = btc_stake.claimReward(accounts[0]).return_value
+    reward, reward_unclaimed, acc_staked_amount = btc_stake.claimReward(accounts[0]).return_value
     assert reward == TOTAL_REWARD * 3
+    assert acc_staked_amount == BTC_VALUE * 3
 
 
 def test_claim_reward_reverts_on_nonexistent_tx_id(btc_stake, set_candidate, btc_agent):
@@ -1000,14 +1008,14 @@ def test_calculate_btc_reward_success(btc_stake, set_candidate):
     turn_round()
     turn_round(consensuses)
     reward = btc_stake.calculateReward([tx_id0, tx_id1]).return_value
-    assert reward == TOTAL_REWARD // 2 * 2
+    assert reward == [TOTAL_REWARD // 2 * 2, BTC_VALUE * 2 + 1]
     reward = btc_stake.calculateReward([tx_id0, tx_id1]).return_value
-    assert reward == 0
+    assert reward == [0, 0]
     tracker0 = get_tracker(accounts[0])
     stake_hub_claim_reward(accounts[0])
     assert tracker0.delta() == TOTAL_REWARD // 2 * 2 - FEE * 2
     reward = btc_stake.calculateReward([]).return_value
-    assert reward == 0
+    assert reward == [0, 0]
 
 
 def test_calculate_btc_reward_with_invalid_txid(btc_stake, set_candidate):
@@ -1239,7 +1247,6 @@ def __mock_delegate_btc_old(btc_value, agent, delegator, tx_id=None, script=LOCK
     return tx_id
 
 
-
 def __get_receipt_map_info(tx_id):
     """
     address candidate;
@@ -1247,6 +1254,7 @@ def __get_receipt_map_info(tx_id):
     uint256 round; // delegator can claim reward after this round
     """
     receipt_map = BTC_STAKE.receiptMap(tx_id)
+    print('__get_receipt_map_info>>>>>>>>>>>>>', receipt_map)
     return receipt_map
 
 

@@ -192,7 +192,7 @@ def test_proxy_claim_reward_success(core_agent, stake_hub):
         "delegator": pledge_agent_proxy.address,
         "amount": COIN_REWARD
     })
-    assert core_agent.rewardMap(pledge_agent_proxy.address) == 0
+    assert core_agent.rewardMap(pledge_agent_proxy.address) == (0, 0)
 
 
 def test_proxy_claim_reward_failed(core_agent, stake_hub):
@@ -204,7 +204,7 @@ def test_proxy_claim_reward_failed(core_agent, stake_hub):
     turn_round()
     turn_round([consensus])
     core_agent_proxy.setReceiveState(False)
-    assert core_agent.rewardMap(core_agent_proxy.address) == 0
+    assert core_agent.rewardMap(core_agent_proxy.address) == (0, 0)
     with brownie.reverts("call to claimReward failed"):
         core_agent_proxy.claimReward.call()
 
@@ -236,7 +236,7 @@ def test_claim_reward_reentry(core_agent, stake_hub):
     turn_round([consensus])
     assert stake_hub.balance() == COIN_REWARD
     tracker = get_tracker(core_agent_proxy)
-    tx = core_agent_proxy.claimReward()
+    tx = core_agent_proxy.claimRewardNew()
     expect_event(tx, "proxyClaim", {
         "success": True
     })
@@ -255,8 +255,7 @@ def test_claim_reward_after_undelegate_one_round(core_agent, validator_set, stak
     tracker1 = get_tracker(accounts[1])
     core_agent.undelegateCoin(operator, undelegate_amount, {'from': accounts[0]})
     core_agent.undelegateCoin(operator, delegate_amount, {'from': accounts[1]})
-    claimable = core_agent.rewardMap(accounts[0])
-    assert claimable == 0
+    assert core_agent.rewardMap(accounts[0]) == [0, 0]
     assert tracker0.delta() == undelegate_amount
     assert tracker1.delta() == delegate_amount
     turn_round([consensus], round_count=1)

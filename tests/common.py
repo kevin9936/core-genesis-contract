@@ -66,13 +66,13 @@ def get_current_round():
     return round_tag
 
 
-def set_round_tag(rount_tag):
-    CandidateHubMock[0].setRoundTag(rount_tag)
-    BitcoinStakeMock[0].setRoundTag(rount_tag)
-    CoreAgentMock[0].setRoundTag(rount_tag)
-    BitcoinLSTStakeMock[0].setRoundTag(rount_tag)
-    BitcoinLSTStakeMock[0].setInitRound(rount_tag)
-    PledgeAgentMock[0].setRoundTag(rount_tag)
+def set_round_tag(round_tag):
+    CandidateHubMock[0].setRoundTag(round_tag)
+    BitcoinStakeMock[0].setRoundTag(round_tag)
+    CoreAgentMock[0].setRoundTag(round_tag)
+    BitcoinLSTStakeMock[0].setRoundTag(round_tag)
+    BitcoinLSTStakeMock[0].setInitRound(round_tag)
+    PledgeAgentMock[0].setRoundTag(round_tag)
 
 
 def stake_hub_claim_reward(account):

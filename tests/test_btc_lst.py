@@ -417,15 +417,17 @@ def test_delegate_includes_existing_rewards(btc_lst_stake, stake_hub, set_candid
     turn_round()
     turn_round(consensuses)
     btc_tx, lock_script = __create_btc_lst_delegate(accounts[0], BTC_VALUE // 2)
-    btc_lst_reward0 = btc_lst_stake.rewardMap(accounts[0])
+    btc_lst_reward0, acc_staked_amount = btc_lst_stake.rewardMap(accounts[0])
     assert btc_lst_reward0 == 0
+    assert acc_staked_amount == 0
     assert btc_lst_stake.userStakeInfo(accounts[0])[1] == BTC_VALUE
     btc_lst_stake.delegate(btc_tx, 1, [], 0, lock_script, {"from": accounts[1]})
     # "Staked on all validators"
     assert btc_lst_stake.userStakeInfo(accounts[0])[1] == BTC_VALUE + BTC_VALUE // 2
-    btc_lst_reward = btc_lst_stake.rewardMap(accounts[0])
+    btc_lst_reward, acc_staked_amount = btc_lst_stake.rewardMap(accounts[0])
     assert btc_lst_reward == TOTAL_REWARD * 3
     assert btc_lst_stake.realtimeAmount() == BTC_VALUE + BTC_VALUE // 2
+    assert acc_staked_amount == BTC_VALUE
 
 
 def test_multisig_wallet_self_staking_reverts(btc_lst_stake, stake_hub, set_candidate):
@@ -1311,8 +1313,8 @@ def test_btc_lst_claim_reward_success(btc_agent, btc_stake, btc_lst_stake, set_c
     return_value = btc_lst_stake.claimReward(accounts[0]).return_value
     claimed_reward = TOTAL_REWARD * 3 // 2
     unclaimed_reward = TOTAL_REWARD * 3 - TOTAL_REWARD * 3 // 2
-    assert return_value == [claimed_reward, unclaimed_reward]
-    assert btc_lst_stake.rewardMap(accounts[0]) == 0
+    assert return_value == [claimed_reward, unclaimed_reward, BTC_VALUE]
+    assert btc_lst_stake.rewardMap(accounts[0]) == [0, 0]
 
 
 def test_lst_claim_reward_when_grade_is_disabled(btc_agent, btc_stake, btc_lst_stake, set_candidate):
@@ -1324,7 +1326,7 @@ def test_lst_claim_reward_when_grade_is_disabled(btc_agent, btc_stake, btc_lst_s
     hex_value = padding_left(Web3.to_hex(int(0)), 64)
     btc_lst_stake.updateParam('gradeActive', hex_value, {'from': accounts[0]})
     return_value = btc_lst_stake.claimReward(accounts[0]).return_value
-    assert return_value == [TOTAL_REWARD * 3, 0]
+    assert return_value == [TOTAL_REWARD * 3, 0, BTC_VALUE]
 
 
 @pytest.mark.parametrize("percentage", [400, 1000, 8800, 10000])
@@ -1339,7 +1341,7 @@ def test_lst_claim_reward_percentage_change(btc_agent, btc_stake, btc_lst_stake,
     return_value = btc_lst_stake.claimReward(accounts[0]).return_value
     btc_lst_reward = TOTAL_REWARD * 3
     claimed_reward = btc_lst_reward * percentage // Utils.DENOMINATOR
-    assert return_value == [claimed_reward, btc_lst_reward - claimed_reward]
+    assert return_value == [claimed_reward, btc_lst_reward - claimed_reward, BTC_VALUE]
 
 
 def test_lst_claim_reward_only_btc_agent_can_call(btc_agent, btc_stake, btc_lst_stake, set_candidate):

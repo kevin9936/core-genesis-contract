@@ -32,44 +32,11 @@ contract StakeHubMock is StakeHub {
             stateMap[assets[i].agent].factor = 10000;
         }
     }
-
-    function setInitLpRates(uint32 value1, uint32 value01, uint32 value2, uint32 value02, uint32 value3, uint32 value03, uint32 value4, uint32 value04) external {
-        while (grades.length > 0) {
-            grades.pop();
-        }
-        grades.push(DualStakingGrade(value1, value01));
-        grades.push(DualStakingGrade(value2, value02));
-        grades.push(DualStakingGrade(value3, value03));
-        grades.push(DualStakingGrade(value4, value04));
-    }
-
-    function setLpRates(uint32 value1, uint32 balue01) external {
-        grades.push(DualStakingGrade(value1, balue01));
-    }
-
+    
     function setOperators(address delegator, bool value) external {
         operators[delegator] = value;
     }
-
-    function setAssetBonusAmount(uint256 bonus0, uint256 bonus1, uint256 bonus2) external {
-        assets[0].bonusAmount = bonus0;
-        assets[1].bonusAmount = bonus1;
-        assets[2].bonusAmount = bonus2;
-    }
-
-
-    function setIsActive(uint256 value) external {
-        gradeActive = value;
-    }
-
-    function setUnclaimedReward(uint256 value) external {
-        unclaimedReward = value;
-    }
-
-
-    function popLpRates() external {
-        delete grades;
-    }
+    
 
     function getDebts(address delegator) external view returns (NotePayable[] memory) {
         return debts[delegator].notes;
@@ -84,21 +51,13 @@ contract StakeHubMock is StakeHub {
         stateMap[agent] = AssetState(value, value1);
     }
 
-    function setBtcPoolRate(uint32[] memory value) external {
-        assets[0].bonusRate = value[0];
-        assets[1].bonusRate = value[1];
-        assets[2].bonusRate = value[2];
-    }
-    function getGradesLength() external view returns (uint256) {
-        return grades.length;
-    }
 
     function initHybridScoreMock() external {
         _initializeFromPledgeAgent();
     }
 
-    receive() external payable {
-    }
+//    receive() external payable {
+//    }
 
     function coreAgentDistributeReward(address[] calldata validators, uint256[] calldata rewardList, uint256 round) external {
         IAgent(CORE_AGENT_ADDR).distributeReward(validators, rewardList, round);

@@ -53,9 +53,10 @@ def test_init_can_only_run_once(hash_power_agent):
         hash_power_agent.init()
 
 
-def __check_reward_power(delegator, result: int):
+def __check_reward_power(delegator, result: dict):
     reward = HASH_POWER_AGENT.rewardMap(delegator)
-    assert reward == result
+    for r in result:
+        assert reward[r] == result.get(r)
 
 
 def test_distribute_reward_success(hash_power_agent):
@@ -74,7 +75,13 @@ def test_distribute_reward_success(hash_power_agent):
     hash_power_agent.distributeReward(validators, reward_list, round_tag + 1)
     for index, v in enumerate(validators):
         reward = reward_list[index] // sum_stake_amounts[index] * staked_amounts[index]
-        __check_reward_power(accounts[index], reward)
+        __check_reward_power(accounts[index], {
+            'reward': reward,
+            'accStakedAmount': staked_amounts[index]
+        })
+    __check_reward_power(accounts[5], {
+        'accStakedAmount': 4
+    })
 
 
 def test_distribute_reward_with_new_validator(hash_power_agent):
@@ -90,9 +97,14 @@ def test_distribute_reward_with_new_validator(hash_power_agent):
     hash_power_agent.distributeReward(validators, reward_list, round_tag + 1)
     for index, v in enumerate(validators):
         reward = reward_list[index] // staked_amounts[index] * staked_amounts[index]
+        acc_stake_amount = staked_amounts[index]
         if index == 0:
             reward = 0
-        __check_reward_power(accounts[index], reward)
+            acc_stake_amount = 0
+        __check_reward_power(accounts[index], {
+            'reward': reward,
+            'accStakedAmount': acc_stake_amount
+        })
 
 
 def test_distribute_reward_with_zero_amount(hash_power_agent, candidate_hub):
@@ -103,7 +115,10 @@ def test_distribute_reward_with_zero_amount(hash_power_agent, candidate_hub):
     hash_power_agent.distributeReward(validators, rewards, round_tag)
     reward = 0
     for index, v in enumerate(validators):
-        __check_reward_power(v, reward)
+        __check_reward_power(v, {
+            'reward': reward,
+            'accStakedAmount': 0
+        })
 
 
 def test_distribute_reward_only_stake_hub_can_call(hash_power_agent):
@@ -144,17 +159,22 @@ def test_power_claim_reward_success(hash_power_agent):
     update_system_contract_address(hash_power_agent, stake_hub=accounts[0])
     hash_power_agent.distributeReward(validators, reward_list, round_tag + 1)
     for index, v in enumerate(validators):
-        reward_sum, unclaimed = hash_power_agent.claimReward(accounts[index]).return_value
+        reward_sum, unclaimed, acc_staked_amount = hash_power_agent.claimReward(accounts[index]).return_value
         reward = reward_list[index] // sum_stake_amounts[index] * staked_amounts[index]
+        actual_acc_staked_amount = staked_amounts[index]
         assert reward_sum == reward
+        assert actual_acc_staked_amount == actual_acc_staked_amount
         assert unclaimed == 0
-        __check_reward_power(accounts[index], 0)
+        __check_reward_power(accounts[5], {
+            'accStakedAmount': 4
+        })
 
 
 def test_claim_power_no_reward_success(hash_power_agent):
     update_system_contract_address(hash_power_agent, stake_hub=accounts[0])
-    reward_sum, unclaimed = hash_power_agent.claimReward(accounts[0]).return_value
+    reward_sum, unclaimed, acc_staked_amount = hash_power_agent.claimReward(accounts[0]).return_value
     assert reward_sum == 0
+    assert acc_staked_amount == 0
 
 
 def test_only_stake_hub_can_call_claim_reward(hash_power_agent):

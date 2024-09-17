@@ -44,3 +44,9 @@ class HardCap:
     POWER_HARD_CAP = 2000
     BTC_HARD_CAP = 4000
     SUM_HARD_CAP = CORE_HARD_CAP + POWER_HARD_CAP + BTC_HARD_CAP
+
+
+class AssetWeight:
+    CORE_WEIGHT = 1e4
+    POWER_WEIGHT = 1e2
+    BTC_WEIGHT = 1e4
