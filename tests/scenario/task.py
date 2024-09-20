@@ -683,20 +683,20 @@ class UpdateCoreStakeGrades(UpdateParams):
         return constants.GRADES_KEY
 
     def get_contract(self):
-        return StakeHubMock[0]
+        return BitcoinAgentMock[0]
 
 class UpdateCoreStakeGradeFlag(UpdateParams):
     def build_value(self, params):
         assert len(params) == 1
         self.data = params[0]
-        assert self.data <= 7
-        return params[0].to_bytes(32)
+        assert self.data <= 1
+        return params[0].to_bytes(1)
 
     def get_key(self):
         return constants.GRADE_FLAG_KEY
 
     def get_contract(self):
-        return StakeHubMock[0]
+        return BitcoinAgentMock[0]
 
 class UpdateBtcStakeGradeFlag(UpdateParams):
     def build_value(self, params):
@@ -715,19 +715,34 @@ class UpdateBtcStakeGrades(UpdateCoreStakeGrades):
     def get_contract(self):
         return BitcoinStakeMock[0]
 
-class UpdateBtcLstStakeGradeFlag(UpdateBtcStakeGradeFlag):
+class UpdateBtcLstStakeGradeFlag(UpdateParams):
+    def is_supported(self, advanced_round):
+        return False
+
+    def build_value(self, params):
+        assert len(params) == 1
+        self.data = params[0]
+        assert self.data <= 1
+        return params[0].to_bytes(32)
+
+    def get_key(self):
+        return constants.GRADE_FLAG_KEY
+
     def get_contract(self):
         return BitcoinLSTStakeMock[0]
 
-class UpdateBtcLstStakeGradePercent(UpdateBtcLstStakeGradeFlag):
-    def get_key(self):
-        return constants.GRADE_PERCENT_KEY
-
+class UpdateBtcLstStakeGradePercent(UpdateParams):
     def build_value(self, params):
         assert len(params) == 1
         self.data = params[0]
         assert self.data <= constants.PERCENT_DECIMALS
         return params[0].to_bytes(32)
+
+    def get_key(self):
+        return constants.GRADE_PERCENT_KEY
+
+    def get_contract(self):
+        return BitcoinLSTStakeMock[0]
 
 #### for test ####
 class CreatePayment(Task):

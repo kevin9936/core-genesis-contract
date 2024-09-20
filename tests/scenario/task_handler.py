@@ -440,9 +440,11 @@ class ClaimReward(TaskHandler):
         super().on_task_ready()
         self.chain.init_balance(self.task.account)
         self.chain.init_balance(StakeHubMock[0])
+        self.chain.init_balance(SystemRewardMock[0])
 
         self.checker.check_creditor_contributions(self.task.account)
         self.checker.check_balance(StakeHubMock[0])
+        self.checker.check_balance(SystemRewardMock[0])
         self.checker.check_history_reward(self.task.account)
         self.checker.check_balance(self.task.account)
         self.checker.check_total_unclaimed_reward()
@@ -459,6 +461,7 @@ class ClaimReward(TaskHandler):
         self.checker.check_creditor_contributions(self.task.account)
         self.checker.check_total_unclaimed_reward()
         self.checker.check_balance(StakeHubMock[0])
+        self.checker.check_balance(SystemRewardMock[0])
 
 class UpdateCoreStakeGradeFlag(TaskHandler):
     def on_task_ready(self):

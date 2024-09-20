@@ -87,7 +87,7 @@ class Scenario:
         task_inst = TaskClass()
 
         assert task_inst.is_supported(advanced_round), \
-            f"Unsupport execute task {task_name} in init round"
+            f"Unsupport execute task {task_name} in advanced_round={advanced_round}"
 
         task_inst.set_round(round)
         task_inst.set_chain_state(self.chain)

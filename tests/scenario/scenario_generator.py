@@ -223,7 +223,7 @@ class DataCenter:
             GenerateBlock.__name__: 100,
             UpdateCoreStakeGradeFlag.__name__: 20,
             UpdateBtcStakeGradeFlag.__name__: 10,
-            UpdateBtcLstStakeGradeFlag.__name__: 5,
+            UpdateBtcLstStakeGradePercent.__name__: 10,
             RegisterCandidate.__name__: 50,
             SlashValidator.__name__: 5,
             AddMargin.__name__: 90,
@@ -682,7 +682,7 @@ class ChainTaskGenerator(TaskGenerator):
         cls.__random_task_builders = [
             UpdateCoreStakeGradeFlag(),
             UpdateBtcStakeGradeFlag(),
-            UpdateBtcLstStakeGradeFlag()
+            UpdateBtcLstStakeGradePercent()
         ]
 
     def __init__(self):
@@ -966,7 +966,7 @@ class UpdateCoreStakeGradeFlag(TaskBuilder):
         self.next_builder = UpdateCoreStakeGrades()
 
     def self_build(self, task_generator):
-        value = random.randint(0, constants.MAX_CORE_STAKE_GRADE_FLAG)
+        value = random.randint(0, 1)
         if value > 0:
             self.next_builder.enable()
         else:
@@ -1085,9 +1085,6 @@ class UpdateBtcLstStakeGradePercent(TaskBuilder):
     def __init__(self):
         super().__init__()
         self.type = TaskType.UpdateBtcLstStakeGradePercent.value
-
-    def is_enabled(self, task_generator):
-        return self.enabled
 
     def self_build(self, task_generator):
         value = random.randint(1, constants.PERCENT_DECIMALS)

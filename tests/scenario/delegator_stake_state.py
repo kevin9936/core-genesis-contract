@@ -126,7 +126,7 @@ class DelegatorStakeState:
         self.btc_lst_stake_percent = 0
 
         # dual staking level
-        self.core_stake_grade_flag = 0
+        self.core_stake_grade_flag = False
         self.core_stake_grades = []
 
         # wallets (script_pubkey => flag)   flag(0,1):is active
@@ -141,13 +141,13 @@ class DelegatorStakeState:
         self.init_data_on_chain()
 
     def init_data_on_chain(self):
-        self.core_stake_grade_flag = StakeHubMock[0].gradeActive()
-        self.core_stake_grades = StakeHubMock[0].getGrades()
+        self.core_stake_grade_flag = BitcoinAgentMock[0].gradeActive()
+        self.core_stake_grades = BitcoinAgentMock[0].getGrades()
 
         self.btc_stake_grade_flag = bool(BitcoinStakeMock[0].gradeActive())
         self.btc_stake_grades = BitcoinStakeMock[0].getGrades()
 
-        self.btc_lst_stake_grade_flag = bool(BitcoinLSTStakeMock[0].gradeActive())
+        self.btc_lst_stake_grade_flag = True#bool(BitcoinLSTStakeMock[0].gradeActive())
         self.btc_lst_stake_percent = BitcoinLSTStakeMock[0].percentage()
 
         if self.btc_lst_stake_grade_flag:

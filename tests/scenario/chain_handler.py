@@ -84,10 +84,10 @@ class ChainHandler:
                 validator.get_stake_state().set_reward(asset.get_name(), asset_reward)
                 self.chain.add_total_income(-asset_reward)
 
-            # update asset subsidy
-            asset_bonus = self.chain.get_total_unclaimed_reward() * asset.get_bonus_rate() // constants.PERCENT_DECIMALS
-            self.chain.add_total_unclaimed_reward(-asset_bonus)
-            asset.add_bonus_amount(asset_bonus) # bonus amount used in claimreward
+            # # update asset subsidy
+            # asset_bonus = self.chain.get_total_unclaimed_reward() * asset.get_bonus_rate() // constants.PERCENT_DECIMALS
+            # self.chain.add_total_unclaimed_reward(-asset_bonus)
+            # asset.add_bonus_amount(asset_bonus) # bonus amount used in claimreward
 
             # distribute asset reward
             asset.distribute_reward(validators, self.chain.get_delegator_stake_state(), round)
@@ -365,28 +365,16 @@ class ChainHandler:
                 round,
                 delegator,
                 delegator_stake_state,
-                candidates
+                candidates,
+                core_accured_stake_amount
             )
 
             if asset == assets[0]:
                 core_accured_stake_amount = accured_stake_amount
-                core_decimals = asset.get_decimals()
 
             print(f"claim {asset.get_name()} reward, claimable={claimable_reward}, unclaimable={unclaimable_reward}")
-            claimable_reward, unclaimable_reward = \
-                asset.apply_dual_stake_reward(
-                    claimable_reward,
-                    unclaimable_reward,
-                    accured_stake_amount,
-                    delegator_stake_state,
-                    core_accured_stake_amount,
-                    core_decimals
-                )
-
             total_claimable_reward += claimable_reward
             total_unclaimable_reward += unclaimable_reward
-
-            print(f"    apply_dual_stake_reward,claimable={claimable_reward}, unclaimable={unclaimable_reward}")
 
         print(f"total_claimable={total_claimable_reward},total_unclaimable={total_unclaimable_reward}")
 
@@ -396,14 +384,29 @@ class ChainHandler:
 
         self.chain.add_balance(delegator, total_claimable_reward)
         self.chain.add_balance(StakeHubMock[0], -total_claimable_reward)
-        self.chain.add_total_unclaimed_reward(total_unclaimable_reward)
 
-        ## for debug
+        total_float_reward = self.check_float_reward_pool(total_unclaimable_reward)
+        self.chain.add_total_unclaimed_reward(-total_float_reward)
+
+        # ## for debug
         # arr = StakeHubMock[0].getDataArr()
-        # print(f"Debug on chain: {arr}")
+        # print(f"STAKEHUB Debug on chain: {arr}")
 
-        # arr1, arr2 = CoreAgentMock[0].getDataArr()
-        # print(f"CoreAgent Debug: {arr1}, {arr2}")
+        # arr = BitcoinAgentMock[0].getDataArr()
+        # print(f"BITCOINAGENT Debug: {arr}")
+
+
+    def check_float_reward_pool(self, total_unclaimable_reward):
+        float_reward_pool = self.chain.get_total_unclaimed_reward()
+        total_float_reward = -total_unclaimable_reward
+        if total_float_reward > float_reward_pool:
+            supplementary_amount = total_float_reward * 10
+            actual_supplementary_amount = \
+                self.chain.claim_system_reward(StakeHubMock[0], supplementary_amount)
+
+            self.chain.add_total_unclaimed_reward(actual_supplementary_amount)
+
+        return total_float_reward
 
 
     def pay_delegator_debts(self, delegator, reward, delegator_stake_state):

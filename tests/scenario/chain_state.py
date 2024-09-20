@@ -538,7 +538,7 @@ class ChainState:
         return StakeHubMock[0].payableNotes(contributor)
 
     def get_total_unclaimed_reward_on_chain(self):
-        return StakeHubMock[0].unclaimedReward()
+        return StakeHubMock[0].rewardPool()
 
     def get_wallets_on_chain(self):
         return BitcoinLSTStakeMock[0].getWallets()
@@ -559,10 +559,10 @@ class ChainState:
         return BitcoinLSTStakeMock[0].redeemRequests(index)
 
     def get_core_stake_grade_flag_on_chain(self):
-        return StakeHubMock[0].gradeActive()
+        return BitcoinAgentMock[0].gradeActive()
 
     def get_core_stake_grades_on_chain(self):
-        return StakeHubMock[0].getGrades()
+        return BitcoinAgentMock[0].getGrades()
 
     def get_btc_stake_grade_flag_on_chain(self):
         return BitcoinStakeMock[0].gradeActive()
@@ -603,6 +603,14 @@ class ChainState:
         else:
             self.add_balance(Foundation[0], out_of_cap_amount)
 
+    def claim_system_reward(self, receiver, amount):
+        balance = self.get_balance(SystemRewardMock[0])
+        amount = min(balance, amount)
+        self.add_balance(receiver, amount)
+        self.add_balance(SystemRewardMock[0], -amount)
+
+        assert amount >= 0
+        return amount
 
     def pay_to_burn(self, amount):
         if amount == 0:

@@ -35,6 +35,7 @@ class Asset:
         self.round_rewards = {}
 
         self.dual_stake_mask = 0
+        self.decimals = 1
 
         self.init_state_off_chain()
 
@@ -46,11 +47,8 @@ class Asset:
             return self.name == other.name and \
                 self.agent == other.agent and \
                 self.hardcap == other.hardcap and \
-                self.bonus_rate == other.bonus_rate and \
-                self.bonus_amount == other.bonus_amount and \
                 self.amount == other.amount and \
-                self.factor == other.factor and \
-                self.decimals == other.decimals
+                self.factor == other.factor
 
         return False
 
@@ -72,17 +70,17 @@ class Asset:
     def init_state_off_chain(self):
         tuple_data = self.get_initial_state()
         tuple_data_on_chain = self.get_initial_state_on_chain()
-        assert tuple_data == tuple_data_on_chain
+        assert tuple_data == tuple_data_on_chain, f"off_chain_data={tuple_data}, on_chain_data={tuple_data_on_chain}"
 
         self.name = tuple_data[0]
         self.agent = tuple_data[1]
         self.hardcap = tuple_data[2]
-        self.bonus_rate = tuple_data[3]
-        self.bonus_amount = tuple_data[4]
-        self.decimals = tuple_data[5]
+        # self.bonus_rate = tuple_data[3]
+        # self.bonus_amount = tuple_data[4]
+        # self.decimals = tuple_data[5]
 
-        self.amount = tuple_data[6]
-        self.factor = tuple_data[7]
+        self.amount = tuple_data[3]
+        self.factor = tuple_data[4]
 
     def get_initial_state_on_chain(self):
         state1 = StakeHubMock[0].assets(self.get_asset_idx())
@@ -150,7 +148,13 @@ class Asset:
     def distribute_reward(self, validators, delegator_stake_state,  round):
         print(f"{self.__class__.__name__} distribute_reward")
 
-    def claim_reward(self, round, delegator, delegator_stake_state, candidates):
+    def claim_reward(
+        self,
+        round,
+        delegator,
+        delegator_stake_state,
+        candidates,
+        core_accured_stake_amount=0):
         return 0, 0, 0
 
     def apply_dual_stake_reward(
@@ -159,12 +163,11 @@ class Asset:
             unclaimable_reward,
             accured_stake_amount,
             delegator_stake_state,
-            core_accured_stake_amount,
-            core_decimals
+            core_accured_stake_amount
         ):
         flag, grades = delegator_stake_state.get_core_stake_grade_data()
 
-        if not self.enable_dual_stake(flag):
+        if not flag:
             return claimable_reward, unclaimable_reward
 
         if len(grades) == 0:
@@ -175,7 +178,7 @@ class Asset:
 
         assert accured_stake_amount > 0, f"{self.name}"
 
-        stake_amount_rate = core_accured_stake_amount * self.get_decimals() // (accured_stake_amount * core_decimals)
+        stake_amount_rate = core_accured_stake_amount // (accured_stake_amount * self.decimals)
         percent = grades[0][1]
         for grade in reversed(grades):
             if stake_amount_rate >= grade[0]:
@@ -186,19 +189,9 @@ class Asset:
             return claimable_reward, unclaimable_reward
 
         new_claimable_reward = claimable_reward * percent // constants.PERCENT_DECIMALS
-        if new_claimable_reward < claimable_reward:
-            unclaimable_reward += claimable_reward - new_claimable_reward
-            claimable_reward = new_claimable_reward
-        else:
-            bonus = min(new_claimable_reward - claimable_reward, self.bonus_amount)
-            self.bonus_amount -= bonus
-            claimable_reward += bonus
-
-        return claimable_reward, unclaimable_reward
-
-
-    def enable_dual_stake(self, flag):
-        return self.dual_stake_mask == (flag & self.dual_stake_mask)
+        unclaimable_reward = claimable_reward - new_claimable_reward + unclaimable_reward
+        print(f"DUAL STAKING rate={stake_amount_rate}, percent={percent}")
+        return new_claimable_reward, unclaimable_reward
 
 class CoreAsset(Asset):
     def __init__(self):
@@ -207,7 +200,7 @@ class CoreAsset(Asset):
         self.dual_stake_mask = 1
 
     def get_initial_state(self):
-        return ("CORE", self.get_agent_addr().address, 6000, 0, 0, 10**22, 0, 1)
+        return ("CORE", self.get_agent_addr().address, 6000, 0, 1)
 
     def get_asset_idx(self):
         return 0
@@ -244,7 +237,13 @@ class CoreAsset(Asset):
 
     # delegator_stake_state: saves the candidate addr list where the user has staked and the total asset amount
     # candidate_stake_state: saves the staking information of the user in the current candidate
-    def claim_reward(self, round, delegator, delegator_stake_state, candidates):
+    def claim_reward(
+        self,
+        round,
+        delegator,
+        delegator_stake_state,
+        candidates,
+        core_accured_stake_amount=0):
         total_reward = 0
         total_accured_stake_amount = 0
         remove_list = []
@@ -312,7 +311,7 @@ class PowerAsset(Asset):
         self.dual_stake_mask = (1 << 1)
 
     def get_initial_state(self):
-        return ("HASHPOWER", self.get_agent_addr().address, 2000, 0, 0, 100, 0, 10**24)
+        return ("HASHPOWER", self.get_agent_addr().address, 2000, 0, 10**24)
 
     def get_asset_idx(self):
         return 1
@@ -343,7 +342,13 @@ class PowerAsset(Asset):
     def calc_candidate_stake_amount_list(self, candidate, delegator_stake_state, round):
         return [candidate.get_stake_state().get_round_powers(round-7)]
 
-    def claim_reward(self, round, delegator, delegator_stake_state, candidates):
+    def claim_reward(
+        self,
+        round,
+        delegator,
+        delegator_stake_state,
+        candidates,
+        core_accured_stake_amount=0):
         history_reward = delegator_stake_state.get_power_history_reward(delegator)
         if history_reward > 0:
             delegator_stake_state.update_power_history_reward(delegator, 0)
@@ -360,6 +365,8 @@ class BtcAsset(Asset):
         super().__init__()
         self.dual_stake_mask = (1 << 2)
 
+        self.decimals = BitcoinAgentMock[0].assetWeight()
+
         # btc lst data => single class
         self.btc_lst_round_rewards = {}
 
@@ -371,7 +378,7 @@ class BtcAsset(Asset):
         return amount_list
 
     def get_initial_state(self):
-        return ("BTC", self.get_agent_addr().address, 4000, 10000, 0, 10**12, 0, 2*(10**14))
+        return ("BTC", self.get_agent_addr().address, 4000, 0, 2*(10**14))
 
     def get_asset_idx(self):
         return 2
@@ -437,9 +444,25 @@ class BtcAsset(Asset):
         total_btc_lst_stake_amount = delegator_stake_state.get_btc_lst_total_stake_amount()
         self.add_btc_lst_round_reward(round, total_btc_lst_stake_reward, total_btc_lst_stake_amount)
 
-    def claim_reward(self, round, delegator, delegator_stake_state, candidates):
+    def claim_reward(
+        self,
+        round,
+        delegator,
+        delegator_stake_state,
+        candidates,
+        core_accured_stake_amount=0):
         btc_stake_reward, unclaimable_btc_stake_reward, btc_stake_accured_stake_amount = \
             self.claim_btc_stake_reward(round, delegator, delegator_stake_state)
+
+        print(f"BEFORE APPLY DUAL STAKING: {btc_stake_reward}, {unclaimable_btc_stake_reward}")
+        btc_stake_reward, unclaimable_btc_stake_reward = self.apply_dual_stake_reward(
+            btc_stake_reward,
+            unclaimable_btc_stake_reward,
+            btc_stake_accured_stake_amount,
+            delegator_stake_state,
+            core_accured_stake_amount
+        )
+        print(f"AFTER APPLY DUAL STAKING: {btc_stake_reward}, {unclaimable_btc_stake_reward}")
         btclst_reward, unlaimable_btclst_reward, btclst_accured_stake_amount = \
             self.claim_btc_lst_reward(round, delegator, delegator_stake_state)
 
@@ -447,8 +470,8 @@ class BtcAsset(Asset):
         total_btc_unclaimable_reward =  int(unclaimable_btc_stake_reward + unlaimable_btclst_reward)
         total_accured_stake_amount = int(btc_stake_accured_stake_amount + btclst_accured_stake_amount)
 
-        print(f"BTC STAKE: {btc_stake_reward}, {unclaimable_btc_stake_reward}")
-        print(f"BTC LST STAKE: {btclst_reward}, {unlaimable_btclst_reward}")
+        print(f"BTC STAKE REWARD: {btc_stake_reward}, {unclaimable_btc_stake_reward}")
+        print(f"BTC LST STAKE REWARD: {btclst_reward}, {unlaimable_btclst_reward}")
 
         return total_btc_reward, total_btc_unclaimable_reward, total_accured_stake_amount
 
