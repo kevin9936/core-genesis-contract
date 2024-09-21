@@ -871,42 +871,67 @@ def test_validate_acc_stake_amount(core_agent, set_candidate, operate, stake_hub
     assert acc_staked_amount == acc_stake_amount0
 
 
-@pytest.mark.parametrize("operate", [
-    ['delegate', 'delegate', 'transfer', 'claim'],
-    ['delegate', 'undelegate', 'transfer', 'claim'],
-    ['undelegate', 'undelegate', 'transfer', 'claim'],
-    ['transfer', 'undelegate', 'delegate', 'undelegate']
+@pytest.mark.parametrize('round_count', [0, 1])
+@pytest.mark.parametrize("tests", [
+    [300, 'delegate', 'delegate', 'transfer', 'claim'],
+    [200, 'delegate', 'undelegate', 'transfer', 'claim'],
+    [200, 'undelegate', 'transfer', 'claim'],
+    [200, 'transfer', 'undelegate', 'delegate']
 ])
-def test_calc_acc_stake_after_coin_stake(core_agent, set_candidate, operate, stake_hub):
+def test_calc_acc_stake_after_coin_stake(core_agent, set_candidate, stake_hub, round_count, tests):
     operators, consensuses = set_candidate
     core_agent.delegateCoin(operators[0], {'value': MIN_INIT_DELEGATE_VALUE * 2})
     core_agent.delegateCoin(operators[1], {'value': MIN_INIT_DELEGATE_VALUE})
     acc_stake_amount0 = MIN_INIT_DELEGATE_VALUE * 3
     turn_round()
+    operate = tests[1:]
     for i in operate:
-        if operate == 'delegate':
+        if i == 'delegate':
             delegate_coin_success(operators[0], MIN_INIT_DELEGATE_VALUE, accounts[0])
-        elif operate == 'undelegate':
+        elif i == 'undelegate':
             undelegate_coin_success(operators[0], MIN_INIT_DELEGATE_VALUE, accounts[0])
             acc_stake_amount0 -= MIN_INIT_DELEGATE_VALUE
-        elif operate == 'transfer':
+        elif i == 'transfer':
             transfer_coin_success(operators[0], operators[2], MIN_INIT_DELEGATE_VALUE, accounts[0])
         else:
             stake_hub_claim_reward(accounts[0])
-    turn_round(consensuses)
+    turn_round(consensuses, round_count=round_count)
+    acc_stake_amount0 *= round_count
     update_system_contract_address(core_agent, stake_hub=accounts[0])
-    reward, reward_unclaimed, acc_staked_amount = core_agent.claimReward(accounts[0]).return_value
+    reward, reward_unclaimed, acc_staked_amount = core_agent.claimReward(accounts[0], 0).return_value
+    expect_stake_amount = 0
+    if round_count > 0:
+        expect_stake_amount = tests[0]
     assert acc_staked_amount == acc_stake_amount0
+    assert acc_staked_amount == expect_stake_amount
 
 
-@pytest.mark.parametrize("round", [0, 1, 2, 3])
-def test_multi_round_coin_stake_success(core_agent, set_candidate, round):
+@pytest.mark.parametrize("tests", [
+    [800, 'delegate', 'delegate', 'transfer', 'claim'],
+    [500, 'delegate', 'undelegate', 'transfer', 'claim'],
+    [400, 'undelegate', 'undelegate', 'delegate', 'delegate'],
+    [700, 'transfer', 'transfer', 'delegate']
+])
+def test_acc_stake_amount_cross_round_success(core_agent, set_candidate, stake_hub, tests):
     operators, consensuses = set_candidate
-    core_agent.delegateCoin(operators[0], {'value': MIN_INIT_DELEGATE_VALUE})
+    core_agent.delegateCoin(operators[0], {'value': MIN_INIT_DELEGATE_VALUE * 2})
+    core_agent.delegateCoin(operators[1], {'value': MIN_INIT_DELEGATE_VALUE})
     turn_round()
-    turn_round(consensuses, round_count=round)
-    reward = core_agent.collectCoinRewardMock(operators[0], accounts[0]).return_value
-    assert reward == (TOTAL_REWARD * round, MIN_INIT_DELEGATE_VALUE * round)
+    operate = tests[1:]
+    for i in operate:
+        if i == 'delegate':
+            delegate_coin_success(operators[0], MIN_INIT_DELEGATE_VALUE, accounts[0])
+        elif i == 'undelegate':
+            undelegate_coin_success(operators[0], MIN_INIT_DELEGATE_VALUE, accounts[0])
+        elif i == 'transfer':
+            transfer_coin_success(operators[0], operators[2], MIN_INIT_DELEGATE_VALUE, accounts[0])
+        else:
+            stake_hub_claim_reward(accounts[0])
+    turn_round(consensuses, round_count=2)
+    update_system_contract_address(core_agent, stake_hub=accounts[0])
+    reward, reward_unclaimed, acc_staked_amount = core_agent.claimReward(accounts[0], 0).return_value
+    expect_stake_amount = tests[0]
+    assert acc_staked_amount == expect_stake_amount
 
 
 def test_calculate_reward_success(core_agent, set_candidate):

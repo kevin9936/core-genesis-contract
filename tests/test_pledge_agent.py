@@ -4,7 +4,8 @@ import pytest
 from web3 import Web3
 import brownie
 from brownie import *
-from .common import register_candidate, turn_round, stake_hub_claim_reward, get_current_round, set_round_tag
+from .common import register_candidate, turn_round, stake_hub_claim_reward, get_current_round, set_round_tag, \
+    claim_stake_and_relay_reward
 from .delegate import *
 from .utils import get_tracker, random_address, expect_event, update_system_contract_address
 from .calc_reward import *
@@ -15,6 +16,23 @@ TOTAL_REWARD = 0
 COIN_REWARD = 0
 ONE_ETHER = Web3.to_wei(1, 'ether')
 TX_FEE = 100
+
+DELEGATE_VALUE = 2000000
+BTC_VALUE = 200
+POWER_VALUE = 2
+BTC_LST_VALUE = 600
+FEE = 100
+BTC_REWARD = 0
+MONTH = 30
+YEAR = 360
+# BTC delegation-related
+PUBLIC_KEY = "0223dd766d6e38eaf9c044dcb18d8221fe8c9a5763ca331e93fadc8f55949b8e12"
+LOCK_SCRIPT = "0480db8767b17576a914574fdd26858c28ede5225a809f747c01fcc1f92a88ac"
+PAY_ADDRESS = "0xa914c0958c8d9357598c5f7a6eea8a807d81683f9bb687"
+LOCK_TIME = 1736956800
+# BTCLST delegation-related
+BTCLST_LOCK_SCRIPT = "0xa914cdf3d02dd323c14bea0bed94962496c80c09334487"
+BTCLST_REDEEM_SCRIPT = "0xa914047b9ba09367c1b213b5ba2184fba3fababcdc0287"
 
 
 @pytest.fixture(scope="module", autouse=True)
@@ -29,9 +47,9 @@ def set_min_init_delegate_value(min_init_delegate_value):
 
 
 @pytest.fixture(scope="module", autouse=True)
-def set_block_reward(validator_set, pledge_agent, stake_hub, btc_stake):
+def set_block_reward(validator_set, pledge_agent, stake_hub, core_agent, btc_stake, btc_lst_stake, gov_hub):
     global BLOCK_REWARD, TOTAL_REWARD
-    global COIN_REWARD, PLEDGE_AGENT, STAKE_HUB, BTC_STAKE
+    global COIN_REWARD, PLEDGE_AGENT, STAKE_HUB, BTC_STAKE, CORE_AGENT
     block_reward = validator_set.blockReward()
     block_reward_incentive_percent = validator_set.blockRewardIncentivePercent()
     total_block_reward = block_reward + TX_FEE
@@ -40,7 +58,10 @@ def set_block_reward(validator_set, pledge_agent, stake_hub, btc_stake):
     COIN_REWARD = TOTAL_REWARD * HardCap.CORE_HARD_CAP // HardCap.SUM_HARD_CAP
     PLEDGE_AGENT = pledge_agent
     STAKE_HUB = stake_hub
+    CORE_AGENT = core_agent
     BTC_STAKE = btc_stake
+    set_block_time_stamp(150, LOCK_TIME)
+    btc_lst_stake.updateParam('add', BTCLST_LOCK_SCRIPT, {'from': gov_hub.address})
 
 
 @pytest.fixture()
@@ -233,6 +254,17 @@ def test_claim_reward(pledge_agent, candidate_hub, agents_type: str):
         actual_reward = TOTAL_REWARD * 2
     if event_length == 1:
         assert tx.events['claimedReward']['amount'] == actual_reward
+
+
+def test_claim_reward_success(btc_agent, pledge_agent, set_candidate):
+    operators, consensuses = set_candidate
+    turn_round()
+    delegate_btc_lst_success(accounts[0], BTC_VALUE, BTCLST_LOCK_SCRIPT, percentage=Utils.DENOMINATOR)
+    turn_round(consensuses, round_count=2)
+    tracker = get_tracker(accounts[0])
+    actual_reward = TOTAL_REWARD * 3
+    pledge_agent.claimReward(operators)
+    assert tracker.delta() == actual_reward - FEE
 
 
 @pytest.mark.parametrize("agents_type", ["empty", "all", "partial", "none"])
@@ -613,7 +645,7 @@ def test_move_core_success(pledge_agent, core_agent, set_candidate, round):
     set_round_tag(round_tag)
     turn_round(consensuses, round_count=round)
     if round == 0:
-        change_round = get_current_round() - 1
+        change_round = get_current_round()
     else:
         change_round = get_current_round()
     pledge_agent.moveCOREData(operators[0], accounts[0])
@@ -641,7 +673,7 @@ def test_repeat_move_core_data(pledge_agent, core_agent, set_candidate):
     __check_delegate_info(operators[0], accounts[0], {
         'stakedAmount': MIN_INIT_DELEGATE_VALUE * 2,
         'realtimeAmount': MIN_INIT_DELEGATE_VALUE * 2,
-        'changeRound': core_agent.roundTag() - 1,
+        'changeRound': core_agent.roundTag(),
         'transferredAmount': 0,
     })
     tracker = get_tracker(accounts[0])
@@ -660,7 +692,7 @@ def test_move_core_data_with_reward(pledge_agent, core_agent, set_candidate):
     __check_delegate_info(operators[0], accounts[0], {
         'stakedAmount': MIN_INIT_DELEGATE_VALUE,
         'realtimeAmount': MIN_INIT_DELEGATE_VALUE,
-        'changeRound': core_agent.roundTag() - 1,
+        'changeRound': core_agent.roundTag(),
         'transferredAmount': 0,
     })
     tracker = get_tracker(accounts[0])
@@ -690,7 +722,7 @@ def test_cancel_move_data_after_transfer(pledge_agent, core_agent, set_candidate
     __check_delegate_info(operators[0], accounts[0], {
         'stakedAmount': MIN_INIT_DELEGATE_VALUE,
         'realtimeAmount': MIN_INIT_DELEGATE_VALUE,
-        'changeRound': core_agent.roundTag() - 1,
+        'changeRound': core_agent.roundTag(),
         'transferredAmount': 0,
     })
     tracker = get_tracker(accounts[0])
@@ -699,6 +731,91 @@ def test_cancel_move_data_after_transfer(pledge_agent, core_agent, set_candidate
     turn_round(consensuses)
     stake_hub_claim_reward(accounts[0])
     assert tracker.delta() == TOTAL_REWARD
+
+
+def test_move_core_data_check_acc_stake_amount(pledge_agent, stake_hub, core_agent, set_candidate):
+    operators, consensuses = set_candidate
+    old_delegate_coin_success(operators[0], accounts[0], MIN_INIT_DELEGATE_VALUE * 2)
+    __old_turn_round()
+    old_transfer_coin_success(operators[0], operators[1], accounts[0], MIN_INIT_DELEGATE_VALUE)
+    old_undelegate_coin_success(operators[1], accounts[0], MIN_INIT_DELEGATE_VALUE)
+    __old_turn_round(consensuses, round_count=2)
+    __init_hybrid_score_mock()
+    pledge_agent.moveCOREData(operators[0], accounts[0])
+    __check_core_reward_map(accounts[0], {
+        'reward': 0,
+        'accStakedAmount': 0
+    })
+    turn_round(consensuses)
+    update_system_contract_address(core_agent, stake_hub=accounts[0])
+    reward_map = core_agent.claimReward.call(accounts[0], 0)
+    assert reward_map == [TOTAL_REWARD, 0, MIN_INIT_DELEGATE_VALUE]
+    update_system_contract_address(core_agent, stake_hub=stake_hub)
+    turn_round(consensuses)
+    update_system_contract_address(core_agent, stake_hub=accounts[0])
+    reward_map = core_agent.claimReward.call(accounts[0], 0)
+    assert reward_map == [TOTAL_REWARD * 2, 0, MIN_INIT_DELEGATE_VALUE * 2]
+    update_system_contract_address(core_agent, stake_hub=stake_hub)
+    stake_hub_claim_reward(accounts[0])
+    turn_round(consensuses)
+    update_system_contract_address(core_agent, stake_hub=accounts[0])
+    reward_map = core_agent.claimReward.call(accounts[0], 0)
+    assert reward_map == [TOTAL_REWARD, 0, MIN_INIT_DELEGATE_VALUE]
+
+
+def test_move_data_current_round_calc_acc_stake_amount(pledge_agent, stake_hub, core_agent, set_candidate):
+    operators, consensuses = set_candidate
+    old_delegate_coin_success(operators[0], accounts[0], MIN_INIT_DELEGATE_VALUE * 3)
+    __old_turn_round()
+    old_transfer_coin_success(operators[0], operators[1], accounts[0], MIN_INIT_DELEGATE_VALUE)
+    old_undelegate_coin_success(operators[1], accounts[0], MIN_INIT_DELEGATE_VALUE)
+    __old_turn_round(consensuses, round_count=5)
+    __init_hybrid_score_mock()
+    pledge_agent.moveCOREData(operators[0], accounts[0])
+    turn_round(consensuses)
+    update_system_contract_address(core_agent, stake_hub=accounts[0])
+    reward_map = core_agent.claimReward.call(accounts[0], 0)
+    assert reward_map == [TOTAL_REWARD, 0, MIN_INIT_DELEGATE_VALUE * 4]
+
+
+def test_move_data_current_round_calc_acc_stake_amount1(pledge_agent, stake_hub, core_agent, set_candidate):
+    operators, consensuses = set_candidate
+    __old_turn_round()
+    old_delegate_coin_success(operators[0], accounts[0], MIN_INIT_DELEGATE_VALUE * 2)
+    __init_hybrid_score_mock()
+    pledge_agent.moveCOREData(operators[0], accounts[0])
+    turn_round(consensuses, round_count=2)
+    update_system_contract_address(core_agent, stake_hub=accounts[0])
+    reward_map = core_agent.claimReward.call(accounts[0], 0)
+    print('fsdfas', reward_map)
+    update_system_contract_address(core_agent, stake_hub=stake_hub)
+    stake_hub_claim_reward(accounts[0])
+    # assert reward_map == [TOTAL_REWARD, 0, MIN_INIT_DELEGATE_VALUE * 2]
+
+
+def test_move_data_current_round_calc_acc_stake_amount2(pledge_agent, stake_hub, core_agent, set_candidate):
+    operators, consensuses = set_candidate
+    __old_turn_round()
+    old_delegate_coin_success(operators[0], accounts[1], MIN_INIT_DELEGATE_VALUE * 2)
+    __old_turn_round()
+    __old_turn_round(consensuses)
+    old_delegate_coin_success(operators[0], accounts[0], MIN_INIT_DELEGATE_VALUE * 2)
+    __init_hybrid_score_mock()
+    tx0 = pledge_agent.moveCOREData(operators[0], accounts[0])
+    tx1 = pledge_agent.moveCOREData(operators[0], accounts[1])
+    __get_candidate_map_info(operators[0])
+    __get_candidate_map_info(operators[1])
+    turn_round(consensuses, round_count=1)
+    update_system_contract_address(core_agent, stake_hub=accounts[0])
+    reward_map = core_agent.claimReward.call(accounts[1], 0)
+    print('fsdfas', reward_map)
+    reward_map = core_agent.claimReward.call(accounts[0], 0)
+    print('fsdfas', reward_map)
+    update_system_contract_address(core_agent, stake_hub=stake_hub)
+
+    stake_hub_claim_reward(accounts[1])
+    stake_hub_claim_reward(accounts[0])
+    # assert reward_map == [TOTAL_REWARD, 0, MIN_INIT_DELEGATE_VALUE * 2]
 
 
 def test_get_stake_info(pledge_agent):
@@ -742,11 +859,11 @@ def test_move2_core_agent_execution_success(pledge_agent, validator_set, stake_h
     __init_hybrid_score_mock()
     real_amount = delegate_amount
     transferred_amount = 0
-    change_round = 1
     if operate == 'delegate':
         __old_delegate_coin(operators[0], accounts[0], old=False)
         staked_amount = delegate_amount
         real_amount = MIN_INIT_DELEGATE_VALUE * 6
+        change_round = core_agent.roundTag()
     elif operate == 'undelegate':
         turn_round()
         tx = __old_undelegate_coin(operators[0], accounts[0], MIN_INIT_DELEGATE_VALUE, old=False)
@@ -765,7 +882,7 @@ def test_move2_core_agent_execution_success(pledge_agent, validator_set, stake_h
     else:
         # core agent init roundTag - 1
         staked_amount = MIN_INIT_DELEGATE_VALUE * 5
-        change_round = 0
+        change_round = core_agent.roundTag()
         __old_claim_reward(operators)
 
     __check_old_delegate_info(operators[0], accounts[0], {
@@ -931,9 +1048,9 @@ def test_migration_scenario_4(pledge_agent, validator_set, stake_hub, operate):
     turn_round(consensuses, round_count=1)
     tracker0 = get_tracker(accounts[0])
     __old_claim_reward(operators, accounts[0])
-    assert tracker0.delta() == 0
-    assert stake_hub_claim_reward(accounts[0])
     assert tracker0.delta() == reward
+    assert stake_hub_claim_reward(accounts[0])
+    assert tracker0.delta() == 0
 
 
 @pytest.mark.parametrize("operate", ['undelegate', 'transfer'])
@@ -963,9 +1080,7 @@ def test_migration_scenario_5(pledge_agent, validator_set, stake_hub, operate):
     stake_hub_claim_reward(accounts[0])
     assert tracker0.delta() == 0
     __old_claim_reward(operators, accounts[0])
-    assert tracker0.delta() == reward
-    stake_hub_claim_reward(accounts[0])
-    assert tracker0.delta() == BLOCK_REWARD
+    assert tracker0.delta() == reward + BLOCK_REWARD
     turn_round(consensuses, round_count=1)
     stake_hub_claim_reward(accounts[0])
     _, _, account_rewards, _ = parse_delegation([{
@@ -987,6 +1102,7 @@ def test_migration_scenario_5(pledge_agent, validator_set, stake_hub, operate):
 
 def __init_hybrid_score_mock():
     STAKE_HUB.initHybridScoreMock()
+    set_round_tag(get_current_round())
 
 
 def __move_btc_data(tx_ids):
@@ -1028,6 +1144,7 @@ def __old_claim_reward(candidates, account=None):
     if account is None:
         account = accounts[0]
     tx = PLEDGE_AGENT.claimReward(candidates, {'from': account})
+    print('sdfdasfa', tx.events)
 
 
 def __old_turn_round(miners: list = None, tx_fee=100, round_count=1):
@@ -1071,6 +1188,7 @@ def __get_reward_map_info(delegator):
 
 def __get_candidate_map_info(candidate):
     candidate_info = CoreAgentMock[0].candidateMap(candidate)
+    print('__get_candidate_map_info>>>>>>>', candidate_info)
     return candidate_info
 
 
@@ -1140,6 +1258,21 @@ def __check_btc_receipt_map(candidate, result: dict):
     receipt = __get_btc_receipt_map(candidate)
     for i in result:
         assert receipt[i] == result[i]
+
+
+def __get_core_agent_reward_map(delegator):
+    reward_map = CORE_AGENT.rewardMap(delegator)
+    return reward_map
+
+
+def __check_core_reward_map(delegator, result: dict):
+    """
+    uint256 reward;
+    uint256 accStakedAmount;
+    """
+    reward_map = __get_core_agent_reward_map(delegator)
+    for i in result:
+        assert reward_map[i] == result[i]
 
 
 def __check_old_agent_map_info(candidate, result: dict):

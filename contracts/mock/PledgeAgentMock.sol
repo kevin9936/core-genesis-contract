@@ -420,9 +420,4 @@ contract PledgeAgentMock is PledgeAgent {
             emit roundReward(agentList[i], coinReward, powerReward, btcReward);
         }
     }
-
-    receive() external payable {
-    }
-
-
 }

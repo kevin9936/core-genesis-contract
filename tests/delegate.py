@@ -132,7 +132,11 @@ def generate_btc_transaction_info(btc_tx_info, inputs=None, outputs=None):
     btc_tx_info['version'] = '02000000'
     btc_tx_info['inputcount'] = f'0{len(inputs)}'
     btc_tx_info['inputs'] = []
-    btc_tx_info['outputcount'] = f'0{len(outputs)}'
+    # btc_tx_info['outputcount'] = f'0{len(outputs)}'
+    output_count = hex(len(outputs)).replace('0x', '')
+    if len(output_count) == 1:
+        output_count = f'0{output_count}'
+    btc_tx_info['outputcount'] = f'{output_count}'
     btc_tx_info['outputs'] = []
     btc_tx_info['inputs'] = []
     outputs_list = btc_tx_info['outputs']
@@ -270,7 +274,7 @@ def delegate_power_success(candidate, delegator, value=1, stake_round=0):
 
 
 def delegate_btc_lst_success(delegator, btc_amount, lock_script, percentage=5000, relay=None):
-    BitcoinLSTStakeMock[0].setPercentage(percentage)
+    BitcoinAgentMock[0].setPercentage(percentage)
     delegator_asset = BitcoinLSTToken[0].balanceOf(delegator)
     btc_tx0 = build_btc_lst_tx(delegator, int(btc_amount), lock_script)
     print('sadfasfafa,', btc_tx0)

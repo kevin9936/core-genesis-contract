@@ -1,5 +1,6 @@
 import brownie
 import pytest
+from brownie.network import gas_price
 from web3 import constants
 from .common import *
 from .delegate import *
@@ -37,7 +38,8 @@ def set_relayer_register(relay_hub):
 
 
 @pytest.fixture(scope="module", autouse=True)
-def set_block_reward(validator_set, candidate_hub, btc_light_client, btc_stake, stake_hub, core_agent, btc_lst_stake,
+def set_block_reward(validator_set, candidate_hub, btc_agent, btc_light_client, btc_stake, stake_hub, core_agent,
+                     btc_lst_stake,
                      gov_hub):
     global BLOCK_REWARD, FEE, BTC_REWARD, TOTAL_REWARD
     global BTC_STAKE, STAKE_HUB, CORE_AGENT, BTC_LST_STAKE, BTC_LST_REWARD, BTC_LIGHT_CLIENT
@@ -47,7 +49,7 @@ def set_block_reward(validator_set, candidate_hub, btc_light_client, btc_stake, 
     total_block_reward = block_reward + TX_FEE
     BLOCK_REWARD = total_block_reward * ((100 - block_reward_incentive_percent) / 100)
     TOTAL_REWARD = BLOCK_REWARD // 2
-    BTC_LST_REWARD = TOTAL_REWARD * btc_lst_stake.percentage() // Utils.DENOMINATOR
+    BTC_LST_REWARD = TOTAL_REWARD * btc_agent.lstGradePercentage() // Utils.DENOMINATOR
     BTC_STAKE = btc_stake
     STAKE_HUB = stake_hub
     CORE_AGENT = core_agent
@@ -595,6 +597,24 @@ def test_delegate_non_zero_valid_stake(btc_lst_stake, stake_hub, set_candidate):
     turn_round(consensuses, round_count=2)
     tx = claim_stake_and_relay_reward(constants.ADDRESS_ZERO)
     assert len(tx.events) == 0
+
+
+def test_multi_output_gas_consumption(btc_lst_stake, stake_hub, set_candidate):
+    operators, consensuses = set_candidate
+    turn_round()
+    output = []
+    for i in range(200):
+        if i < 199:
+            output.append([BTC_VALUE, REDEEM_SCRIPT])
+        else:
+            output.append([BTC_VALUE, LOCK_SCRIPT])
+    delegate_btc_tx0 = btc_delegate.build_btc_lst(
+        output,
+        opreturn=set_op_return([constants.ADDRESS_ZERO])
+    )
+    gas_price(False)
+    tx = btc_lst_stake.delegate(delegate_btc_tx0, 1, [], 0, LOCK_SCRIPT, {"from": accounts[1]})
+    print('gas_used',tx.gas_used)
 
 
 def test_lst_btc_undelegate_success(btc_lst_stake, lst_token, set_candidate):
@@ -1347,6 +1367,71 @@ def test_lst_claim_reward_percentage_change(btc_agent, btc_stake, btc_lst_stake,
 def test_lst_claim_reward_only_btc_agent_can_call(btc_agent, btc_stake, btc_lst_stake, set_candidate):
     with brownie.reverts("the msg sender must be bitcoin agent contract"):
         btc_lst_stake.claimReward(accounts[0])
+
+
+@pytest.mark.parametrize('round_count', [0, 1])
+@pytest.mark.parametrize("tests", [
+    [6000, 'delegate', 'transfer', 'claim'],
+    [2000, 'transfer', 'transfer', 'claim'],
+    [2000, 'transfer', 'redeem', 'delegate'],
+    [6000, 'delegate', 'redeem', 'claim'],
+    [4000, 'delegate', 'redeem', 'transfer', 'claim'],
+    [2000, 'redeem', 'redeem', 'delegate'],
+])
+def test_get_btc_lst_acc_stake_amount_success(btc_lst_stake, btc_agent, set_candidate, round_count, tests):
+    operators, consensuses = set_candidate
+    delegate_btc_lst_success(accounts[0], BTC_VALUE * 2, LOCK_SCRIPT)
+    delegate_btc_lst_success(accounts[0], BTC_VALUE, LOCK_SCRIPT)
+    turn_round()
+    for i in tests:
+        if i == 'delegate':
+            delegate_btc_lst_success(accounts[0], BTC_VALUE, LOCK_SCRIPT)
+        elif i == 'transfer':
+            transfer_btc_lst_success(accounts[0], BTC_VALUE, accounts[1])
+        elif i == 'redeem':
+            redeem_btc_lst_success(accounts[0], BTC_VALUE, REDEEM_SCRIPT)
+        else:
+            stake_hub_claim_reward(accounts[0])
+    turn_round(consensuses, round_count=round_count)
+    update_system_contract_address(btc_lst_stake, btc_agent=accounts[0])
+    reward, reward_unclaimed, acc_staked_amount = btc_lst_stake.claimReward(accounts[0]).return_value
+    expect_stake_amount = tests[0]
+    print('btc_lst_stake', btc_lst_stake.rewardMap(accounts[0]))
+    print('userStakeInfo', btc_lst_stake.userStakeInfo(accounts[0]))
+    if round_count == 0:
+        expect_stake_amount = 0
+    assert acc_staked_amount == expect_stake_amount
+    # assert False
+
+
+@pytest.mark.parametrize("tests", [
+    [12000, 'delegate', 'transfer', 'claim'],
+    [14000, 'delegate', 'delegate', 'transfer'],
+    [0, 'transfer', 'transfer', 'redeem'],
+    [8000, 'delegate', 'redeem', 'transfer', 'claim'],
+    [6000, 'redeem', 'redeem', 'delegate'],
+])
+def test_multi_round_btc_lst_acc_amount(btc_lst_stake, btc_agent, set_candidate, tests):
+    operators, consensuses = set_candidate
+    delegate_btc_lst_success(accounts[0], BTC_VALUE * 2, LOCK_SCRIPT)
+    delegate_btc_lst_success(accounts[0], BTC_VALUE, LOCK_SCRIPT)
+    turn_round()
+    for i in tests:
+        if i == 'delegate':
+            delegate_btc_lst_success(accounts[0], BTC_VALUE, LOCK_SCRIPT)
+        elif i == 'transfer':
+            transfer_btc_lst_success(accounts[0], BTC_VALUE, accounts[1])
+        elif i == 'redeem':
+            redeem_btc_lst_success(accounts[0], BTC_VALUE, REDEEM_SCRIPT)
+        else:
+            stake_hub_claim_reward(accounts[0])
+    turn_round(consensuses, round_count=2)
+    update_system_contract_address(btc_lst_stake, btc_agent=accounts[0])
+    reward, reward_unclaimed, acc_staked_amount = btc_lst_stake.claimReward(accounts[0]).return_value
+    expect_stake_amount = tests[0]
+    print('btc_lst_stake', btc_lst_stake.rewardMap(accounts[0]))
+    print('userStakeInfo', btc_lst_stake.userStakeInfo(accounts[0]))
+    assert acc_staked_amount == expect_stake_amount
 
 
 def test_p2sh_lock_script_with_p2sh_redeem_script(btc_lst_stake, lst_token, set_candidate):

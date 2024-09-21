@@ -362,7 +362,7 @@ def parse_delegation(agents, block_reward, btc_lst_stake=None, state_map=None, c
         calc_coin_delegator_reward(agent, agent.get('coin', []), delegator_asset_reward, delegator_map)
         calc_power_delegator_reward(agent, agent.get('power', []), delegator_asset_reward, delegator_map)
         calc_btc_delegator_reward(agent, agent.get('btc', []), delegator_asset_reward, bonus, delegator_map)
-    total_bonus = bonus.get('total_bonus')
+    total_bonus = bonus.get('total_bonus', 0)
     compensation_reward['reward_pool'] += total_bonus
     print('delegator_asset_reward0>>>>', delegator_asset_reward)
     # calculate Core reward ratio discount
@@ -371,6 +371,7 @@ def parse_delegation(agents, block_reward, btc_lst_stake=None, state_map=None, c
         asset = ['btc']
         calc_core_discounted_reward(asset, delegator_asset_reward, bonus, compensation_reward, delegator_map)
     bonus['btc'] = bonus.get('reward_pool')
+    bonus['total_bonus'] = bonus.get('reward_pool')
     # distribute the bonus proportionally to assets (coin, power, btc)
     account_rewards = {}
     update_delegator_total_reward(delegator_asset_reward, account_rewards)

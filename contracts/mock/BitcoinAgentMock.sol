@@ -7,6 +7,9 @@ contract BitcoinAgentMock is BitcoinAgent {
     function setCandidateMap(address agent, uint256 value, uint256 value1) external {
         candidateMap[agent] = StakeAmount(value, value1);
     }
+    function setPercentage(uint256 value) external {
+        lstGradePercentage = value;
+    }
 
     function setInitLpRates(uint32 value1, uint32 value01, uint32 value2, uint32 value02, uint32 value3, uint32 value03, uint32 value4, uint32 value04) external {
         while (grades.length > 0) {

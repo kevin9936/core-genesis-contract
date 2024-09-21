@@ -27,9 +27,7 @@ contract BitcoinLSTStakeMock is BitcoinLSTStake {
         rewardMap[delegator] = Reward(reward, accStakedAmount);
     }
 
-    function setPercentage(uint256 value) external {
-        percentage = value;
-    }
+ 
 
     function setUtxoFee(uint64 value) external {
         utxoFee = value;

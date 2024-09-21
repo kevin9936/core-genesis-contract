@@ -760,6 +760,63 @@ def test_only_btc_agent_can_call_claim_reward(btc_stake, btc_agent):
         btc_stake.claimReward(accounts[0])
 
 
+@pytest.mark.parametrize('round_count', [0, 1])
+@pytest.mark.parametrize("tests", [
+    [2000, 'delegate', 'transfer', 'claim'],
+    [6000, 'delegate', 'delegate', 'claim'],
+    [2000, 'delegate', 'delegate', 'transfer', 'claim'],
+    [2000, 'delegate', 'transfer', 'claim'],
+    [2000, 'transfer', 'claim'],
+    [2000, 'transfer', 'delegate']
+])
+def test_get_acc_stake_amount_success(btc_stake, btc_agent, set_candidate, round_count, tests):
+    operators, consensuses = set_candidate
+    tx_id = delegate_btc_success(operators[0], accounts[0], BTC_VALUE * 2, LOCK_SCRIPT)
+    delegate_btc_success(operators[1], accounts[0], BTC_VALUE, LOCK_SCRIPT)
+    turn_round()
+    for i in tests:
+        if i == 'delegate':
+            delegate_btc_success(operators[0], accounts[0], BTC_VALUE, LOCK_SCRIPT)
+        elif i == 'transfer':
+            transfer_btc_success(tx_id, operators[2], accounts[0])
+        else:
+            stake_hub_claim_reward(accounts[0])
+    turn_round(consensuses, round_count=round_count)
+    update_system_contract_address(btc_stake, btc_agent=accounts[0])
+    reward, reward_unclaimed, acc_staked_amount = btc_stake.claimReward(accounts[0]).return_value
+    expect_stake_amount = tests[0]
+    if round_count == 0:
+        expect_stake_amount = 0
+    assert acc_staked_amount == expect_stake_amount
+
+
+@pytest.mark.parametrize("tests", [
+    [10000, 'delegate', 'transfer', 'claim'],
+    [16000, 'delegate', 'delegate', 'claim'],
+    [12000, 'delegate', 'delegate', 'transfer', 'claim'],
+    [10000, 'delegate', 'transfer', 'claim'],
+    [8000, 'transfer', 'claim'],
+    [10000, 'transfer', 'delegate']
+])
+def test_multi_round_acc_amount(btc_stake, btc_agent, set_candidate, tests):
+    operators, consensuses = set_candidate
+    tx_id = delegate_btc_success(operators[0], accounts[0], BTC_VALUE * 2, LOCK_SCRIPT)
+    delegate_btc_success(operators[1], accounts[0], BTC_VALUE, LOCK_SCRIPT)
+    turn_round()
+    for i in tests:
+        if i == 'delegate':
+            delegate_btc_success(operators[0], accounts[0], BTC_VALUE, LOCK_SCRIPT)
+        elif i == 'transfer':
+            transfer_btc_success(tx_id, operators[2], accounts[0])
+        else:
+            stake_hub_claim_reward(accounts[0])
+    turn_round(consensuses, round_count=2)
+    update_system_contract_address(btc_stake, btc_agent=accounts[0])
+    reward, reward_unclaimed, acc_staked_amount = btc_stake.claimReward(accounts[0]).return_value
+    expect_stake_amount = tests[0]
+    assert acc_staked_amount == expect_stake_amount
+
+
 def test_only_btc_agent_can_call_set_new_round(btc_stake, btc_agent):
     round_tag = get_current_round()
     with brownie.reverts("the msg sender must be bitcoin agent contract"):

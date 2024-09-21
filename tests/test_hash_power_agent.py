@@ -159,7 +159,7 @@ def test_power_claim_reward_success(hash_power_agent):
     update_system_contract_address(hash_power_agent, stake_hub=accounts[0])
     hash_power_agent.distributeReward(validators, reward_list, round_tag + 1)
     for index, v in enumerate(validators):
-        reward_sum, unclaimed, acc_staked_amount = hash_power_agent.claimReward(accounts[index]).return_value
+        reward_sum, unclaimed, acc_staked_amount = hash_power_agent.claimReward(accounts[index], 0).return_value
         reward = reward_list[index] // sum_stake_amounts[index] * staked_amounts[index]
         actual_acc_staked_amount = staked_amounts[index]
         assert reward_sum == reward
@@ -172,9 +172,26 @@ def test_power_claim_reward_success(hash_power_agent):
 
 def test_claim_power_no_reward_success(hash_power_agent):
     update_system_contract_address(hash_power_agent, stake_hub=accounts[0])
-    reward_sum, unclaimed, acc_staked_amount = hash_power_agent.claimReward(accounts[0]).return_value
+    reward_sum, unclaimed, acc_staked_amount = hash_power_agent.claimReward(accounts[0], 0).return_value
     assert reward_sum == 0
     assert acc_staked_amount == 0
+
+
+def test_acc_stake_amount_success(hash_power_agent, set_candidate, stake_hub):
+    turn_round()
+    operators, consensuses = set_candidate
+    staked_amounts = [6, 12, 15]
+    for index, v in enumerate(operators):
+        delegate_power_success(v, accounts[index], staked_amounts[index])
+    turn_round()
+    update_system_contract_address(hash_power_agent, stake_hub=accounts[0])
+    reward_sum, unclaimed, acc_staked_amount = hash_power_agent.claimReward(accounts[0], 0).return_value
+    assert acc_staked_amount == 0
+    update_system_contract_address(hash_power_agent, stake_hub=stake_hub)
+    turn_round(consensuses)
+    update_system_contract_address(hash_power_agent, stake_hub=accounts[0])
+    reward_sum, unclaimed, acc_staked_amount = hash_power_agent.claimReward(accounts[0], 0).return_value
+    assert acc_staked_amount ==  staked_amounts[0]
 
 
 def test_only_stake_hub_can_call_claim_reward(hash_power_agent):
