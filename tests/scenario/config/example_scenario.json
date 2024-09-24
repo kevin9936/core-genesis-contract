@@ -9,6 +9,7 @@
             "NOTES": "except for the SponsorFund and RegisterCandidate, no other tasks can be configured in the initial round",
             "SponsorFund": "sponsee addr, sponsor addr",
             "RegisterCandidate": "operator addr, commision",
+            "AddSystemRewardOperator": "contract name, e.g. StakeHub",
             "GenerateBlock": "block count",
             "StakeCore": "delegator, delegatee, core amount(without decimals 1e18)",
             "UnstakeCore": "delegator, delegatee, amount",
@@ -42,7 +43,8 @@
             ["SponsorFund","ValidatorSet",10000000],
             ["RegisterCandidate","P0",100],
             ["RegisterCandidate","P1",200],
-            ["RegisterCandidate","P2",150]
+            ["RegisterCandidate","P2",150],
+            ["AddSystemRewardOperator","StakeHub"]
         ],
         "1": [
             ["GenerateBlock", 9],

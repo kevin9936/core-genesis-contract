@@ -130,6 +130,10 @@ class AccountMgr:
         return random.choice(list(cls.__sponsor_addr_table.keys()))
 
     @classmethod
+    def get_contract_addr(cls, name):
+        return cls.__contract_addr_table[name]
+
+    @classmethod
     def get_consensus_addr(cls, name):
         consensus_addr_name = f"{constants.CONSENSUS_ADDR_NAME_PREFIX}{name}"
         return cls.__consensus_addr_table[consensus_addr_name]

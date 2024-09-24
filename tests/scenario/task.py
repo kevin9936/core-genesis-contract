@@ -15,6 +15,7 @@ get_operator_addr = AccountMgr.get_operator_addr
 get_consensus_addr = AccountMgr.get_consensus_addr
 get_fee_addr = AccountMgr.get_fee_addr
 get_delegator_addr = AccountMgr.get_delegator_addr
+get_contract_addr = AccountMgr.get_contract_addr
 
 class Task(ABC):
     @abstractmethod
@@ -667,6 +668,21 @@ class UpdateParams(Task):
         )
         self.notify_task_finish()
 
+class AddSystemRewardOperator(UpdateParams):
+    def is_supported(self, advanced_round):
+        return True
+
+    def build_value(self, params):
+        assert len(params) == 1
+        self.data = get_contract_addr(params[0])
+        return bytes.fromhex(self.data.address[2:])
+
+    def get_key(self):
+        return constants.ADD_OPERATOR_KEY
+
+    def get_contract(self):
+        return SystemRewardMock[0]
+
 class UpdateCoreStakeGrades(UpdateParams):
     def build_value(self, params):
         groups = len(params) // 2
@@ -728,21 +744,19 @@ class UpdateBtcLstStakeGradeFlag(UpdateParams):
     def get_key(self):
         return constants.GRADE_FLAG_KEY
 
-    def get_contract(self):
-        return BitcoinLSTStakeMock[0]
 
 class UpdateBtcLstStakeGradePercent(UpdateParams):
     def build_value(self, params):
         assert len(params) == 1
         self.data = params[0]
-        assert self.data <= constants.PERCENT_DECIMALS
+        assert self.data <= constants.MAX_BTC_LST_STAKE_GRADE_PERCENT
         return params[0].to_bytes(32)
 
     def get_key(self):
         return constants.GRADE_PERCENT_KEY
 
     def get_contract(self):
-        return BitcoinLSTStakeMock[0]
+        return BitcoinAgentMock[0]
 
 #### for test ####
 class CreatePayment(Task):

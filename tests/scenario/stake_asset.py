@@ -451,9 +451,12 @@ class BtcAsset(Asset):
         delegator_stake_state,
         candidates,
         core_accured_stake_amount=0):
+
+        # process btc staking reward
         btc_stake_reward, unclaimable_btc_stake_reward, btc_stake_accured_stake_amount = \
             self.claim_btc_stake_reward(round, delegator, delegator_stake_state)
 
+        # apply dual staking to btc staking reward
         print(f"BEFORE APPLY DUAL STAKING: {btc_stake_reward}, {unclaimable_btc_stake_reward}")
         btc_stake_reward, unclaimable_btc_stake_reward = self.apply_dual_stake_reward(
             btc_stake_reward,
@@ -463,8 +466,14 @@ class BtcAsset(Asset):
             core_accured_stake_amount
         )
         print(f"AFTER APPLY DUAL STAKING: {btc_stake_reward}, {unclaimable_btc_stake_reward}")
+
+        # process btc lst staking reward
         btclst_reward, unlaimable_btclst_reward, btclst_accured_stake_amount = \
             self.claim_btc_lst_reward(round, delegator, delegator_stake_state)
+
+        # apply percent to btc lst staking reward
+        btclst_reward, unlaimable_btclst_reward = \
+            delegator_stake_state.apply_holding_time_to_reward(btclst_reward)
 
         total_btc_reward = int(btc_stake_reward + btclst_reward)
         total_btc_unclaimable_reward =  int(unclaimable_btc_stake_reward + unlaimable_btclst_reward)
@@ -547,11 +556,9 @@ class BtcAsset(Asset):
 
         print(f"claim_btc_lst_reward reward={reward}, history reward={history_reward}")
 
-        claimable_reward, unclaimable_reward = \
-            delegator_stake_state.apply_holding_time_to_reward(reward + history_reward)
-
-        print(f"claim_btc_lst_reward claimable_reward={claimable_reward},unclaimable_reward={unclaimable_reward}")
-        return claimable_reward, unclaimable_reward, accured_stake_amount + history_accured_stake_amount
+        claimable_reward = reward + history_reward
+        print(f"claim_btc_lst_reward claimable_reward={claimable_reward}")
+        return claimable_reward, 0, accured_stake_amount + history_accured_stake_amount
 
     def collect_btc_lst_reward(self, round, delegator, delegator_stake_state):
         change_round = delegator_stake_state.get_btc_lst_change_round(delegator)

@@ -147,8 +147,8 @@ class DelegatorStakeState:
         self.btc_stake_grade_flag = bool(BitcoinStakeMock[0].gradeActive())
         self.btc_stake_grades = BitcoinStakeMock[0].getGrades()
 
-        self.btc_lst_stake_grade_flag = True#bool(BitcoinLSTStakeMock[0].gradeActive())
-        self.btc_lst_stake_percent = BitcoinLSTStakeMock[0].percentage()
+        self.btc_lst_stake_grade_flag = True
+        self.btc_lst_stake_percent = BitcoinAgentMock[0].lstGradePercentage()
 
         if self.btc_lst_stake_grade_flag:
             assert self.btc_lst_stake_percent > 0
@@ -543,9 +543,9 @@ class DelegatorStakeState:
         if reward == 0:
             return 0, 0
 
-        assert self.btc_lst_stake_percent > 0 and self.btc_lst_stake_percent <= constants.PERCENT_DECIMALS
-        claimable_reward = reward * self.btc_lst_stake_percent // constants.PERCENT_DECIMALS
+        assert self.btc_lst_stake_percent > 0
 
+        claimable_reward = reward * self.btc_lst_stake_percent // constants.PERCENT_DECIMALS
         return claimable_reward, reward - claimable_reward
 
     def select_utxo_from_redeem_proof_txs(self, amount):

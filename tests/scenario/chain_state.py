@@ -538,7 +538,7 @@ class ChainState:
         return StakeHubMock[0].payableNotes(contributor)
 
     def get_total_unclaimed_reward_on_chain(self):
-        return StakeHubMock[0].rewardPool()
+        return StakeHubMock[0].surplus()
 
     def get_wallets_on_chain(self):
         return BitcoinLSTStakeMock[0].getWallets()
@@ -574,7 +574,7 @@ class ChainState:
         return BitcoinLSTStakeMock[0].gradeActive()
 
     def get_btc_lst_stake_grade_percent_on_chain(self):
-        return BitcoinLSTStakeMock[0].percentage()
+        return BitcoinAgentMock[0].lstGradePercentage()
 
     def get_slash_indicator_on_chain(self, consensus_addr):
         return SlashIndicatorMock[0].indicators(consensus_addr)

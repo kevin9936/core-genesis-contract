@@ -672,7 +672,8 @@ class ChainTaskGenerator(TaskGenerator):
             return
 
         cls.__one_time_task_builders = [
-            SponsorFund()
+            SponsorFund(),
+            AddSystemRewardOperator()
         ]
 
         cls.__mandatory_task_builders = [
@@ -840,6 +841,7 @@ class TaskType(Enum):
     UpdateBtcStakeGrades = CHAIN_TASK_BASE_TYPE + 5
     UpdateBtcLstStakeGradeFlag = CHAIN_TASK_BASE_TYPE + 6
     UpdateBtcLstStakeGradePercent = CHAIN_TASK_BASE_TYPE + 7
+    AddSystemRewardOperator = CHAIN_TASK_BASE_TYPE + 8
     RegisterCandidate = CANDIDATE_TASK_BASE_TYPE
     SlashValidator = CANDIDATE_TASK_BASE_TYPE + 1
     AddMargin = CANDIDATE_TASK_BASE_TYPE + 2
@@ -940,6 +942,19 @@ class SponsorFund(TaskBuilder):
                 tasks.append(task)
 
         return tasks
+
+# it is only used to add StakeHub as the operator of SystemReward
+class AddSystemRewardOperator(TaskBuilder):
+    def __init__(self):
+        super().__init__()
+        self.type = TaskType.AddSystemRewardOperator.value
+
+    def is_enabled(self, task_generator):
+        return self.enabled
+
+    def self_build(self, task_generator):
+        task = [self.__class__.__name__, "StakeHub"]
+        return [task]
 
 class GenerateBlock(TaskBuilder):
     def __init__(self):
@@ -1087,7 +1102,7 @@ class UpdateBtcLstStakeGradePercent(TaskBuilder):
         self.type = TaskType.UpdateBtcLstStakeGradePercent.value
 
     def self_build(self, task_generator):
-        value = random.randint(1, constants.PERCENT_DECIMALS)
+        value = random.randint(1, constants.MAX_BTC_LST_STAKE_GRADE_PERCENT)
         task = [self.__class__.__name__, value]
         return [task]
 ############### end chain task build #############

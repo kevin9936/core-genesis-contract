@@ -463,6 +463,9 @@ class ClaimReward(TaskHandler):
         self.checker.check_balance(StakeHubMock[0])
         self.checker.check_balance(SystemRewardMock[0])
 
+class AddSystemRewardOperator(TaskHandler):
+    pass
+
 class UpdateCoreStakeGradeFlag(TaskHandler):
     def on_task_ready(self):
         super().on_task_ready()
