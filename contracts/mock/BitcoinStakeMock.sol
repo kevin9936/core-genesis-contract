@@ -9,7 +9,7 @@ contract BitcoinStakeMock is BitcoinStake {
 
     function developmentInit() external {
         minBtcLockRound = 1;
-        gradeActive = 1;
+        gradeActive = true;
     }
 
     function getDelegatorBtcMap(address delegator) external view returns (bytes32[] memory) {
@@ -57,7 +57,7 @@ contract BitcoinStakeMock is BitcoinStake {
         rewardMap[delegator] = Reward(reward, unclaimed, accStakedAmount);
     }
 
-    function setIsActive(uint256 value) external {
+    function setIsActive(bool value) external {
         gradeActive = value;
     }
 

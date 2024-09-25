@@ -102,7 +102,7 @@ contract PledgeAgentMock is PledgeAgent {
             require(amount >= requiredCoinDeposit, "undelegate amount is too small");
             require(newDeposit >= requiredCoinDeposit + amount, "remaining amount is too small");
         }
-        uint256 rewardAmount = collectCoinReward(a, d);
+        uint256 rewardAmount = _collectCoinReward(a, d);
         a.totalDeposit -= amount;
         uint256 deposit = d.changeRound < roundTag ? newDeposit : d.deposit;
         newDeposit -= amount;
@@ -145,7 +145,7 @@ contract PledgeAgentMock is PledgeAgent {
         }
 
         if (rewardAmount != 0) {
-            distributeReward(payable(delegator));
+            _distributeReward(payable(delegator));
         }
 
         return (amount, deductedInDeposit + deductedOutDeposit);
@@ -157,7 +157,7 @@ contract PledgeAgentMock is PledgeAgent {
         CoinDelegator storage d = a.cDelegatorMap[delegator];
         uint256 rewardAmount;
         if (d.changeRound != 0) {
-            rewardAmount = collectCoinReward(a, d);
+            rewardAmount = _collectCoinReward(a, d);
         }
         a.totalDeposit += deposit;
 
@@ -178,7 +178,7 @@ contract PledgeAgentMock is PledgeAgent {
         }
 
         if (rewardAmount != 0) {
-            distributeReward(payable(delegator));
+            _distributeReward(payable(delegator));
         }
         return d.newDeposit;
     }
@@ -263,7 +263,7 @@ contract PledgeAgentMock is PledgeAgent {
         if (!ICandidateHub(CANDIDATE_HUB_ADDR).canDelegate(targetAgent)) {
             revert InactiveAgent(targetAgent);
         }
-        (uint256 reward) = collectBtcReward(txid);
+        (uint256 reward) = _collectBtcReward(txid);
         Agent storage a = agentsMap[agent];
         a.totalBtc -= br.value;
         round2expireInfoMap[br.endRound].agent2valueMap[agent] -= br.value;

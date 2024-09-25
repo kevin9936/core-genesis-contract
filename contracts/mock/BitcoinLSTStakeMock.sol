@@ -16,7 +16,7 @@ contract BitcoinLSTStakeMock is BitcoinLSTStake {
     }
 
     function setWallet(bytes memory pkscript) external {
-        addWallet(pkscript);
+        _addWallet(pkscript);
     }
 
     function setRoundTag(uint256 value) external {

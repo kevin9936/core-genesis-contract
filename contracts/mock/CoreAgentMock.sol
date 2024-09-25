@@ -60,7 +60,7 @@ contract CoreAgentMock is CoreAgent {
         uint256 avgStakedAmount;
         Candidate storage a = candidateMap[agent];
         CoinDelegator storage d = a.cDelegatorMap[delegator];
-        (rewardAmountM, avgStakedAmount) = collectRewardFromCandidate(agent, d);
+        (rewardAmountM, avgStakedAmount) = _collectRewardFromCandidate(agent, d);
         return (rewardAmountM, avgStakedAmount);
     }
 

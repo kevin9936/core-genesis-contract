@@ -61,7 +61,7 @@ contract StakeHubMock is StakeHub {
     }
 
     function calculateRewardMock(address delegator) external returns (uint256[] memory rewards, uint256 debtAmount) {
-        (rewards, debtAmount) = calculateReward(delegator);
+        (rewards, debtAmount) = _calculateReward(delegator);
     }
     function coreAgentDistributeReward(address[] calldata validators, uint256[] calldata rewardList, uint256 round) external {
         IAgent(CORE_AGENT_ADDR).distributeReward(validators, rewardList, round);
