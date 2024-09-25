@@ -144,7 +144,7 @@ class DelegatorStakeState:
         self.core_stake_grade_flag = BitcoinAgentMock[0].gradeActive()
         self.core_stake_grades = BitcoinAgentMock[0].getGrades()
 
-        self.btc_stake_grade_flag = bool(BitcoinStakeMock[0].gradeActive())
+        self.btc_stake_grade_flag = BitcoinStakeMock[0].gradeActive()
         self.btc_stake_grades = BitcoinStakeMock[0].getGrades()
 
         self.btc_lst_stake_grade_flag = True

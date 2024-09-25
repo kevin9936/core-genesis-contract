@@ -719,7 +719,7 @@ class UpdateBtcStakeGradeFlag(UpdateParams):
         assert len(params) == 1
         self.data = params[0]
         assert self.data <= 1
-        return params[0].to_bytes(32)
+        return params[0].to_bytes(1)
 
     def get_key(self):
         return constants.GRADE_FLAG_KEY
@@ -739,7 +739,7 @@ class UpdateBtcLstStakeGradeFlag(UpdateParams):
         assert len(params) == 1
         self.data = params[0]
         assert self.data <= 1
-        return params[0].to_bytes(32)
+        return params[0].to_bytes(1)
 
     def get_key(self):
         return constants.GRADE_FLAG_KEY
