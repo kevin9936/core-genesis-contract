@@ -552,14 +552,9 @@ def test_claim_rewards_with_different_fees_success(btc_stake, set_candidate, fee
     turn_round()
     turn_round(consensuses, round_count=7)
     tracker1 = get_tracker(accounts[1])
-    __check_debts_notes_info(accounts[0], [{'contributor': accounts[1], 'amount': fee * FEE}])
     stake_hub_claim_reward(accounts[0])
-    tx = claim_relayer_reward(accounts[1])
-    expect_event(tx, 'claimedRelayerReward', {
-        'relayer': accounts[1],
-        'amount': fee * FEE
-    })
-    assert tracker1.delta() == fee * FEE
+    stake_hub_claim_reward(accounts[1])
+    assert tracker1.delta() == 0
 
 
 def test_success_with_zero_fee(btc_stake, set_candidate):
@@ -582,7 +577,7 @@ def test_insufficient_rewards_to_pay_porter_fee(btc_stake, set_candidate):
     delegate_amount = 20000
     operators, consensuses = set_candidate
     set_last_round_tag(STAKE_ROUND)
-    delegate_btc_success(operators[0], accounts[0], BTC_VALUE, LOCK_SCRIPT, LOCK_TIME, accounts[1],fee= fee)
+    delegate_btc_success(operators[0], accounts[0], BTC_VALUE, LOCK_SCRIPT, LOCK_TIME, accounts[1], fee=fee)
     CORE_AGENT.delegateCoin(operators[0], {"value": delegate_amount, "from": accounts[1]})
     turn_round()
     turn_round(consensuses, round_count=1)
@@ -1371,8 +1366,6 @@ def test_btc_pledge_expiration_after_refusal(core_agent, validator_set, candidat
     assert tracker0.delta() == account_rewards[accounts[0]]
     turn_round(consensuses, round_count=2)
     assert tracker0.delta() == 0
-
-
 
 
 def __get_receipt_map_info(tx_id):

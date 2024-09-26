@@ -403,7 +403,6 @@ if __name__ == '__main__':
     reward, unclaimed_reward, account_rewards, round_reward = parse_delegation([{
         "address": 'v0',
         "active": True,
-        "power": [set_delegate('a0', 20)],
-        "coin": [set_delegate('a0', 10000)],
-        "btc": [set_delegate('a0', 100)]
-    }], 13545, {'v1': set_btc_lst_delegate(300)}, state_map={'core_lp': 4, 'btc_rate': [2500, 2500, 5000]})
+        "coin": [set_delegate('a1', 1000)],
+        "btc": [set_delegate('a0', 200)]
+    }], 13545)

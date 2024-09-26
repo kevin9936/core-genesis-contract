@@ -37,13 +37,19 @@ contract StakeHubMock is StakeHub {
         operators[delegator] = value;
     }
 
-
 //    function getDebts(address delegator) external view returns (NotePayable[] memory) {
 //        return debts[delegator].notes;
 //    }
 
     function getCandidateScoresMap(address candidate) external view returns (uint256[] memory) {
         return candidateScoresMap[candidate];
+    }
+
+    function setCandidateScoresMap(address candidate, uint256 core, uint256 power, uint256 btc) external {
+        candidateScoresMap[candidate][0] = (core + power + btc);
+        candidateScoresMap[candidate][1] = core;
+        candidateScoresMap[candidate][2] = power;
+        candidateScoresMap[candidate][3] = btc;
     }
 
 
@@ -63,6 +69,7 @@ contract StakeHubMock is StakeHub {
     function calculateRewardMock(address delegator) external returns (uint256[] memory rewards) {
         (rewards) = _calculateReward(delegator);
     }
+
     function coreAgentDistributeReward(address[] calldata validators, uint256[] calldata rewardList, uint256 round) external {
         IAgent(CORE_AGENT_ADDR).distributeReward(validators, rewardList, round);
     }

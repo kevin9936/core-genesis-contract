@@ -832,6 +832,42 @@ def test_dual_staking_reward_after_rounds(btc_stake, btc_agent, stake_hub, valid
     turn_round(consensuses, tx_fee=tx_fee)
 
 
+def test_dual_staking_claim_success_after_btc_expiration(btc_stake, btc_agent, stake_hub, validator_set, btc_lst_stake,
+                                                         set_candidate):
+    __set_is_stake_hub_active(True)
+    __set_tlp_rates()
+    __set_lp_rates([[0, 5000], [10000, 15000], [10001, 1000]])
+    operators, consensuses = set_candidate
+    set_last_round_tag(3)
+    delegate_btc_success(operators[0], accounts[0], 100, LOCK_SCRIPT, stake_duration=YEAR)
+    turn_round()
+    turn_round(consensuses, round_count=4)
+    delegate_coin_success(operators[1], 3000000, accounts[0])
+    turn_round(consensuses, round_count=2)
+    tracker = get_tracker(accounts[0])
+    stake_hub_claim_reward(accounts[0])
+    assert tracker.delta() == TOTAL_REWARD + TOTAL_REWARD * 3 * 15000 // Utils.DENOMINATOR
+
+
+@pytest.mark.parametrize("asset_weight", [1, 100, 1000, 1e7, 1e10, 1e18])
+def test_claim_reward_after_modify_asset_weight(btc_stake, btc_agent,
+                                                set_candidate, core_agent, stake_hub, asset_weight):
+    btc_agent.setAssetWeight(asset_weight)
+    __set_lp_rates([[0, 1000], [10000, 10000], [10001, 1000]])
+    delegate_amount = 100 * 10000 * asset_weight
+    btc_value = 100
+    __set_tlp_rates()
+    __set_is_stake_hub_active(True)
+    operators, consensuses = set_candidate
+    turn_round()
+    turn_round(consensuses)
+    delegate_coin_success(operators[0], delegate_amount, accounts[0])
+    delegate_btc_success(operators[2], accounts[0], btc_value, LOCK_SCRIPT)
+    turn_round(consensuses, round_count=2)
+    rewards = stake_hub.claimReward().return_value
+    assert rewards[-1] == TOTAL_REWARD
+
+
 def __set_is_btc_stake_active(value=0):
     BTC_STAKE.setIsActive(value)
 

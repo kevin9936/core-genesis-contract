@@ -407,6 +407,16 @@ def test_undelegate_amount_small(core_agent, validator_set):
         core_agent.undelegateCoin(operator, undelegate_value)
 
 
+def test_undelegate_cannot_be_zero(core_agent, validator_set):
+    operator = accounts[1]
+    consensus = register_candidate(operator=operator)
+    core_agent.delegateCoin(operator, {"value": MIN_INIT_DELEGATE_VALUE})
+    turn_round()
+    assert consensus in validator_set.getValidators()
+    with brownie.reverts("Not enough staked tokens"):
+        core_agent.undelegateCoin(operator, 0)
+
+
 def test_undelegate_coin_success(core_agent):
     agent = accounts[1]
     delegator = accounts[2]

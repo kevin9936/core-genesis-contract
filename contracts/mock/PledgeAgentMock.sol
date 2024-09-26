@@ -3,6 +3,9 @@ pragma solidity 0.8.4;
 import "../PledgeAgent.sol";
 
 contract PledgeAgentMock is PledgeAgent {
+    int256 public constant CLAIM_ROUND_LIMIT = 500;
+    uint256 public constant BTC_UNIT_CONVERSION_MOCK = 5;
+
     event delegatedCoinOld(address indexed agent, address indexed delegator, uint256 amount, uint256 totalAmount);
     event transferredCoinOld(
         address indexed sourceCandidate,
@@ -33,6 +36,7 @@ contract PledgeAgentMock is PledgeAgent {
         minBtcLockRound = 3;
         minBtcValue = 100;
         roundTag = 1;
+//        BTC_UNIT_CONVERSION = BTC_UNIT_CONVERSION / 1e9 / 2;
     }
 
     function setAgentRound(address agent, uint256 power, uint256 coin) external {
@@ -145,7 +149,7 @@ contract PledgeAgentMock is PledgeAgent {
         }
 
         if (rewardAmount != 0) {
-            _distributeReward(payable(delegator));
+            distributeRewardMock(payable(delegator), rewardAmount);
         }
 
         return (amount, deductedInDeposit + deductedOutDeposit);
@@ -360,7 +364,7 @@ contract PledgeAgentMock is PledgeAgent {
             totalBtc += a.btc;
         }
 
-        uint256 bf = (btcFactor == 0 ? INIT_BTC_FACTOR : btcFactor) * BTC_UNIT_CONVERSION;
+        uint256 bf = (btcFactor == 0 ? INIT_BTC_FACTOR : btcFactor) * BTC_UNIT_CONVERSION_MOCK;
         uint256 pf = powerFactor;
 
         scores = new uint256[](candidateSize);
@@ -419,5 +423,128 @@ contract PledgeAgentMock is PledgeAgent {
             uint256 btcReward = rewardList[i] * a.btc * rs.btcFactor * rs.power / roundScore;
             emit roundReward(agentList[i], coinReward, powerReward, btcReward);
         }
+    }
+    /*********************** Internal methods ***************************/
+    function distributeRewardMock(address payable delegator, uint256 reward) internal {
+        Address.sendValue(delegator, reward);
+        emit claimedReward(delegator, msg.sender, reward, true);
+    }
+
+    function collectCoinRewardMock(Reward storage r, uint256 deposit) internal returns (uint256 rewardAmount) {
+        require(r.coin >= deposit, "reward is not enough");
+        uint256 curReward;
+        if (r.coin == deposit) {
+            curReward = r.remainReward;
+            r.coin = 0;
+        } else {
+            uint256 rsPower = stateMap[r.round].power;
+            curReward = (r.totalReward * deposit * rsPower) / r.score;
+            require(r.remainReward >= curReward, "there is not enough reward");
+            r.coin -= deposit;
+            r.remainReward -= curReward;
+        }
+        return curReward;
+    }
+
+    function collectCoinRewardMock(Agent storage a, CoinDelegator storage d, int256 roundLimit) internal returns (uint256 rewardAmount) {
+        uint256 changeRound = d.changeRound;
+        uint256 curRound = roundTag;
+        if (changeRound < curRound) {
+            d.transferInDeposit = 0;
+        }
+
+        uint256 rewardLength = a.rewardSet.length;
+        uint256 rewardIndex = d.rewardIndex;
+        if (rewardIndex >= rewardLength) {
+            return 0;
+        }
+        if (rewardIndex + uint256(roundLimit) < rewardLength) {
+            rewardLength = rewardIndex + uint256(roundLimit);
+        }
+
+        while (rewardIndex < rewardLength) {
+            Reward storage r = a.rewardSet[rewardIndex];
+            uint256 rRound = r.round;
+            if (rRound == curRound) {
+                break;
+            }
+            uint256 deposit = d.newDeposit;
+            // HARDFORK V-1.0.3  
+            // d.deposit and d.transferOutDeposit are both eligible for claiming rewards
+            // however, d.transferOutDeposit will be used to pay the DEBT for the delegator before that
+            // the rewards from the DEBT will be collected and sent to the system reward contract
+            if (rRound == changeRound) {
+                uint256 transferOutDeposit = d.transferOutDeposit;
+                uint256 debt = debtDepositMap[rRound][msg.sender];
+                if (transferOutDeposit > debt) {
+                    transferOutDeposit -= debt;
+                    debtDepositMap[rRound][msg.sender] = 0;
+                } else {
+                    debtDepositMap[rRound][msg.sender] -= transferOutDeposit;
+                    transferOutDeposit = 0;
+                }
+                if (transferOutDeposit != d.transferOutDeposit) {
+                    uint256 undelegateReward = collectCoinRewardMock(r, d.transferOutDeposit - transferOutDeposit);
+                    if (r.coin == 0) {
+                        delete a.rewardSet[rewardIndex];
+                    }
+                    ISystemReward(SYSTEM_REWARD_ADDR).receiveRewards{value: undelegateReward}();
+                }
+                deposit = d.deposit + transferOutDeposit;
+                d.deposit = d.newDeposit;
+                d.transferOutDeposit = 0;
+            }
+            if (deposit != 0) {
+                rewardAmount += collectCoinRewardMock(r, deposit);
+                if (r.coin == 0) {
+                    delete a.rewardSet[rewardIndex];
+                }
+            }
+            rewardIndex++;
+        }
+
+        // update index whenever claim happens
+        d.rewardIndex = rewardIndex;
+        return rewardAmount;
+    }
+
+    /// Claim reward for delegator
+    /// @param agentList The list of validators to claim rewards on, it can be empty
+    /// @return (Amount claimed, Are all rewards claimed)
+    function claimRewardMock(address[] calldata agentList) external returns (uint256, bool) {
+        // limit round count to control gas usage
+        int256 roundLimit = CLAIM_ROUND_LIMIT;
+        uint256 reward;
+        uint256 rewardSum = rewardMap[msg.sender];
+        if (rewardSum != 0) {
+            rewardMap[msg.sender] = 0;
+        }
+
+        uint256 agentSize = agentList.length;
+        for (uint256 i = 0; i < agentSize; ++i) {
+            Agent storage a = agentsMap[agentList[i]];
+            if (a.rewardSet.length == 0) {
+                continue;
+            }
+            CoinDelegator storage d = a.cDelegatorMap[msg.sender];
+            if (d.newDeposit == 0 && d.transferOutDeposit == 0) {
+                continue;
+            }
+            int256 roundCount = int256(a.rewardSet.length - d.rewardIndex);
+            reward = collectCoinRewardMock(a, d, roundLimit);
+            roundLimit -= roundCount;
+            rewardSum += reward;
+            if (d.newDeposit == 0 && d.transferOutDeposit == 0) {
+                delete a.cDelegatorMap[msg.sender];
+            }
+            // if there are rewards to be collected, leave them there
+            if (roundLimit < 0) {
+                break;
+            }
+        }
+        if (rewardSum != 0) {
+            distributeRewardMock(payable(msg.sender), rewardSum);
+        }
+        return (rewardSum, roundLimit >= 0);
     }
 }

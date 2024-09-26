@@ -600,7 +600,6 @@ def test_delegate_non_zero_valid_stake(btc_lst_stake, stake_hub, set_candidate):
 
 
 def test_multi_output_gas_consumption(btc_lst_stake, stake_hub, set_candidate):
-    operators, consensuses = set_candidate
     turn_round()
     output = []
     for i in range(200):
@@ -614,7 +613,55 @@ def test_multi_output_gas_consumption(btc_lst_stake, stake_hub, set_candidate):
     )
     gas_price(False)
     tx = btc_lst_stake.delegate(delegate_btc_tx0, 1, [], 0, LOCK_SCRIPT, {"from": accounts[1]})
-    print('gas_used',tx.gas_used)
+    print('gas_used', tx.gas_used)
+
+
+@pytest.mark.parametrize("tests", ['delegate', 'undelegate', 'redeem', 'transfer'])
+def test_paused_state_prevents_operations(btc_lst_stake, lst_token, set_candidate, tests):
+    update_system_contract_address(btc_lst_stake, gov_hub=accounts[0])
+    redeem_btc_tx = btc_delegate.build_btc_lst(
+        set_outputs([BTC_VALUE - UTXO_FEE, LOCK_SCRIPT], [BTC_VALUE * 3, REDEEM_SCRIPT]),
+        set_inputs([random_btc_tx_id(), 0])
+    )
+    btc_lst_stake.updateParam('paused', 1)
+    if tests == 'delegate':
+        with brownie.reverts("Pausable: paused"):
+            delegate_btc_lst_success(accounts[0], BTC_VALUE, LOCK_SCRIPT)
+    elif tests == 'undelegate':
+        with brownie.reverts("Pausable: paused"):
+            btc_lst_stake.undelegate(redeem_btc_tx, 0, [], 0)
+    elif tests == 'redeem':
+        with brownie.reverts("Pausable: paused"):
+            redeem_btc_lst_success(accounts[0], BTC_VALUE, random_btc_lst_lock_script())
+    elif tests == 'transfer':
+        btc_lst_stake.updateParam('paused', 0)
+        delegate_btc_lst_success(accounts[0], BTC_VALUE, LOCK_SCRIPT)
+        btc_lst_stake.updateParam('paused', 1)
+        with brownie.reverts("call lstStake.onTokenTransfer failed."):
+            BitcoinLSTToken[0].transfer(accounts[1], BTC_VALUE, {"from": accounts[0]})
+
+
+@pytest.mark.parametrize("tests", ['delegate', 'undelegate', 'redeem', 'transfer'])
+def test_successful_call_after_unpause(btc_lst_stake, lst_token, set_candidate, tests):
+    update_system_contract_address(btc_lst_stake, gov_hub=accounts[0])
+    redeem_btc_tx = btc_delegate.build_btc_lst(
+        set_outputs([BTC_VALUE - UTXO_FEE, LOCK_SCRIPT], [BTC_VALUE * 3, REDEEM_SCRIPT]),
+        set_inputs([random_btc_tx_id(), 0])
+    )
+    btc_lst_stake.updateParam('paused', 1)
+    with brownie.reverts("Pausable: paused"):
+        delegate_btc_lst_success(accounts[0], BTC_VALUE, LOCK_SCRIPT)
+    btc_lst_stake.updateParam('paused', 0)
+    delegate_btc_lst_success(accounts[0], BTC_VALUE, LOCK_SCRIPT)
+    if tests == 'delegate':
+        delegate_btc_lst_success(accounts[0], BTC_VALUE, LOCK_SCRIPT)
+    elif tests == 'undelegate':
+        with brownie.reverts("input must from stake wallet."):
+            btc_lst_stake.undelegate(redeem_btc_tx, 0, [], 0)
+    elif tests == 'redeem':
+        redeem_btc_lst_success(accounts[0], BTC_VALUE, random_btc_lst_lock_script())
+    elif tests == 'transfer':
+        transfer_btc_lst_success(accounts[0], BTC_VALUE, accounts[1])
 
 
 def test_lst_btc_undelegate_success(btc_lst_stake, lst_token, set_candidate):
@@ -1434,6 +1481,17 @@ def test_multi_round_btc_lst_acc_amount(btc_lst_stake, btc_agent, set_candidate,
     assert acc_staked_amount == expect_stake_amount
 
 
+def test_check_acc_stake_amount_after_btc_lst_redeem(btc_lst_stake, btc_agent, set_candidate):
+    operators, consensuses = set_candidate
+    delegate_btc_lst_success(accounts[0], BTC_VALUE, LOCK_SCRIPT)
+    turn_round()
+    redeem_btc_lst_success(accounts[0], BTC_VALUE, REDEEM_SCRIPT)
+    turn_round(consensuses, round_count=3)
+    update_system_contract_address(btc_lst_stake, btc_agent=accounts[0])
+    reward, reward_unclaimed, acc_staked_amount = btc_lst_stake.claimReward(accounts[0]).return_value
+    assert acc_staked_amount == 0
+
+
 def test_p2sh_lock_script_with_p2sh_redeem_script(btc_lst_stake, lst_token, set_candidate):
     tx_id = delegate_btc_lst_success(accounts[0], BTC_VALUE, LOCK_SCRIPT)
     turn_round()
@@ -1646,6 +1704,108 @@ def test_redeem_without_pledge_reverts(btc_lst_stake, lst_token, set_candidate):
     delegate_btc_lst_success(accounts[1], BTC_VALUE, LOCK_SCRIPT)
     with brownie.reverts("Not enough btc token"):
         btc_lst_stake.redeem(BTC_VALUE // 2, REDEEM_SCRIPT)
+
+
+@pytest.mark.parametrize("redeem_value", [0, 1, -1])
+def test_btc_redeem_exceeds_single_limit(btc_lst_stake, lst_token, set_candidate, redeem_value):
+    utxo_fee = 100
+    btc_value = 15e8
+    redeem_amount = 10e8
+    delegate_btc_lst_success(accounts[0], btc_value, LOCK_SCRIPT)
+    if redeem_value > 0:
+        with brownie.reverts("The cumulative burn amount has reached the upper limit"):
+            btc_lst_stake.redeem(redeem_amount + utxo_fee + redeem_value, REDEEM_SCRIPT)
+    else:
+        tx = btc_lst_stake.redeem(redeem_amount + utxo_fee + redeem_value, REDEEM_SCRIPT)
+        assert 'redeemed' in tx.events
+
+
+def test_btc_redeem_in_multiple_parts(btc_lst_stake, lst_token, set_candidate):
+    btc_value = 15e8
+    redeem_amount = 2e8
+    delegate_btc_lst_success(accounts[0], btc_value, LOCK_SCRIPT)
+    for i in range(5):
+        tx = btc_lst_stake.redeem(redeem_amount, REDEEM_SCRIPT)
+        assert 'redeemed' in tx.events
+    with brownie.reverts("The cumulative burn amount has reached the upper limit"):
+        btc_lst_stake.redeem(redeem_amount, REDEEM_SCRIPT)
+
+
+@pytest.mark.parametrize("redeem_value", [9e8, 10e8, 11e8, 14e8])
+def test_redeem_exceeds_after_multiple_stakes(btc_lst_stake, lst_token, set_candidate, redeem_value):
+    btc_value = 3e8
+    for i in range(5):
+        delegate_btc_lst_success(accounts[0], btc_value, LOCK_SCRIPT)
+    if redeem_value > 10e8:
+        with brownie.reverts("The cumulative burn amount has reached the upper limit"):
+            btc_lst_stake.redeem(redeem_value, REDEEM_SCRIPT)
+    else:
+        tx = btc_lst_stake.redeem(redeem_value, REDEEM_SCRIPT)
+        assert 'redeemed' in tx.events
+
+
+def test_exceed_redeem_after_multiple_stakes_and_redeems(btc_lst_stake, lst_token, set_candidate):
+    btc_value = 3e8
+    redeem_amount = 2e8
+    for i in range(5):
+        delegate_btc_lst_success(accounts[0], btc_value, LOCK_SCRIPT)
+    for i in range(5):
+        tx = btc_lst_stake.redeem(redeem_amount, REDEEM_SCRIPT)
+        assert 'redeemed' in tx.events
+    with brownie.reverts("The cumulative burn amount has reached the upper limit"):
+        btc_lst_stake.redeem(redeem_amount, REDEEM_SCRIPT)
+
+
+@pytest.mark.parametrize("part", [True, False])
+def test_recalculate_total_redeem_amount_after_undelegate(btc_lst_stake, part):
+    btc_value = 5e8
+    redeem_amount = 2e8
+    uxto_fee = 100
+    tx_id = None
+    for i in range(5):
+        tx_id = delegate_btc_lst_success(accounts[0], btc_value, LOCK_SCRIPT)
+    for i in range(5):
+        tx = btc_lst_stake.redeem(redeem_amount, REDEEM_SCRIPT)
+        assert 'redeemed' in tx.events
+
+    redeemed = int(redeem_amount * 5) - (uxto_fee * 5)
+    __check_redeem_requests(0, {
+        'amount': redeemed
+    })
+    if part:
+        redeem_btc_tx = build_btc_lst_tx(accounts[0], int(redeem_amount), REDEEM_SCRIPT, tx_id, 0)
+        redeemed -= redeem_amount
+        btc_lst_stake.undelegate(redeem_btc_tx, 0, [], 0)
+        __check_redeem_requests(0, {
+            'amount': redeemed
+        })
+    else:
+        redeem_btc_tx = build_btc_lst_tx(accounts[0], int(redeem_amount * 5), REDEEM_SCRIPT, tx_id, 0)
+        btc_lst_stake.undelegate(redeem_btc_tx, 0, [], 0)
+        assert btc_lst_stake.getRedeemRequestsLength() == 0
+    btc_lst_stake.redeem(redeem_amount, REDEEM_SCRIPT)
+    if part:
+        with brownie.reverts("The cumulative burn amount has reached the upper limit"):
+            btc_lst_stake.redeem(redeem_amount, REDEEM_SCRIPT)
+    else:
+        tx = btc_lst_stake.redeem(redeem_amount, REDEEM_SCRIPT)
+        assert 'redeemed' in tx.events
+        with brownie.reverts("The cumulative burn amount has reached the upper limit"):
+            btc_lst_stake.redeem(9e8, REDEEM_SCRIPT)
+
+
+def test_full_clear_after_undelegate(btc_lst_stake):
+    btc_value = 20e8
+    redeem_amount0 = 2e8
+    redeem_amount1 = 10e8
+    tx_id = delegate_btc_lst_success(accounts[0], btc_value, LOCK_SCRIPT)
+    btc_lst_stake.redeem(redeem_amount0, REDEEM_SCRIPT)
+    with brownie.reverts("The cumulative burn amount has reached the upper limit"):
+        btc_lst_stake.redeem(redeem_amount1, REDEEM_SCRIPT)
+    redeem_btc_tx = build_btc_lst_tx(accounts[0], redeem_amount0, REDEEM_SCRIPT, tx_id, 0)
+    btc_lst_stake.undelegate(redeem_btc_tx, 0, [], 0)
+    tx = btc_lst_stake.redeem(redeem_amount1, REDEEM_SCRIPT)
+    assert 'redeemed' in tx.events
 
 
 def test_on_token_transfer_success(btc_lst_stake, lst_token, set_candidate):

@@ -67,6 +67,7 @@ class AccountTracker:
     def __init__(self, account: LocalAccount):
         self.account = account
         self.height = chain.height
+        self.address = account.address
 
     def balance(self):
         self.height = chain.height
@@ -90,6 +91,24 @@ class AccountTracker:
 
 def get_tracker(account: LocalAccount) -> AccountTracker:
     return AccountTracker(account)
+
+
+def get_trackers(accounts: list):
+    delegators = []
+    for account in accounts:
+        tracker = AccountTracker(account)
+        delegators.append(tracker)
+    return delegators
+
+
+def assert_trackers(trackers: AccountTracker, expect_reward):
+    if isinstance(trackers, list):
+        for index, tracker in enumerate(trackers):
+            reward = tracker.delta()
+            actual_reward = expect_reward[index]
+            assert reward == actual_reward, f'assert_trackers error address: {tracker.address}:claimed_reward :{reward}, expect_reward:{actual_reward}'
+    else:
+        assert trackers.delta() == expect_reward
 
 
 def padding_left(hex_str, length):

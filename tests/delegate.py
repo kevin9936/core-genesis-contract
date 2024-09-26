@@ -167,6 +167,7 @@ def build_btc_lst_tx(delegator, amount, pay_address, input_tx_id=None, vout=0, f
                      chain_id=1112, magic='5341542b'):
     btc_tx_info = {}
     inputs = [build_input(input_tx_id, vout)]
+    amount = int(amount)
     outputs = [build_output(amount, pay_address),
                build_btc_lst_stake_opreturn(delegator, fee, version, chain_id, magic)]
     generate_btc_transaction_info(btc_tx_info, inputs, outputs)
@@ -229,6 +230,7 @@ def set_last_round_tag(stake_round, time0=None):
 def delegate_coin_success(candidate, amount, delegator):
     tx = CoreAgentMock[0].delegateCoin(candidate, {'value': amount, 'from': delegator})
     assert 'delegatedCoin' in tx.events
+    print('delegate_coin_success>>>>>>>>>>>>', tx.events)
     return tx
 
 
@@ -321,6 +323,8 @@ def old_delegate_coin_success(candidate, account=None, amount=None, old=True):
     else:
         tx = PledgeAgentMock[0].delegateCoin(candidate, {'value': amount, 'from': account})
         assert 'delegatedCoin' in tx.events
+    print('old_delegate_coin_success>>>>>>>>>>>>>>>>>>>>>>', tx.events)
+
     return tx
 
 
@@ -331,6 +335,7 @@ def old_undelegate_coin_success(candidate, account=None, amount=0, old=True):
         tx = PledgeAgentMock[0].undelegateCoinOld(candidate, amount, {'from': account})
     else:
         tx = PledgeAgentMock[0].undelegateCoin(candidate, amount, {'from': account})
+    assert 'undelegatedCoin' in tx.events
     return tx
 
 
@@ -341,14 +346,20 @@ def old_transfer_coin_success(source_agent, target_agent, account=None, amount=0
         tx = PledgeAgentMock[0].transferCoinOld(source_agent, target_agent, amount, {'from': account})
     else:
         tx = PledgeAgentMock[0].transferCoin(source_agent, target_agent, amount, {'from': account})
+    assert 'transferredCoin' in tx.events
     return tx
 
 
 def old_claim_reward_success(candidates, account=None):
-    if account is None:
-        account = accounts[0]
-    tx = PledgeAgentMock[0].claimReward(candidates, {'from': account})
-    print('old_claim_reward_success>>>>>>', tx.events)
+    if isinstance(account, list):
+        for a in account:
+            tx = PledgeAgentMock[0].claimReward(candidates, {'from': a})
+            print('old_claim_reward_success>>>>>>', tx.events)
+    else:
+        if account is None:
+            account = accounts[0]
+        tx = PledgeAgentMock[0].claimReward(candidates, {'from': account})
+        print('old_claim_reward_success>>>>>>', tx.events)
 
 
 def old_claim_btc_reward_success(tx_ids, account=None):
@@ -373,9 +384,11 @@ def old_turn_round(miners: list = None, tx_fee=100, round_count=1):
 
 def old_delegate_btc_success(btc_value, agent, delegator, lock_time=None, tx_id=None, script=None, fee=1):
     if script is None:
-        script, _, _ = random_btc_lock_script()
+        script, _, timestamp = random_btc_lock_script()
     if tx_id is None:
         tx_id = random_btc_tx_id()
+    if lock_time is None:
+        lock_time = timestamp
     PledgeAgentMock[0].delegateBtcMock(tx_id, btc_value, agent, delegator, script, lock_time, fee)
     return tx_id
 
