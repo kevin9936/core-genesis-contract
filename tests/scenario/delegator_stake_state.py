@@ -435,7 +435,8 @@ class DelegatorStakeState:
         assert amount >= self.utxo_fee * 2
 
         self.btc_lst_stake_txs[txid] = tx
-        self.add_debt(tx)
+        # no relayer reward
+        # self.add_debt(tx)
 
         self.add_redeem_proof_tx(tx)
 
@@ -475,7 +476,8 @@ class DelegatorStakeState:
 
         self.btc_stake_txs[txid] = tx
         self.add_btc_stake_txid(tx)
-        self.add_debt(tx)
+        # no relayer reward
+        # self.add_debt(tx)
 
     def remove_btc_stake_txid(self, delegator, txid):
         self.btc_stake_txids[delegator].pop(txid)

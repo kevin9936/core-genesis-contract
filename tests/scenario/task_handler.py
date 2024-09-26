@@ -442,6 +442,7 @@ class ClaimReward(TaskHandler):
         self.chain.init_balance(StakeHubMock[0])
         self.chain.init_balance(SystemRewardMock[0])
 
+        # in fact the relayer has no rewards
         self.checker.check_creditor_contributions(self.task.account)
         self.checker.check_balance(StakeHubMock[0])
         self.checker.check_balance(SystemRewardMock[0])
@@ -458,6 +459,7 @@ class ClaimReward(TaskHandler):
         self.checker.check_delegator_core_stake_nodes(self.task.account)
         self.checker.check_history_reward(self.task.account)
         self.checker.check_balance(self.task.account)
+        # in fact the relayer has no rewards
         self.checker.check_creditor_contributions(self.task.account)
         self.checker.check_total_unclaimed_reward()
         self.checker.check_balance(StakeHubMock[0])
