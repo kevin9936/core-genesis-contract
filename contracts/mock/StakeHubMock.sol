@@ -38,9 +38,9 @@ contract StakeHubMock is StakeHub {
     }
 
 
-    function getDebts(address delegator) external view returns (NotePayable[] memory) {
-        return debts[delegator].notes;
-    }
+//    function getDebts(address delegator) external view returns (NotePayable[] memory) {
+//        return debts[delegator].notes;
+//    }
 
     function getCandidateScoresMap(address candidate) external view returns (uint256[] memory) {
         return candidateScoresMap[candidate];
@@ -60,8 +60,8 @@ contract StakeHubMock is StakeHub {
         _initializeFromPledgeAgent();
     }
 
-    function calculateRewardMock(address delegator) external returns (uint256[] memory rewards, uint256 debtAmount) {
-        (rewards, debtAmount) = _calculateReward(delegator);
+    function calculateRewardMock(address delegator) external returns (uint256[] memory rewards) {
+        (rewards) = _calculateReward(delegator);
     }
     function coreAgentDistributeReward(address[] calldata validators, uint256[] calldata rewardList, uint256 round) external {
         IAgent(CORE_AGENT_ADDR).distributeReward(validators, rewardList, round);
