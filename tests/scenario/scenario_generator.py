@@ -153,6 +153,8 @@ class DataCenter:
 
         self.btc_lst_stake_payments = None
 
+        self.btc_lst_redeem_max_amount = 0
+
         self.utxo_fee = 0
 
         self.init_sponsees()
@@ -160,6 +162,7 @@ class DataCenter:
         self.init_operators()
         self.init_btc_stake_payments()
         self.init_btc_lst_stake_payments()
+        self.init_btc_lst_redeem_max_amount()
         self.init_random_task_probabilities()
         self.init_utxo_fee()
         self.init_slash_params()
@@ -231,6 +234,9 @@ class DataCenter:
             AcceptDelegate.__name__: 50,
             StakeCore.__name__: 30
         }
+
+    def init_btc_lst_redeem_max_amount(self):
+        self.btc_lst_redeem_max_amount = BitcoinLSTStakeMock[0].burnBTCLimit()
 
     def init_utxo_fee(self):
         self.utxo_fee = BitcoinLSTStakeMock[0].utxoFee()
@@ -478,7 +484,7 @@ class DataCenter:
     def choice_redeem_amount(self, redeemer):
         stake_info = self.get_stake_info(redeemer)
 
-        max_amount = stake_info.get_btc_lst_stake_amount()
+        max_amount = min(stake_info.get_btc_lst_stake_amount(), self.btc_lst_redeem_max_amount//constants.BTC_DECIMALS)
         if max_amount == 0:
             return 0
 
