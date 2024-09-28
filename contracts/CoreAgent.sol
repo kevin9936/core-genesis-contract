@@ -357,6 +357,7 @@ contract CoreAgent is IAgent, System, IParamSubscriber {
   /// @param amount the amount of CORE 
   /// @param isTransfer is called from transfer workflow
   function _undelegateCoin(address candidate, address delegator, uint256 amount, bool isTransfer) internal returns (uint256) {
+    require(amount != 0, 'Not enough staked tokens');
     Candidate storage a = candidateMap[candidate];
     CoinDelegator storage cd = a.cDelegatorMap[delegator];
     uint256 changeRound = cd.changeRound;
