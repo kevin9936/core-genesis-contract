@@ -287,7 +287,11 @@ contract CoreAgent is IAgent, System, IParamSubscriber {
   /// @param amount the amount of CORE to unstake
   function proxyUnDelegate(address candidate, address delegator, uint256 amount) external onlyPledgeAgent returns(uint256) {
     if (amount == 0) {
-      amount = candidateMap[candidate].cDelegatorMap[delegator].stakedAmount;
+      if (candidateMap[candidate].cDelegatorMap[delegator].changeRound < roundTag) {
+        amount = candidateMap[candidate].cDelegatorMap[delegator].realtimeAmount;
+      } else {
+        amount = candidateMap[candidate].cDelegatorMap[delegator].stakedAmount;
+      }
     }
     _undelegateCoin(candidate, delegator, amount, false);
     Address.sendValue(payable(PLEDGE_AGENT_ADDR), amount);
@@ -308,7 +312,11 @@ contract CoreAgent is IAgent, System, IParamSubscriber {
       revert SameCandidate(sourceCandidate);
     }
     if (amount == 0) {
-      amount = candidateMap[sourceCandidate].cDelegatorMap[delegator].stakedAmount;
+      if (candidateMap[sourceCandidate].cDelegatorMap[delegator].changeRound < roundTag) {
+        amount = candidateMap[sourceCandidate].cDelegatorMap[delegator].realtimeAmount;
+      } else {
+        amount = candidateMap[sourceCandidate].cDelegatorMap[delegator].stakedAmount;
+      }
     }
     _undelegateCoin(sourceCandidate, delegator, amount, true);
     uint256 newDeposit = _delegateCoin(targetCandidate, delegator, amount, true);
