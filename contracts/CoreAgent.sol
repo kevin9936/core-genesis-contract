@@ -285,13 +285,14 @@ contract CoreAgent is IAgent, System, IParamSubscriber {
   /// @param candidate the validator candidate address
   /// @param delegator the delegator address
   /// @param amount the amount of CORE to unstake
-  function proxyUnDelegate(address candidate, address delegator, uint256 amount) external onlyPledgeAgent {
+  function proxyUnDelegate(address candidate, address delegator, uint256 amount) external onlyPledgeAgent returns(uint256) {
     if (amount == 0) {
       amount = candidateMap[candidate].cDelegatorMap[delegator].stakedAmount;
     }
     _undelegateCoin(candidate, delegator, amount, false);
     Address.sendValue(payable(PLEDGE_AGENT_ADDR), amount);
     emit undelegatedCoin(candidate, delegator, amount);
+    return amount;
   }
 
   /// for backward compatibility - allow users to transfer stake through PledgeAgent
