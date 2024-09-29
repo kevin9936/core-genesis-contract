@@ -44,8 +44,8 @@ contract CoreAgent is IAgent, System, IParamSubscriber {
   struct CoinDelegator {
     uint256 stakedAmount;
     uint256 realtimeAmount;
-    uint256 changeRound;
     uint256 transferredAmount;
+    uint256 changeRound;
   }
 
   struct Candidate {
@@ -182,6 +182,7 @@ contract CoreAgent is IAgent, System, IParamSubscriber {
   /// @param amount The amount of CORE to undelegate
   function undelegateCoin(address candidate, uint256 amount) public {
     _undelegateCoin(candidate, msg.sender, amount, false);
+    _deductTransferredAmount(msg.sender, amount);
     Address.sendValue(payable(msg.sender), amount);
     emit undelegatedCoin(candidate, msg.sender, amount);
   }
@@ -294,6 +295,7 @@ contract CoreAgent is IAgent, System, IParamSubscriber {
       }
     }
     _undelegateCoin(candidate, delegator, amount, false);
+    _deductTransferredAmount(msg.sender, amount);
     Address.sendValue(payable(PLEDGE_AGENT_ADDR), amount);
     emit undelegatedCoin(candidate, delegator, amount);
     return amount;
@@ -356,8 +358,8 @@ contract CoreAgent is IAgent, System, IParamSubscriber {
   /// @param delegator the delegator address
   /// @param amount the amount of CORE 
   /// @param isTransfer is called from transfer workflow
-  function _undelegateCoin(address candidate, address delegator, uint256 amount, bool isTransfer) internal returns (uint256) {
-    require(amount != 0, 'Not enough staked tokens');
+  function _undelegateCoin(address candidate, address delegator, uint256 amount, bool isTransfer) internal {
+    require(amount != 0, 'Undelegate zero coin');
     Candidate storage a = candidateMap[candidate];
     CoinDelegator storage cd = a.cDelegatorMap[delegator];
     uint256 changeRound = cd.changeRound;
@@ -370,17 +372,23 @@ contract CoreAgent is IAgent, System, IParamSubscriber {
 
     // design updates in 1.0.12 vs 1.0.3
     // to simplify the reward calculation for user transfers
-    // a restriction is made that no more CORE tokens than the turnround snapshot value can be transferred to other validators 
-    uint256 stakedAmount = cd.stakedAmount;
-    require(stakedAmount >= amount, "Not enough staked tokens");
-    if (amount != stakedAmount) {
+    // a restriction is made that no more CORE tokens than the turnround
+    // snapshot value can be transferred to other validators
+    uint256 realtimeAmount = cd.realtimeAmount;
+    require(realtimeAmount >= amount, "Not enough staked tokens");
+    if (amount != realtimeAmount) {
       require(amount >= requiredCoinDeposit, "undelegate amount is too small");
       require(cd.realtimeAmount - amount >= requiredCoinDeposit, "remain amount is too small");
     }
 
+    uint256 stakedAmount = cd.stakedAmount;
     a.realtimeAmount -= amount;
     if (isTransfer) {
-      cd.transferredAmount += amount;
+      if (stakedAmount > amount) {
+        cd.transferredAmount += amount;
+      } else if (stakedAmount != 0) {
+        cd.transferredAmount += stakedAmount;
+      }
     } else {
       delegatorMap[delegator].amount -= amount;
     }
@@ -388,9 +396,40 @@ contract CoreAgent is IAgent, System, IParamSubscriber {
       _removeDelegation(delegator, candidate);
     } else {
       cd.realtimeAmount -= amount;
-      cd.stakedAmount -= amount;
+      if (stakedAmount > amount) {
+        cd.stakedAmount -= amount;
+      } else if (stakedAmount != 0) {
+        cd.stakedAmount = 0;
+      }
     }
-    return amount;
+  }
+
+  function _deductTransferredAmount(address delegator, uint256 amount) internal {
+    Delegator storage d = delegatorMap[delegator];
+    address[] storage candidates = d.candidates;
+    address candidate;
+    uint256 transferredAmount;
+    for (uint256 i = candidates.length; i != 0; --i) {
+      candidate = candidates[i - 1];
+      CoinDelegator storage cd = candidateMap[candidate].cDelegatorMap[delegator];
+      transferredAmount = cd.transferredAmount;
+      if (transferredAmount != 0) {
+        if (transferredAmount < amount) {
+          amount -= transferredAmount;
+          cd.transferredAmount = 0;
+          if (cd.realtimeAmount == 0) {
+            delete candidateMap[candidate].cDelegatorMap[delegator];
+            if (i < candidates.length) {
+              d.candidates[i-1] = d.candidates[candidates.length-1];
+            }
+            d.candidates.pop();
+          }
+        } else {
+          cd.transferredAmount -= amount;
+          break;
+        }
+      }
+    }
   }
 
   /// collect reward from a validator candidate
