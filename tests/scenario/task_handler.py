@@ -2,6 +2,8 @@ from abc import ABC, abstractmethod
 from brownie import *
 from . import chain_checker
 from . import chain_handler
+from .account_mgr import AccountMgr
+addr_to_name = AccountMgr.addr_to_name
 
 class TaskHandler(ABC):
     def __init__(self):
@@ -50,6 +52,7 @@ class RegisterCandidate(TaskHandler):
         super().on_task_ready()
         self.chain.init_balance(CandidateHubMock[0])
         self.chain.init_balance(self.task.fee_addr)
+        self.chain.init_balance(self.task.operator_addr)
 
     def on_task_finish(self):
         super().on_task_finish()
@@ -64,7 +67,29 @@ class RegisterCandidate(TaskHandler):
 
     def check_state(self):
         self.checker.check_balance(CandidateHubMock[0])
+        self.checker.check_balance(self.task.operator_addr)
         self.checker.check_candidate(self.task.operator_addr)
+
+class UnregisterCandidate(TaskHandler):
+    def on_task_ready(self):
+        super().on_task_ready()
+        self.chain.init_balance(CandidateHubMock[0])
+        self.chain.init_balance(SystemRewardMock[0])
+        self.chain.init_balance(self.task.operator_addr)
+        self.candidate = self.chain.get_candidate(self.task.operator_addr)
+
+    def on_task_finish(self):
+        super().on_task_finish()
+        self.chain_handler.remove_candidate(
+            self.task.operator_addr
+        )
+        self.check_state()
+
+    def check_state(self):
+        self.checker.check_balance(CandidateHubMock[0])
+        self.checker.check_balance(SystemRewardMock[0])
+        self.checker.check_balance(self.task.operator_addr)
+        self.checker.check_candidate_removed(self.candidate)
 
 class SlashValidator(TaskHandler):
     def on_task_ready(self):
@@ -186,6 +211,10 @@ class TurnRound(TaskHandler):
         self.checker.check_balance(SystemRewardMock[0])
         self.checker.check_balance(ValidatorSetMock[0])
         self.checker.check_balance(StakeHubMock[0])
+
+        print(f"ROUND={self.chain.get_round()} validate set")
+        for validator in self.chain.get_validators().values():
+            print(f"validator: {addr_to_name(validator.get_operator_addr())}")
 
 
 class CreateStakeLockTx(TaskHandler):
@@ -396,6 +425,42 @@ class StakeLSTBtc(TaskHandler):
         self.checker.check_delegator_btc_lst_history_reward(delegator)
         self.checker.check_total_unclaimed_reward()
 
+class TransferLSTBtc(TaskHandler):
+    def on_task_ready(self):
+        super().on_task_ready()
+        self.chain.init_btc_lst_balance(self.task.from_delegator)
+        self.chain.init_btc_lst_balance(self.task.to_delegator)
+
+    def on_task_finish(self):
+        super().on_task_finish()
+        self.chain_handler.transfer_btc_lst(
+            self.task.from_delegator,
+            self.task.to_delegator,
+            self.task.amount
+        )
+
+        self.check_state()
+
+    def check_state(self):
+        from_delegator = self.task.from_delegator
+        to_delegator = self.task.to_delegator
+
+        self.checker.check_btc_lst_balance(from_delegator)
+        self.checker.check_btc_lst_balance(to_delegator)
+
+        self.checker.check_btc_lst_total_realtime_amount()
+        self.checker.check_total_unclaimed_reward()
+
+        self.checker.check_delegator_btc_lst_stake_amount(from_delegator)
+        self.checker.check_delegator_btc_lst_realtime_amount(from_delegator)
+        self.checker.check_delegator_btc_lst_change_round(from_delegator)
+        self.checker.check_delegator_btc_lst_history_reward(from_delegator)
+
+        self.checker.check_delegator_btc_lst_stake_amount(to_delegator)
+        self.checker.check_delegator_btc_lst_realtime_amount(to_delegator)
+        self.checker.check_delegator_btc_lst_change_round(to_delegator)
+        self.checker.check_delegator_btc_lst_history_reward(to_delegator)
+
 
 class BurnLSTBtcAndPayBtcToRedeemer(TaskHandler):
     def on_task_ready(self):
@@ -558,3 +623,6 @@ class UpdateBtcLstStakeGradePercent(TaskHandler):
 
     def check_state(self):
         self.checker.check_btc_lst_stake_grade_percent()
+
+class CreatePayment(TaskHandler):
+    pass

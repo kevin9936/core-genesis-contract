@@ -8,6 +8,7 @@ from . import payment
 from . import task_handler
 from . import constants
 from .account_mgr import AccountMgr
+from .payment import BtcLSTLockWallet
 
 get_sponsor_addr = AccountMgr.get_sponsor_addr
 get_sponsee_addr = AccountMgr.get_sponsee_addr
@@ -107,6 +108,27 @@ class RegisterCandidate(Task):
         )
 
         self.notify_task_finish()
+
+class UnregisterCandidate(Task):
+    def pre_execute(self, params):
+        super().pre_execute(params)
+
+        assert len(params) == 1, f"Invalid params"
+        self.operator_addr = get_operator_addr(params[0])
+
+    def execute(self):
+        super().execute()
+        self.notify_task_ready()
+
+        candidate = self.chain.get_candidate(self.operator_addr)
+        CandidateHubMock[0].unregister(
+            {
+                'from': self.operator_addr
+            }
+        )
+
+        self.notify_task_finish()
+
 
 class SlashValidator(Task):
     def pre_execute(self, params):
@@ -536,6 +558,28 @@ class StakeLSTBtc(Task):
         self.tx_data.set_relayer(self.relayer)
         self.notify_task_finish()
 
+class TransferLSTBtc(Task):
+    def pre_execute(self, params):
+        super().pre_execute(params)
+
+        assert len(params) == 3, f"Invalid params"
+
+        self.from_delegator = get_delegator_addr(params[0])
+        self.to_delegator = get_delegator_addr(params[1])
+        self.amount = int(params[2] * constants.BTC_DECIMALS)
+
+    def execute(self):
+        super().execute()
+
+        self.notify_task_ready()
+        BitcoinLSTToken[0].transfer(
+            self.to_delegator,
+            self.amount,
+            {'from': self.from_delegator}
+        )
+        self.notify_task_finish()
+
+
 class BurnLSTBtcAndPayBtcToRedeemer(Task):
     def pre_execute(self, params):
         super().pre_execute(params)
@@ -619,6 +663,7 @@ class UnstakeLSTBtc(Task):
         self.tx_data.set_relayer(self.relayer)
         self.tx_data.set_block_number(tx.block_number)
         self.notify_task_finish()
+
 
 class ClaimReward(Task):
     def pre_execute(self, params):
@@ -779,3 +824,14 @@ class CreatePayment(Task):
             )
         self.script_pubkey = paymentInst.get_script_pubkey()
         self.redeem_script = paymentInst.get_redeem_script()
+
+        # wallet = BtcLSTLockWallet()
+        # wallet.from_payment(paymentInst)
+
+        # BitcoinLSTStakeMock[0].buildPkScript(wallet.get_hash(), wallet.get_payment_type())
+        # dataArr = BitcoinLSTStakeMock[0].getDataArr()
+        # print(f"type={wallet.get_payment_type()}")
+        # print(f"hash={wallet.get_hash()}")
+        # print(f"dataArr={dataArr}")
+        # print(f"part1={part1}")
+        # print(f"part2={part2}")

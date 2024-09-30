@@ -6,6 +6,83 @@ from .payment import BtcLSTLockWallet
 from .account_mgr import AccountMgr
 addr_to_name = AccountMgr.addr_to_name
 
+def partion(items, count, key):
+    assert isinstance(items, list)
+
+    if len(items) <= count:
+        return items
+
+    count = min(len(items), count)
+    partion_range(items, 0, len(items)-1, count, key)
+
+    ## for debug
+    # for item in items:
+    #     print(f"after {addr_to_name(item.get_operator_addr())} item={item}")
+
+    # validators = ValidatorSetMock[0].getValidatorOps()
+    # for validator in validators:
+    #     print(f"validator_on_chain {validator} {addr_to_name(validator)}")
+
+    return items[:count]
+
+
+def partion_range(items, left, right, count, key):
+    assert left <= right, f"Invalid range=[{left, {right}}]"
+
+    # print(f"partion_range left={left}, right={right}, count={count}")
+    # for item in items:
+    #     print(f"before {addr_to_name(item.get_operator_addr())} item={item}")
+
+    if count == 0 or right - left + 1 <= count:
+        return
+
+    l = left
+    r = right
+
+    pivot = left
+    pivot_item = items[pivot]
+    value = key(pivot_item)
+
+    # print(f"###### pivot={pivot}, value={value}")
+
+    while left < right:
+        while left < right:
+            if key(items[right]) < value:
+                right -= 1
+            else:
+                items[left] = items[right]
+                # print(f"    swap {right} -> {left}")
+                left += 1
+                break
+
+            # print(f"     left={left}, right={right}")
+
+        while left < right:
+            if key(items[left]) >= value:
+                left += 1
+            else:
+                items[right] = items[left]
+                # print(f"    swap {left} -> {right}")
+                right -= 1
+                break
+
+            # print(f"    left={left}, right={right}")
+
+        # for item in items:
+        #     print(f"pivot={left} {addr_to_name(item.get_operator_addr())} item={item}")
+
+    items[left] = pivot_item
+    left_count = left - l + 1
+
+    if left_count == count:
+        return
+
+    if left_count > count:
+        partion_range(items, l, left-1, count, key)
+    elif left_count < count:
+        partion_range(items, left+1, r, count-left_count, key)
+
+
 class ChainHandler:
     def __init__(self, chain) -> None:
         self.chain = chain
@@ -107,6 +184,7 @@ class ChainHandler:
 
     def update_validator_set(self):
         validators = self.select_validators_for_next_round()
+        assert len(validators) > 0
 
         # sync stake amount
         assets = self.chain.get_assets()
@@ -175,10 +253,17 @@ class ChainHandler:
         for candidate in available_candidates.values():
             candidate.get_stake_state().update_total_score()
 
-        sorted_candidates = dict(sorted(available_candidates.items(), key=lambda item: item[1].get_total_score(), reverse=True))
-        count = min(self.chain.get_validator_count(), len(sorted_candidates))
+        validators = partion(
+            list(available_candidates.values()),
+            self.chain.get_validator_count(),
+            key=lambda item: item.get_total_score()
+        )
 
-        return dict(islice(sorted_candidates.items(), count))
+        validator_dict = {}
+        for validator in validators:
+            validator_dict[validator.get_operator_addr()] = validator
+
+        return validator_dict
 
     def clean_slash_indicator(self):
         reduce_count =  self.chain.get_felony_threshold() // 4
@@ -304,6 +389,21 @@ class ChainHandler:
 
         self.chain.add_candidate(chain_state.Candidate(candidate_data))
         self.chain.add_balance(CandidateHubMock[0], margin)
+        self.chain.add_balance(operator_addr, -margin)
+
+    def remove_candidate(self, operator_addr):
+        candidate = self.chain.get_candidate(operator_addr)
+        margin = candidate.get_margin_amount()
+        dues = self.chain.get_candidate_dues()
+
+        deduct_amount = min(margin, dues)
+        refund_amount = margin - deduct_amount
+
+        self.chain.add_balance(SystemRewardMock[0], deduct_amount)
+        self.chain.add_balance(operator_addr, refund_amount)
+        self.chain.add_balance(CandidateHubMock[0], -margin)
+
+        self.chain.remove_candidate(operator_addr)
 
     def add_margin(self, operator_addr, amount):
         self.chain.add_balance(operator_addr, -amount)
@@ -606,27 +706,54 @@ class ChainHandler:
 
         # collect reward
         delegator = tx.get_delegator()
-        round = self.chain.get_round()
-        change_round = delegator_stake_state.get_btc_lst_change_round(delegator)
-
-        # collcet reward
-        btc_asset = self.chain.get_btc_asset()
-        if change_round < round:
-            # need check history reward
-            reward, accured_stake_amount = btc_asset.collect_btc_lst_reward(round, delegator, delegator_stake_state)
-            if reward > 0:
-                delegator_stake_state.add_btc_lst_history_reward(delegator, reward)
-
-            if accured_stake_amount > 0:
-                delegator_stake_state.add_btc_lst_history_accured_stake_amount(delegator, accured_stake_amount)
-
-            delegator_stake_state.update_btc_lst_change_round(delegator, round)
+        self.__update_btc_lst_reward(delegator)
 
         # update realtime amount
-        delegator = tx.get_delegator()
         amount = tx.get_amount()
         delegator_stake_state.add_btc_lst_realtime_amount(delegator, amount)
         delegator_stake_state.add_btc_lst_total_realtime_amount(amount)
+
+
+    def transfer_btc_lst(self, from_delegator, to_delegator, amount):
+        self.__update_btc_lst_balance(from_delegator, -amount)
+        self.__update_btc_lst_balance(to_delegator, amount)
+
+
+    def __update_btc_lst_balance(self, delegator, amount):
+        # erc20 balance
+        self.chain.add_btc_lst_balance(delegator, amount)
+
+        # reward
+        self.__update_btc_lst_reward(delegator)
+
+        # staked amount
+        delegator_stake_state = self.chain.get_delegator_stake_state()
+        delegator_stake_state.add_btc_lst_realtime_amount(delegator, amount)
+
+        is_sync = delegator_stake_state.get_btc_lst_stake_amount(delegator) > \
+            delegator_stake_state.get_btc_lst_realtime_amount(delegator)
+        if is_sync:
+            delegator_stake_state.sync_btc_lst_stake_amount(delegator)
+
+
+    def __update_btc_lst_reward(self, delegator):
+        delegator_stake_state = self.chain.get_delegator_stake_state()
+        change_round = delegator_stake_state.get_btc_lst_change_round(delegator)
+        round = self.chain.get_round()
+
+        btc_asset = self.chain.get_btc_asset()
+        if change_round >= round:
+            return
+
+        # need check history reward
+        reward, accured_stake_amount = btc_asset.collect_btc_lst_reward(round, delegator, delegator_stake_state)
+        if reward > 0:
+            delegator_stake_state.add_btc_lst_history_reward(delegator, reward)
+
+        if accured_stake_amount > 0:
+            delegator_stake_state.add_btc_lst_history_accured_stake_amount(delegator, accured_stake_amount)
+
+        delegator_stake_state.update_btc_lst_change_round(delegator, round)
 
 
     def redeem_btc_lst(self, delegator, amount, payment):

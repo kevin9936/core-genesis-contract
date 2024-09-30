@@ -41,7 +41,7 @@ class Candidate:
         self.commission_in_use = tuple_data[3]
 
     def __repr__(self):
-        return f"Candidate(operator_addr={self.operator_addr},commission={self.commission},commission_in_use={self.commission_in_use},status={self.status},income={self.income})"
+        return f"Candidate(operator_addr={self.operator_addr},score={self.get_total_score()},commission={self.commission},commission_in_use={self.commission_in_use},status={self.status},income={self.income})"
 
     def __eq__(self, other):
         if isinstance(other, Candidate):
@@ -221,6 +221,7 @@ class ChainState:
         self.validators = None
 
         self.balances = {}
+        self.btc_lst_balances = {}
 
         self.total_income = 0
         self.block_reward = 0
@@ -250,6 +251,11 @@ class ChainState:
     def init_balance(self, addr):
         if self.balances.get(addr) is None:
             self.balances[addr] = self.get_balance_on_chain(addr)
+
+    def init_btc_lst_balance(self, addr):
+        if self.btc_lst_balances.get(addr) is None:
+            self.btc_lst_balances[addr] = self.get_btc_lst_balance_on_chain(addr)
+
 
     def init_required_margin(self):
         self.candidate_required_margin = \
@@ -324,10 +330,23 @@ class ChainState:
         return self.balances.get(addr, 0)
 
     def add_balance(self, addr, delta_amount):
-        self.balances[addr] = self.balances[addr] + delta_amount
+        self.balances[addr] = self.get_balance(addr) + delta_amount
+        assert self.balances[addr] >= 0
 
     def update_balance(self, addr, amount):
+        assert amount >= 0
         self.balances[addr] = amount
+
+    def get_btc_lst_balance(self, addr):
+        return self.btc_lst_balances.get(addr, 0)
+
+    def add_btc_lst_balance(self, addr, delta_amount):
+        self.btc_lst_balances[addr] = self.get_btc_lst_balance(addr) + delta_amount
+        assert self.btc_lst_balances[addr] >= 0
+
+    def update_btc_lst_balance(self, addr, amount):
+        assert amount >= 0
+        self.btc_lst_balances[addr] = amount
 
     def get_assets(self):
         return [self.core_asset, self.power_asset, self.btc_asset]
@@ -466,6 +485,12 @@ class ChainState:
             addr = accounts.at(addr, force=True)
 
         return addr.balance()
+
+    def get_btc_lst_balance_on_chain(self, addr):
+        if isinstance(addr, str):
+            addr = accounts.at(addr, force=True)
+
+        return BitcoinLSTToken[0].balanceOf(addr)
 
     def get_candidate_on_chain(self, operator_addr):
         idx = CandidateHubMock[0].operateMap(operator_addr)

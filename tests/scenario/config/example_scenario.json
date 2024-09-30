@@ -9,6 +9,7 @@
             "NOTES": "except for the SponsorFund and RegisterCandidate, no other tasks can be configured in the initial round",
             "SponsorFund": "sponsee addr, sponsor addr",
             "RegisterCandidate": "operator addr, commision",
+            "UnregisterCandidate": "operator addr",
             "AddSystemRewardOperator": "contract name, e.g. StakeHub",
             "GenerateBlock": "block count",
             "StakeCore": "delegator, delegatee, core amount(without decimals 1e18)",
@@ -24,6 +25,7 @@
             "StakeLSTBtc": "lock tx data key, relayer addr",
             "BurnLSTBtcAndPayBtcToRedeemer": "tx data storage key, delegator, amount, payment type, redeem script type",
             "UnstakeLSTBtc": "unstake tx data key, relayer",
+            "TransferLSTBtc": "from delegator, to delegator, amount",
             "ClaimReward":"delegator1 addr,delegator2 addr, ...",
             "UpdateCoreStakeGradeFlag": "grade active value, 0 or 1",
             "UpdateCoreStakeGrades": "grades list",
@@ -44,6 +46,33 @@
             ["RegisterCandidate","P0",100],
             ["RegisterCandidate","P1",200],
             ["RegisterCandidate","P2",150],
+            ["RegisterCandidate","P3",100],
+            ["RegisterCandidate","P4",200],
+            ["RegisterCandidate","P5",150],
+            ["RegisterCandidate","P6",100],
+            ["RegisterCandidate","P7",200],
+            ["RegisterCandidate","P8",150],
+            ["RegisterCandidate","P9",100],
+            ["RegisterCandidate","P10",200],
+            ["RegisterCandidate","P11",150],
+            ["RegisterCandidate","P12",100],
+            ["RegisterCandidate","P13",200],
+            ["RegisterCandidate","P14",150],
+            ["RegisterCandidate","P15",100],
+            ["RegisterCandidate","P16",200],
+            ["RegisterCandidate","P17",150],
+            ["RegisterCandidate","P18",150],
+            ["RegisterCandidate","P19",150],
+            ["RegisterCandidate","P20",150],
+            ["RegisterCandidate","P21",150],
+            ["RegisterCandidate","P22",150],
+            ["RegisterCandidate","P23",150],
+            ["RegisterCandidate","P24",150],
+            ["RegisterCandidate","P25",150],
+            ["RegisterCandidate","P26",150],
+            ["RegisterCandidate","P27",150],
+            ["RegisterCandidate","P28",150],
+            ["RegisterCandidate","P29",150],
             ["AddSystemRewardOperator","StakeHub"]
         ],
         "1": [
@@ -111,7 +140,6 @@
             ["AddWallet","tx_007"],
             ["StakeLSTBtc","tx_007", "U1"],
             ["StakePower", "P0", 6, "U0", "U6","U5"],
-            ["TransferBtc", "tx_001", "U1", "P2"],
             ["ClaimReward","U0","U1","U2","U3","U4","U5","U6"]
         ],
         "9":[
@@ -144,11 +172,11 @@
         ],
         "13": [
             ["GenerateBlock", 9],
-            ["StakeCore", "U2", "P2", 15089]
+            ["StakeCore", "U2", "P3", 15089]
         ],
         "14":[
             ["GenerateBlock", 19],
-            ["TransferCore", "U0", "P0", "P2", 200]
+            ["TransferCore", "U0", "P0", "P3", 200]
         ],
         "15":[
             ["GenerateBlock", 10]
@@ -157,6 +185,33 @@
             ["GenerateBlock", 9],
             ["ClaimReward","U0","U1","U2","U3","U4","U5","U6"]
         ],
-        "17":[]
+        "17":[
+            ["GenerateBlock", 9],
+            ["CreatePayment", "P2PKH"],
+            ["CreatePayment", "P2SH", "P2PKH"],
+            ["CreatePayment", "P2WPKH"],
+            ["CreatePayment", "P2WSH", "P2MS"],
+            ["CreatePayment", "P2TR_SCRIPT"]
+        ],
+        "18": [
+            ["GenerateBlock", 9],
+            ["TransferLSTBtc", "U2", "U4", 2]
+        ],
+        "19": [
+            ["GenerateBlock", 9],
+            ["RefuseDelegate", "P20"]
+        ],
+        "20": [
+            ["GenerateBlock", 9],
+            ["ClaimReward","U2","U4"],
+            ["UnregisterCandidate", "P20"]
+        ],
+        "21": [
+            ["GenerateBlock", 9]
+        ],
+        "22": [
+            ["ClaimReward","U2","U4"],
+            ["UnregisterCandidate","P2"]
+        ]
     }
 }

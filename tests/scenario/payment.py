@@ -57,6 +57,9 @@ class BtcLSTLockWallet:
     def get_payment(self):
         return self.payment
 
+    def get_payment_type(self):
+        return self.payment_type
+
     def get_script_pubkey(self):
         assert self.script_pubkey is not None
         return self.script_pubkey

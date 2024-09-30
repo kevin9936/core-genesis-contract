@@ -22,6 +22,9 @@ class ChainChecker:
     def check_candidate_statuses(self):
         candidates = self.chain.get_candidates()
         operator_addr_list = CandidateHubMock[0].getCandidates()
+        # dataArr = CandidateHubMock[0].getDataArr()
+        # print(f"dataArr={dataArr}")
+
         for i in range(len(operator_addr_list)):
             tuple_data = CandidateHubMock[0].candidateSet(i)
             operator_addr = tuple_data[0]
@@ -32,15 +35,15 @@ class ChainChecker:
 
             commission = candidate_off_chain.get_commission()
             status = candidate_off_chain.get_status()
+            # print(f"{addr_to_name(operator_addr)}, status_on_chain={status_on_chain}, status_off_chain={status}")
 
-            assert_result("commission", commission, commission_on_chain)
-            assert_result("status", status, status_on_chain)
-
+            assert_result(f"{addr_to_name(operator_addr)}_commission", commission, commission_on_chain)
+            assert_result(f"{addr_to_name(operator_addr)}_status", status, status_on_chain)
 
     def check_validator_incomes(self):
         validators = self.chain.get_validators()
         operator_addr_list = ValidatorSetMock[0].getValidatorOps()
-        assert len(operator_addr_list) == len(validators)
+        assert len(operator_addr_list) == len(validators), f"{len(operator_addr_list)},{len(validators)}"
 
         for i in range(len(operator_addr_list)):
             validator_on_chain = ValidatorSetMock[0].currentValidatorSet(i)
@@ -109,13 +112,23 @@ class ChainChecker:
         balance = self.chain.get_balance(addr)
         balance_on_chain = self.chain.get_balance_on_chain(addr)
 
-        assert_result(addr_to_name(addr) + "_balance", balance, balance_on_chain)
+        assert_result(f"{addr_to_name(addr)}_balance", balance, balance_on_chain)
+
+    def check_btc_lst_balance(self, addr):
+        btc_lst_balance = self.chain.get_btc_lst_balance(addr)
+        btc_lst_balance_on_chain = self.chain.get_btc_lst_balance_on_chain(addr)
+
+        assert_result(f"{addr_to_name(addr)}_btc_lst_balance", btc_lst_balance, btc_lst_balance_on_chain)
 
     def check_candidate(self, operator_addr):
         candidate = self.chain.get_candidate(operator_addr)
         candidate_on_chain = self.chain.get_candidate_on_chain(operator_addr)
 
         assert_result("candidate", candidate, candidate_on_chain)
+
+    def check_candidate_removed(self, candidate):
+        idx = CandidateHubMock[0].operateMap(candidate.get_operator_addr())
+        assert idx == 0
 
     def check_slash_indicator(self, operator_addr):
         candidate = self.chain.get_candidate(operator_addr)
