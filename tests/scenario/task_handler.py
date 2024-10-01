@@ -355,6 +355,7 @@ class StakePower(TaskHandler):
 class StakeBtc(TaskHandler):
     def on_task_ready(self):
         super().on_task_ready()
+        self.checker.check_btc_stake_realtime_amount(self.task.tx_data.get_delegatee())
 
     def on_task_finish(self):
         super().on_task_finish()
@@ -406,6 +407,7 @@ class StakeLSTBtc(TaskHandler):
     def on_task_ready(self):
         super().on_task_ready()
         delegator = self.task.tx_data.get_delegator()
+        self.chain.init_btc_lst_balance(delegator)
         self.checker.check_delegator_btc_lst_history_reward(delegator)
 
     def on_task_finish(self):
@@ -417,6 +419,7 @@ class StakeLSTBtc(TaskHandler):
     def check_state(self):
         txid = self.task.tx_data.get_txid()
         delegator = self.task.tx_data.get_delegator()
+        self.checker.check_btc_lst_balance(delegator)
         self.checker.check_btc_lst_stake_tx(txid)
         self.checker.check_btc_lst_total_realtime_amount()
         self.checker.check_delegator_btc_lst_stake_amount(delegator)
@@ -430,6 +433,9 @@ class TransferLSTBtc(TaskHandler):
         super().on_task_ready()
         self.chain.init_btc_lst_balance(self.task.from_delegator)
         self.chain.init_btc_lst_balance(self.task.to_delegator)
+        self.checker.check_btc_lst_balance(self.task.from_delegator)
+        self.checker.check_btc_lst_balance(self.task.to_delegator)
+
 
     def on_task_finish(self):
         super().on_task_finish()
@@ -465,6 +471,7 @@ class TransferLSTBtc(TaskHandler):
 class BurnLSTBtcAndPayBtcToRedeemer(TaskHandler):
     def on_task_ready(self):
         super().on_task_ready()
+        self.chain.init_btc_lst_balance(self.task.delegator)
 
     def on_task_finish(self):
         super().on_task_finish()
@@ -477,6 +484,7 @@ class BurnLSTBtcAndPayBtcToRedeemer(TaskHandler):
 
     def check_state(self):
         delegator = self.task.delegator
+        self.checker.check_btc_lst_balance(delegator)
         self.checker.check_btc_lst_redeem_requests()
         self.checker.check_btc_lst_total_realtime_amount()
         self.checker.check_delegator_btc_lst_stake_amount(delegator)
@@ -526,9 +534,9 @@ class ClaimReward(TaskHandler):
         self.checker.check_balance(self.task.account)
         # in fact the relayer has no rewards
         self.checker.check_creditor_contributions(self.task.account)
-        self.checker.check_total_unclaimed_reward()
-        self.checker.check_balance(StakeHubMock[0])
         self.checker.check_balance(SystemRewardMock[0])
+        self.checker.check_balance(StakeHubMock[0])
+        self.checker.check_total_unclaimed_reward()
 
 class AddSystemRewardOperator(TaskHandler):
     pass

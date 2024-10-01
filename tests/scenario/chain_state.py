@@ -19,6 +19,7 @@ class Candidate:
         self.operator = None
         self.slash_count = 0
         self.latest_slash_block = 0
+        self.removed = False
 
         if tuple_data is None:
             self.commission = 0
@@ -62,18 +63,25 @@ class Candidate:
         return self.jailed_round <= round
 
     def disable_delegate(self):
+        assert not self.is_removed()
         self.status = self.status | NodeStatus.INACTIVE.value
 
     def enable_delegate(self):
+        assert not self.is_removed()
         self.status = self.status & ~NodeStatus.INACTIVE.value
 
     def set_vldt(self):
+        assert not self.is_removed()
         self.status = self.status | NodeStatus.VALIDATOR.value
 
     def unset_vldt(self):
+        if self.is_removed():
+            return
+
         self.status = self.status & ~NodeStatus.VALIDATOR.value
 
     def set_jail(self, round, jail_round):
+        assert not self.is_removed()
         self.status = self.status | NodeStatus.JAIL.value
         if self.jailed_round == 0:
             self.jailed_round = round + jail_round
@@ -84,32 +92,49 @@ class Candidate:
         return self.jailed_round
 
     def unset_jail(self):
+        if self.is_removed():
+            return
+
         self.status = self.status & ~NodeStatus.JAIL.value
         self.jailed_round = 0
 
+    def set_removed(self):
+        self.removed = True
+
+    def is_removed(self):
+        return self.removed
+
     def set_margin(self):
+        assert not self.is_removed()
         self.status = self.status | NodeStatus.MARGIN.value
 
     def unset_margin(self):
+        assert not self.is_removed()
         self.status = self.status & ~NodeStatus.MARGIN.value
 
     def is_lack_of_collateral(self):
         return (self.status & NodeStatus.MARGIN.value) == NodeStatus.MARGIN.value
 
     def can_delegate(self):
+        assert not self.is_removed()
+
         return self.status == NodeStatus.CANDIDATE.value or \
             self.status == NodeStatus.VALIDATOR.value or \
             self.status == (NodeStatus.CANDIDATE.value | NodeStatus.VALIDATOR.value)
 
     def can_unregister(self):
-        return self.status == NodeStatus.CANDIDATE.value or \
-            self.status == NodeStatus.MARGIN.value or \
-            self.status == NodeStatus.INACTIVE.value
+        assert not self.is_removed()
+
+        return self.status == (self.status & (NodeStatus.CANDIDATE.value|NodeStatus.MARGIN.value|NodeStatus.INACTIVE.value))
 
     def is_validator(self):
+        assert not self.is_removed()
         return NodeStatus.VALIDATOR.value == (self.status & NodeStatus.VALIDATOR.value)
 
     def is_available(self):
+        if self.is_removed():
+            return False
+
         return self.status == NodeStatus.CANDIDATE.value or \
             self.status == (NodeStatus.CANDIDATE.value | NodeStatus.VALIDATOR.value)
 
@@ -121,6 +146,9 @@ class Candidate:
 
     def get_stake_state(self):
         return self.stake_state
+
+    def set_stake_state(self, stake_state):
+        self.stake_state = stake_state
 
     def get_total_score(self):
         return self.stake_state.get_total_score()
@@ -367,11 +395,36 @@ class ChainState:
         return self.candidates[operator_addr]
 
     def add_candidate(self, candidate):
-        assert self.candidates.get(candidate.operator_addr) is None
-        self.candidates[candidate.operator_addr] = candidate
+        operator_addr = candidate.get_operator_addr()
+        if self.candidates.get(operator_addr) is not None:
+            self.candidates.pop(operator_addr)
+
+        self.candidates[operator_addr] = candidate
 
     def remove_candidate(self, operator_addr):
-        self.candidates.pop(operator_addr)
+        self.candidates[operator_addr].set_removed()
+
+        # swap with last item, because quick sort is not stable
+        candidate_count = len(self.candidates)
+        if candidate_count == 1:
+            return
+
+        idx = 0
+        for addr in self.candidates.keys():
+            if addr == operator_addr:
+                break
+            idx += 1
+
+        if idx == candidate_count - 1:
+            return
+
+        items = list(self.candidates.items())
+        last_item = items[candidate_count-1]
+        items[candidate_count-1] = items[idx]
+        items[idx] = last_item
+
+        self.candidates = dict(items)
+
 
     def get_validator(self, operator_addr):
         return self.validators.get(operator_addr)
@@ -630,6 +683,7 @@ class ChainState:
 
     def claim_system_reward(self, receiver, amount):
         balance = self.get_balance(SystemRewardMock[0])
+        print(f"SystemReward balance off_chain={balance}, on_chain={self.get_balance_on_chain(SystemRewardMock[0])}, expect claim={amount}")
         amount = min(balance, amount)
         self.add_balance(receiver, amount)
         self.add_balance(SystemRewardMock[0], -amount)

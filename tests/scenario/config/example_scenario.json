@@ -167,8 +167,7 @@
             ["UnstakeLSTBtc","tx_011", "U1"]
         ],
         "12": [
-            ["GenerateBlock", 12],
-            ["ClaimReward","U0","U1","U2","U3","U4","U5","U6"]
+            ["GenerateBlock", 12]
         ],
         "13": [
             ["GenerateBlock", 9],
@@ -182,8 +181,7 @@
             ["GenerateBlock", 10]
         ],
         "16":[
-            ["GenerateBlock", 9],
-            ["ClaimReward","U0","U1","U2","U3","U4","U5","U6"]
+            ["GenerateBlock", 9]
         ],
         "17":[
             ["GenerateBlock", 9],
@@ -203,14 +201,13 @@
         ],
         "20": [
             ["GenerateBlock", 9],
-            ["ClaimReward","U2","U4"],
             ["UnregisterCandidate", "P20"]
         ],
         "21": [
             ["GenerateBlock", 9]
         ],
         "22": [
-            ["ClaimReward","U2","U4"],
+            ["ClaimReward","U0","U2","U4"],
             ["UnregisterCandidate","P2"]
         ]
     }
