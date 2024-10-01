@@ -181,8 +181,8 @@ contract CoreAgent is IAgent, System, IParamSubscriber {
   /// @param candidate The operator address of validator
   /// @param amount The amount of CORE to undelegate
   function undelegateCoin(address candidate, uint256 amount) public {
-    _undelegateCoin(candidate, msg.sender, amount, false);
-    _deductTransferredAmount(msg.sender, amount);
+    uint256 dAmount = _undelegateCoin(candidate, msg.sender, amount, false);
+    _deductTransferredAmount(msg.sender, dAmount);
     Address.sendValue(payable(msg.sender), amount);
     emit undelegatedCoin(candidate, msg.sender, amount);
   }
@@ -294,8 +294,8 @@ contract CoreAgent is IAgent, System, IParamSubscriber {
         amount = candidateMap[candidate].cDelegatorMap[delegator].stakedAmount;
       }
     }
-    _undelegateCoin(candidate, delegator, amount, false);
-    _deductTransferredAmount(msg.sender, amount);
+    uint256 dAmount = _undelegateCoin(candidate, delegator, amount, false);
+    _deductTransferredAmount(msg.sender, dAmount);
     Address.sendValue(payable(PLEDGE_AGENT_ADDR), amount);
     emit undelegatedCoin(candidate, delegator, amount);
     return amount;
@@ -358,7 +358,8 @@ contract CoreAgent is IAgent, System, IParamSubscriber {
   /// @param delegator the delegator address
   /// @param amount the amount of CORE 
   /// @param isTransfer is called from transfer workflow
-  function _undelegateCoin(address candidate, address delegator, uint256 amount, bool isTransfer) internal {
+  /// @return undelegatedNewAmount the amount minuses the reduced staked amount.
+  function _undelegateCoin(address candidate, address delegator, uint256 amount, bool isTransfer) internal returns (uint256 undelegatedNewAmount) {
     require(amount != 0, 'Undelegate zero coin');
     Candidate storage a = candidateMap[candidate];
     CoinDelegator storage cd = a.cDelegatorMap[delegator];
@@ -402,6 +403,7 @@ contract CoreAgent is IAgent, System, IParamSubscriber {
         cd.stakedAmount = 0;
       }
     }
+    undelegatedNewAmount = amount - (stakedAmount - cd.stakedAmount);
   }
 
   function _deductTransferredAmount(address delegator, uint256 amount) internal {
