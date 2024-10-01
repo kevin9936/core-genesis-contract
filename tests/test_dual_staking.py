@@ -2,8 +2,7 @@ import brownie
 import pytest
 from brownie import *
 from .calc_reward import set_delegate, parse_delegation, Discount, set_btc_lst_delegate
-from .common import register_candidate, turn_round, get_current_round, claim_stake_and_relay_reward, \
-    stake_hub_claim_reward, claim_relayer_reward, set_round_tag
+from .common import register_candidate, turn_round, get_current_round, stake_hub_claim_reward, set_round_tag
 from .delegate import *
 from .utils import *
 
@@ -103,7 +102,7 @@ def test_delegate_btc_success_public_hash(btc_stake, set_candidate):
     })
     turn_round(consensuses)
     tracker = get_tracker(accounts[0])
-    tx = claim_stake_and_relay_reward(accounts[0])
+    tx = stake_hub_claim_reward(accounts[0])
     assert "claimedReward" in tx.events
     reward, _ = __calc_btc_deducted_stake_duration_reward(TOTAL_REWARD, stake_duration)
     assert tracker.delta() == reward
@@ -118,7 +117,7 @@ def test_claim_btc_rewards_for_various_stake_durations(btc_stake, set_candidate,
     turn_round()
     turn_round(consensuses)
     tracker = get_tracker(accounts[0])
-    tx = claim_stake_and_relay_reward(accounts[0])
+    tx = stake_hub_claim_reward(accounts[0])
     assert "claimedReward" in tx.events
     reward, unclaimed_reward = __calc_btc_deducted_stake_duration_reward(TOTAL_REWARD, pledge_days)
     assert tracker.delta() == reward
@@ -131,7 +130,7 @@ def test_no_duration_discount_without_btc_rewards(btc_stake, set_candidate):
     delegate_btc_success(operators[0], accounts[0], BTC_VALUE, LOCK_SCRIPT)
     turn_round()
     tracker = get_tracker(accounts[0])
-    claim_stake_and_relay_reward(accounts[0])
+    stake_hub_claim_reward(accounts[0])
     assert tracker.delta() == 0
     assert STAKE_HUB.surplus() == 0
 
@@ -146,7 +145,7 @@ def test_enable_disable_duration_discount(btc_stake, set_candidate, is_active):
     turn_round()
     turn_round(consensuses)
     tracker = get_tracker(accounts[0])
-    claim_stake_and_relay_reward(accounts[0])
+    stake_hub_claim_reward(accounts[0])
     if is_active == 0:
         stake_duration = 360
     reward, unclaimed_reward = __calc_btc_deducted_stake_duration_reward(TOTAL_REWARD, stake_duration)
@@ -163,7 +162,7 @@ def test_no_stake_duration_rewards(btc_stake, set_candidate, is_active):
     turn_round()
     turn_round(consensuses)
     tracker = get_tracker(accounts[0])
-    claim_stake_and_relay_reward(accounts[0])
+    stake_hub_claim_reward(accounts[0])
     assert tracker.delta() == TOTAL_REWARD
     assert STAKE_HUB.surplus() == 0
 
@@ -177,7 +176,7 @@ def test_one_level_stake_duration_reward(btc_stake, set_candidate, tlp):
     turn_round()
     turn_round(consensuses)
     tracker = get_tracker(accounts[0])
-    claim_stake_and_relay_reward(accounts[0])
+    stake_hub_claim_reward(accounts[0])
     reward, unclaimed_reward = __calc_btc_deducted_stake_duration_reward(TOTAL_REWARD, MONTH,
                                                                          tlp_rates={tlp[0]: tlp[1]})
     assert tracker.delta() == reward
@@ -198,7 +197,7 @@ def test_each_bracket_discounted_rewards_accuracy(btc_stake, candidate_hub, btc_
     core_acc_stake_amount = __update_core_stake_amount(accounts[0], core_rate, BTC_VALUE)
     tracker = get_tracker(accounts[0])
     reward, unclaimed_reward = __calc_stake_amount_discount(BLOCK_REWARD // 2, BTC_VALUE, core_acc_stake_amount)
-    tx = claim_stake_and_relay_reward(accounts[0])
+    tx = stake_hub_claim_reward(accounts[0])
     assert "claimedReward" in tx.events
     assert tracker.delta() == reward
     assert STAKE_HUB.surplus() == unclaimed_reward
@@ -222,7 +221,7 @@ def test_btc_reward_discount_by_core_stake_amount(btc_stake, candidate_hub, btc_
         core_reward = TOTAL_REWARD * Utils.CORE_STAKE_DECIMAL // (BTC_VALUE * core_rate) * (
                 BTC_VALUE * core_rate) // Utils.CORE_STAKE_DECIMAL
     reward, unclaimed_reward = __calc_stake_amount_discount(TOTAL_REWARD, BTC_VALUE, BTC_VALUE * core_rate)
-    tx = claim_stake_and_relay_reward(accounts[0])
+    tx = stake_hub_claim_reward(accounts[0])
     if core_rate >= 15000:
         assert tx.events['rewardTo']['amount'] == (reward - TOTAL_REWARD) * 10
     assert tracker.delta() == reward + core_reward
@@ -251,7 +250,7 @@ def test_btc_lst_reward_unaffected_by_core_amount(btc_stake, set_candidate, btc_
     turn_round(consensuses, round_count=2)
     btc_reward = TOTAL_REWARD * 3
     tracker = get_tracker(accounts[0])
-    claim_stake_and_relay_reward(accounts[0])
+    stake_hub_claim_reward(accounts[0])
     assert tracker.delta() == btc_reward // 2
     assert STAKE_HUB.surplus() == btc_reward - btc_reward // 2
 
@@ -265,7 +264,7 @@ def test_update_btc_lst_percentage_and_claim(btc_stake, set_candidate, btc_lst_s
     turn_round(consensuses, round_count=2)
     btc_reward = TOTAL_REWARD * 3
     tracker = get_tracker(accounts[0])
-    claim_stake_and_relay_reward(accounts[0])
+    stake_hub_claim_reward(accounts[0])
     assert tracker.delta() == btc_reward * percentage // Utils.DENOMINATOR
     assert STAKE_HUB.surplus() == btc_reward - btc_reward * percentage // Utils.DENOMINATOR
 
@@ -286,7 +285,7 @@ def test_core_hash_btc_rewards_discounted_by_core_ratio(btc_stake, candidate_hub
     core_acc_stake_amount = __update_core_stake_amount(accounts[0], core_rate, btc_value)
     btc_reward, btc_unclaimed_reward = __calc_stake_amount_discount(TOTAL_REWARD, btc_value, core_acc_stake_amount)
     tracker = get_tracker(accounts[0])
-    claim_stake_and_relay_reward(accounts[0])
+    stake_hub_claim_reward(accounts[0])
     assert tracker.delta() == btc_reward + TOTAL_REWARD
     assert STAKE_HUB.surplus() == btc_unclaimed_reward
 
@@ -307,12 +306,12 @@ def test_power_btc_discount_conversion_success(btc_stake, btc_agent,
     delegate_btc_success(operators[2], accounts[0], btc_value, LOCK_SCRIPT)
     delegate_power_success(operators[1], accounts[0], power_value)
     turn_round(consensuses, round_count=2)
-    rewards, debt_amount = stake_hub.claimReward.call()
+    rewards = stake_hub.claimReward.call()
     tracker = get_tracker(accounts[0])
     stake_hub_claim_reward(accounts[0])
     assert rewards[1] == TOTAL_REWARD
     assert rewards[2] == TOTAL_REWARD * Utils.BTC_DECIMAL // btc_value * 100
-    assert tracker.delta() == sum(rewards) - debt_amount
+    assert tracker.delta() == sum(rewards)
 
 
 def test_multiple_validators_stake_ratio(btc_stake, candidate_hub, btc_light_client,
@@ -329,7 +328,7 @@ def test_multiple_validators_stake_ratio(btc_stake, candidate_hub, btc_light_cli
     delegate_btc_success(operators[2], accounts[0], btc_value, LOCK_SCRIPT, stake_duration=YEAR)
     turn_round()
     turn_round(consensuses)
-    rewards, debt_amount = stake_hub_claim_reward(accounts[0]).return_value
+    rewards = stake_hub_claim_reward(accounts[0]).return_value
     assert rewards[2] == TOTAL_REWARD // 2
 
 
@@ -349,7 +348,7 @@ def test_btc_and_core_stake_in_same_validator(btc_stake, candidate_hub, btc_ligh
         "btc": [set_delegate(accounts[0], BTC_VALUE)]
     }], BLOCK_REWARD // 2, state_map={'core_lp': True})
     tracker = get_tracker(accounts[0])
-    tx = claim_stake_and_relay_reward(accounts[0])
+    tx = stake_hub_claim_reward(accounts[0])
     assert "claimedReward" in tx.events
     assert tracker.delta() == account_rewards[accounts[0]]
 
@@ -365,7 +364,7 @@ def test_success_with_over_100_percent_discount(btc_stake, btc_agent, set_candid
     delegate_btc_success(operators[0], accounts[0], BTC_VALUE, LOCK_SCRIPT, stake_duration=YEAR)
     turn_round()
     turn_round(consensuses)
-    tx = claim_stake_and_relay_reward(accounts[0])
+    tx = stake_hub_claim_reward(accounts[0])
     assert 'claimedReward' in tx.events
 
 
@@ -393,7 +392,7 @@ def test_normal_duration_and_reward_discounts(btc_stake, set_candidate, candidat
         "coin": [set_delegate(accounts[0], DELEGATE_VALUE), set_delegate(accounts[1], delegate_amount)],
     }], BLOCK_REWARD // 2, state_map={'core_lp': True})
     tracker = get_tracker(accounts[0])
-    tx = claim_stake_and_relay_reward(accounts[0])
+    tx = stake_hub_claim_reward(accounts[0])
     assert "claimedReward" in tx.events
     assert tracker.delta() == account_rewards[accounts[0]]
     assert STAKE_HUB.surplus() == unclaimed_reward['total_bonus'] > 0
@@ -427,7 +426,7 @@ def test_multiple_btc_stakes_and_reward_claim(btc_stake, set_candidate, candidat
         "coin": [set_delegate(accounts[0], DELEGATE_VALUE // 2), set_delegate(accounts[1], DELEGATE_VALUE // 2)],
     }], BLOCK_REWARD // 2, state_map={'core_lp': True})
     tracker = get_tracker(accounts[0])
-    tx = claim_stake_and_relay_reward(accounts[0])
+    tx = stake_hub_claim_reward(accounts[0])
     assert "claimedReward" in tx.events
     assert tracker.delta() == account_rewards[accounts[0]]
     assert STAKE_HUB.surplus() == unclaimed_reward['total_bonus'] > 0
@@ -448,7 +447,7 @@ def test_deducted_rewards_added_to_next_round_btc(btc_stake, set_candidate, cand
         "btc": [set_delegate(accounts[0], BTC_VALUE, stake_duration=MONTH)]
     }], BLOCK_REWARD // 2, state_map={'core_lp': True})
     tracker = get_tracker(accounts[0])
-    claim_stake_and_relay_reward(accounts[0])
+    stake_hub_claim_reward(accounts[0])
     assert tracker.delta() == account_rewards[accounts[0]]
     turn_round(consensuses)
     assert STAKE_HUB.surplus() == unclaimed_reward['btc']
@@ -460,7 +459,7 @@ def test_deducted_rewards_added_to_next_round_btc(btc_stake, set_candidate, cand
         "btc": [set_delegate(accounts[0], BTC_VALUE, stake_duration=MONTH)]
     }
     ], BLOCK_REWARD // 2, state_map={'core_lp': True}, compensation_reward=unclaimed_reward)
-    claim_stake_and_relay_reward(accounts[0])
+    stake_hub_claim_reward(accounts[0])
     assert tracker.delta() == account_rewards[accounts[0]]
     assert STAKE_HUB.surplus() == unclaimed_reward1['btc']
 
@@ -480,8 +479,8 @@ def test_multiple_users_rewards_deducted(btc_stake, set_candidate, candidate_hub
                 set_delegate(accounts[1], BTC_VALUE // 4, stake_duration=150)]
     }], BLOCK_REWARD // 2, state_map={'core_lp': True})
     tracker = get_tracker(accounts[0])
-    claim_stake_and_relay_reward(accounts[0])
-    claim_stake_and_relay_reward(accounts[1])
+    stake_hub_claim_reward(accounts[0])
+    stake_hub_claim_reward(accounts[1])
     unclaimed_reward = STAKE_HUB.surplus()
     assert tracker.delta() == account_rewards[accounts[0]]
     assert unclaimed_reward == unclaimed_rewards['total_bonus']
@@ -499,7 +498,7 @@ def test_btc_stake_without_coin_stake(set_candidate):
         "coin": [set_delegate(accounts[2], delegate_amount)],
         "btc": [set_delegate(accounts[0], BTC_VALUE, stake_duration=MONTH)]
     }], BLOCK_REWARD // 2, state_map={'core_lp': 4})
-    claim_stake_and_relay_reward(accounts[0])
+    stake_hub_claim_reward(accounts[0])
     unclaimed_reward = STAKE_HUB.surplus()
     turn_round(consensuses)
     assert unclaimed_reward == unclaimed_rewards['total_bonus']
@@ -517,7 +516,7 @@ def test_turn_round_btc_rewards_without_btc_stake(stake_hub, set_candidate):
     delegate_btc_success(operators[0], accounts[0], BTC_VALUE, LOCK_SCRIPT, stake_duration=YEAR)
     turn_round()
     turn_round(consensuses)
-    claim_stake_and_relay_reward(accounts[0])
+    stake_hub_claim_reward(accounts[0])
     unclaimed_reward = stake_hub.surplus()
     tx = turn_round(consensuses)
     assert 'roundReward' in tx.events
@@ -533,9 +532,9 @@ def test_turn_round_core_rewards_without_core_stake(btc_stake, stake_hub, set_ca
     delegate_btc_success(operators[0], accounts[0], BTC_VALUE, LOCK_SCRIPT, stake_duration=YEAR)
     turn_round()
     turn_round(consensuses)
-    claim_stake_and_relay_reward(accounts[0])
+    stake_hub_claim_reward(accounts[0])
     turn_round(consensuses)
-    claim_stake_and_relay_reward(accounts[0])
+    stake_hub_claim_reward(accounts[0])
     unclaimed_reward = stake_hub.surplus()
     tx = turn_round(consensuses)
     discount = 1000
@@ -553,14 +552,14 @@ def test_btc_lst_discount_by_percentage(btc_stake, set_candidate, btc_agent, per
     hex_value = padding_left(Web3.to_hex(int(percentage)), 64)
     btc_agent.updateParam('lstGradePercentage', hex_value, {'from': accounts[0]})
     tracker = get_tracker(accounts[0])
-    claim_stake_and_relay_reward(accounts[0])
+    stake_hub_claim_reward(accounts[0])
     btc_reward = TOTAL_REWARD * 3
     actual_reward = TOTAL_REWARD * 3 * percentage // Utils.DENOMINATOR
     bonus = btc_reward - actual_reward
     assert tracker.delta() == actual_reward
     assert STAKE_HUB.surplus() == bonus
     turn_round(consensuses)
-    claim_stake_and_relay_reward(accounts[0])
+    stake_hub_claim_reward(accounts[0])
     assert STAKE_HUB.surplus() == bonus * 2
 
 
@@ -574,13 +573,13 @@ def test_btc_lst_claim_extra_reward(btc_stake, set_candidate, btc_agent, percent
     hex_value = padding_left(Web3.to_hex(int(percentage[0])), 64)
     btc_agent.updateParam('lstGradePercentage', hex_value, {'from': accounts[0]})
     tracker = get_tracker(accounts[0])
-    claim_stake_and_relay_reward(accounts[0])
+    stake_hub_claim_reward(accounts[0])
     actual_reward = TOTAL_REWARD * 3 * percentage[0] // Utils.DENOMINATOR
     assert tracker.delta() == actual_reward
     bonus = percentage[1]
     assert STAKE_HUB.surplus() == bonus
     turn_round(consensuses)
-    claim_stake_and_relay_reward(accounts[0])
+    stake_hub_claim_reward(accounts[0])
     bonus -= (actual_reward - TOTAL_REWARD * 3)
     assert STAKE_HUB.surplus() == bonus
 
@@ -597,7 +596,7 @@ def test_bonus_exclusive_to_btc_stake(btc_stake, btc_agent, set_candidate, stake
     tracker0 = get_tracker(accounts[0])
     tracker1 = get_tracker(accounts[1])
     tracker2 = get_tracker(accounts[2])
-    claim_stake_and_relay_reward(accounts[:3])
+    stake_hub_claim_reward(accounts[:3])
     assert tracker0.delta() == TOTAL_REWARD
     assert tracker1.delta() == TOTAL_REWARD
     assert tracker2.delta() == TOTAL_REWARD * 2
@@ -612,7 +611,7 @@ def test_no_extra_bonus_for_btc_lst_state(btc_stake, btc_agent, set_candidate, s
     delegate_btc_lst_success(accounts[0], BTC_LST_VALUE, BTCLST_LOCK_SCRIPT, percentage=Utils.DENOMINATOR)
     turn_round(consensuses, round_count=2)
     tracker0 = get_tracker(accounts[0])
-    claim_stake_and_relay_reward(accounts[:3])
+    stake_hub_claim_reward(accounts[:3])
     assert tracker0.delta() == TOTAL_REWARD * 3
     assert stake_hub.surplus() == 0
 
@@ -627,7 +626,7 @@ def test_btc_staking_reward_depleted(btc_stake, set_candidate, btc_lst_stake, st
     delegate_btc_lst_success(accounts[0], BTC_VALUE, BTCLST_LOCK_SCRIPT, 0)
     turn_round(consensuses, round_count=2)
     tracker0 = get_tracker(accounts[0])
-    claim_stake_and_relay_reward(accounts[0])
+    stake_hub_claim_reward(accounts[0])
     assert tracker0.delta() == 0
     turn_round(consensuses)
 
@@ -649,7 +648,7 @@ def test_btc_expired_excluded_from_stake(btc_stake, set_candidate, btc_lst_stake
     # current_round = 20106
     # the effective staking duration of BTC is only 1 round, and Coin has 4 rounds, so the acc_stake_amount ratio is 1:40000
     tracker = get_tracker(accounts[0])
-    claim_stake_and_relay_reward(accounts[0])
+    stake_hub_claim_reward(accounts[0])
     assert tracker.delta() == TOTAL_REWARD * 5
 
 
@@ -667,7 +666,7 @@ def test_acc_stake_amount_after_btc_transfer(btc_stake, set_candidate, btc_lst_s
     transfer_btc_success(tx_id, operators[2], accounts[0])
     turn_round(consensuses, round_count=round)
     tracker = get_tracker(accounts[0])
-    claim_stake_and_relay_reward(accounts[0])
+    stake_hub_claim_reward(accounts[0])
     btc_round = 0
     core_round = 0
     if round > 1:
@@ -704,7 +703,7 @@ def test_calc_stake_after_coin_unstake(btc_stake, set_candidate, btc_lst_stake, 
     undelegate_coin_success(operators[0], delegate_amount // 2, accounts[0])
     turn_round(consensuses, round_count=2)
     tracker = get_tracker(accounts[0])
-    claim_stake_and_relay_reward(accounts[0])
+    stake_hub_claim_reward(accounts[0])
     power_reward = TOTAL_REWARD // power_value * power_value
     btc_reward = TOTAL_REWARD // 2
     coin_reward = TOTAL_REWARD + TOTAL_REWARD * Utils.CORE_STAKE_DECIMAL // delegate_amount * (
@@ -732,7 +731,7 @@ def test_calc_stake_after_coin_transfer(btc_stake, btc_lst_stake):
     transfer_coin_success(operators[0], operators[3], delegate_amount, accounts[0])
     turn_round(consensuses, round_count=2)
     tracker = get_tracker(accounts[0])
-    claim_stake_and_relay_reward(accounts[0])
+    stake_hub_claim_reward(accounts[0])
     power_reward = TOTAL_REWARD
     btc_reward = TOTAL_REWARD * Utils.BTC_DECIMAL // btc_value * btc_value // Utils.BTC_DECIMAL
     coin_reward = TOTAL_REWARD * 2
@@ -782,7 +781,7 @@ def test_dual_staking_reward_in_current_round(btc_stake, btc_agent, stake_hub, v
             transfer_btc_success(tx_id, operators[1], accounts[0])
     turn_round(consensuses, round_count=round_count, tx_fee=tx_fee)
     tracker = get_tracker(accounts[0])
-    claim_stake_and_relay_reward(accounts[0])
+    stake_hub_claim_reward(accounts[0])
     if round_count == 0:
         assert tracker.delta() == 0
         assert stake_hub.surplus() == 0
@@ -824,7 +823,7 @@ def test_dual_staking_reward_after_rounds(btc_stake, btc_agent, stake_hub, valid
             transfer_btc_success(tx_id, operators[2], accounts[0])
     turn_round(consensuses, round_count=2, tx_fee=tx_fee)
     tracker = get_tracker(accounts[0])
-    claim_stake_and_relay_reward(accounts[0])
+    stake_hub_claim_reward(accounts[0])
     coin_reward = total_reward * 2
     btc_reward = tests['expect_btc_reward']
     assert tracker.delta() == btc_reward + coin_reward
@@ -1006,7 +1005,7 @@ def __calculate_compensation_reward_for_staking(operators, consensuses):
         "btc": []
     }], BLOCK_REWARD // 2, core_lp=True)
     tracker = get_tracker(accounts[0])
-    claim_stake_and_relay_reward(accounts[0])
+    stake_hub_claim_reward(accounts[0])
     assert tracker.delta() == account_rewards[accounts[0]]
     return (unclaimed_reward, round_reward)
 

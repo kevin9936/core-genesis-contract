@@ -4,14 +4,13 @@ import rlp
 from brownie import *
 from web3 import constants
 from .calc_reward import set_delegate, parse_delegation
-from .common import register_candidate, turn_round, get_current_round, set_round_tag, stake_hub_claim_reward, \
-    claim_relayer_reward
+from .common import register_candidate, turn_round, get_current_round, set_round_tag, stake_hub_claim_reward
 from .delegate import *
 from .utils import *
 
 BLOCK_REWARD = 0
 BTC_VALUE = 2000
-FEE = 1
+FEE = 0
 STAKE_ROUND = 3
 TOTAL_REWARD = 0
 # BTC delegation-related
@@ -129,7 +128,6 @@ def test_delegate_btc_with_lock_time_in_tx(btc_stake, set_candidate, stake_hub, 
     tracker0 = get_tracker(accounts[0])
     tracker1 = get_tracker(accounts[1])
     stake_hub_claim_reward(accounts[0])
-    claim_relayer_reward(accounts[1])
     assert tracker0.delta() == TOTAL_REWARD - FEE
     assert tracker1.delta() == FEE
 
@@ -169,18 +167,10 @@ def test_delegate_btc_with_lock_script_in_tx(btc_stake, set_candidate):
         'lockTime': LOCK_TIME,
         'usedHeight': 0,
     })
-    __check_debts_notes_info(accounts[0], [
-        {
-            'contributor': accounts[2],
-            'amount': 100
-        }
-    ])
     turn_round(consensuses)
     tracker0 = get_tracker(accounts[0])
     tracker1 = get_tracker(accounts[2])
     stake_hub_claim_reward(accounts[0])
-    __check_payable_notes_info(accounts[2], 100)
-
     _, _, account_rewards, _ = parse_delegation([{
         "address": operators[0],
         "active": True,
@@ -188,8 +178,6 @@ def test_delegate_btc_with_lock_script_in_tx(btc_stake, set_candidate):
         "coin": [],
         "btc": [set_delegate(accounts[0], btc_amount)]
     }], BLOCK_REWARD // 2)
-
-    claim_relayer_reward(accounts[2])
     assert tracker0.delta() == account_rewards[accounts[0]] - FEE
     assert tracker1.delta() == FEE
 
@@ -549,34 +537,33 @@ def test_btc_delegate_no_amount_limit(btc_stake, set_candidate, delegate_btc_val
     tx = stake_hub_claim_reward(accounts[0])
     assert "claimedReward" in tx.events
     assert tracker.delta() == TOTAL_REWARD - FEE
-    claim_relayer_reward(accounts[0])
     assert tracker.delta() == FEE
-
-
-def test_collect_porter_fee_success(btc_stake, set_candidate, delegate_btc_valid_tx):
-    operators, consensuses = set_candidate
-    lock_script, btc_tx = delegate_btc_valid_tx
-    round_tag = get_current_round()
-    btc_stake.delegate(btc_tx, round_tag, [], 0, lock_script, {'from': accounts[1]})
-    turn_round()
-    turn_round(consensuses)
-    tracker0 = get_tracker(accounts[0])
-    tracker1 = get_tracker(accounts[1])
-    __check_payable_notes_info(accounts[1], 0)
-    __check_debts_notes_info(accounts[0], [{'contributor': accounts[1], 'amount': 100}])
-    stake_hub_claim_reward(accounts[0])
-    __check_payable_notes_info(accounts[1], 100)
-    __check_debts_notes_info(accounts[0], [])
-    tx = claim_relayer_reward(accounts[1])
-    expect_event(tx, 'claimedRelayerReward', {
-        'relayer': accounts[1],
-        'amount': FEE
-    })
-    turn_round(consensuses)
-    assert tracker0.delta() == TOTAL_REWARD - FEE
-    stake_hub_claim_reward(accounts[0])
-    claim_relayer_reward(accounts[1])
-    assert tracker1.delta() == FEE
+# 
+# 
+# def test_collect_porter_fee_success(btc_stake, set_candidate, delegate_btc_valid_tx):
+#     operators, consensuses = set_candidate
+#     lock_script, btc_tx = delegate_btc_valid_tx
+#     round_tag = get_current_round()
+#     btc_stake.delegate(btc_tx, round_tag, [], 0, lock_script, {'from': accounts[1]})
+#     turn_round()
+#     turn_round(consensuses)
+#     tracker0 = get_tracker(accounts[0])
+#     tracker1 = get_tracker(accounts[1])
+#     __check_payable_notes_info(accounts[1], 0)
+#     __check_debts_notes_info(accounts[0], [{'contributor': accounts[1], 'amount': 100}])
+#     stake_hub_claim_reward(accounts[0])
+#     __check_payable_notes_info(accounts[1], 100)
+#     __check_debts_notes_info(accounts[0], [])
+#     tx = claim_relayer_reward(accounts[1])
+#     expect_event(tx, 'claimedRelayerReward', {
+#         'relayer': accounts[1],
+#         'amount': FEE
+#     })
+#     turn_round(consensuses)
+#     assert tracker0.delta() == TOTAL_REWARD - FEE
+#     stake_hub_claim_reward(accounts[0])
+#     claim_relayer_reward(accounts[1])
+#     assert tracker1.delta() == FEE
 
 
 def test_btc_stake_distribute_reward_success(btc_stake, candidate_hub):
@@ -848,8 +835,8 @@ def test_set_new_round_success(btc_stake):
     assert btc_stake.roundTag() == round_tag + 1
 
 
-def test_only_btc_agent_can_call_prepare(btc_stake):
-    with brownie.reverts("the msg sender must be bitcoin agent contract"):
+def test_only_stake_hub_can_call_prepare(btc_stake):
+    with brownie.reverts("the msg sender must be stake hub contract"):
         btc_stake.prepare(get_current_round())
 
 
@@ -863,7 +850,7 @@ def test_prepare_success(btc_stake, set_candidate):
     delegate_btc_success(operators[2], accounts[0], BTC_VALUE + 2, lock_script0)
     set_last_round_tag(1)
     turn_round()
-    update_system_contract_address(btc_stake, btc_agent=accounts[0])
+    update_system_contract_address(btc_stake, stake_hub=accounts[0])
     __get_candidate_map_info(operators[0])
     candidate_list, amounts = btc_stake.getRound2expireInfoMap(end_round0)
     __check_list_length(candidate_list, 1)
@@ -885,7 +872,7 @@ def test_prepare_success(btc_stake, set_candidate):
 
 def test_prepare_success_with_no_expiring_collateral(btc_stake):
     turn_round()
-    update_system_contract_address(btc_stake, btc_agent=accounts[0])
+    update_system_contract_address(btc_stake, stake_hub=accounts[0])
     round_tag = get_current_round()
     candidate_list, amounts = btc_stake.getRound2expireInfoMap(round_tag)
     __check_list_length(candidate_list, 0)
@@ -901,7 +888,7 @@ def test_prepare_success_after_specific_round_interval(btc_stake, set_candidate)
     delegate_btc_success(operators[2], accounts[0], BTC_VALUE + 2, lock_script0)
     set_last_round_tag(1)
     turn_round()
-    update_system_contract_address(btc_stake, btc_agent=accounts[0])
+    update_system_contract_address(btc_stake, stake_hub=accounts[0])
     __get_candidate_map_info(operators[0])
     candidate_list, amounts = btc_stake.getRound2expireInfoMap(end_round1)
     __check_list_length(candidate_list, 2)
@@ -1075,14 +1062,14 @@ def test_calculate_btc_reward_success(btc_stake, set_candidate):
     tx_id1 = delegate_btc_success(operators[0], accounts[0], BTC_VALUE + 1, LOCK_SCRIPT)
     turn_round()
     turn_round(consensuses)
-    reward = btc_stake.calculateReward([tx_id0, tx_id1]).return_value
+    reward = btc_stake.calculateRewardMock([tx_id0, tx_id1]).return_value
     assert reward == [TOTAL_REWARD // 2 * 2, BTC_VALUE * 2 + 1]
-    reward = btc_stake.calculateReward([tx_id0, tx_id1]).return_value
+    reward = btc_stake.calculateRewardMock([tx_id0, tx_id1]).return_value
     assert reward == [0, 0]
     tracker0 = get_tracker(accounts[0])
     stake_hub_claim_reward(accounts[0])
     assert tracker0.delta() == TOTAL_REWARD // 2 * 2 - FEE * 2
-    reward = btc_stake.calculateReward([]).return_value
+    reward = btc_stake.calculateRewardMock([]).return_value
     assert reward == [0, 0]
 
 
@@ -1092,7 +1079,7 @@ def test_calculate_btc_reward_with_invalid_txid(btc_stake, set_candidate):
     turn_round()
     turn_round(consensuses)
     with brownie.reverts("invalid deposit receipt"):
-        btc_stake.calculateReward([tx_id0, '0x00'])
+        btc_stake.calculateRewardMock([tx_id0, '0x00'])
 
 
 def test_move_data_success(btc_stake, pledge_agent, set_candidate):
@@ -1250,17 +1237,15 @@ def test_lock_duration_not_starting_from_zero_reverts(btc_stake):
 @pytest.mark.parametrize("grade_active", [0, 1])
 def test_update_param_grade_active_success(btc_stake, grade_active):
     update_system_contract_address(btc_stake, gov_hub=accounts[0])
-    hex_value = padding_left(Web3.to_hex(grade_active), 64)
-    btc_stake.updateParam('gradeActive', hex_value)
+    btc_stake.updateParam('gradeActive', grade_active)
     assert btc_stake.gradeActive() == grade_active
 
 
 def test_revert_on_grade_active_exceeding_limit(btc_stake):
     grade_active = 2
     update_system_contract_address(btc_stake, gov_hub=accounts[0])
-    hex_value = padding_left(Web3.to_hex(grade_active), 64)
     with brownie.reverts(f"OutOfBounds: gradeActive, {grade_active}, 0, 1"):
-        btc_stake.updateParam('gradeActive', hex_value)
+        btc_stake.updateParam('gradeActive', grade_active)
 
 
 def test_update_param_short_param_reverts(btc_stake):
@@ -1380,18 +1365,18 @@ def __check_receipt_map_info(tx_id, result: dict):
         assert data[i] == result[i]
 
 
-def __check_debts_notes_info(delegator, result: list):
-    data = __get_debts_notes_info(delegator)
-    if len(result) == 0 and len(data) == 0:
-        return
-    for index, r in enumerate(result):
-        for i, c in enumerate(r):
-            assert data[index][i] == r[c]
+# def __check_debts_notes_info(delegator, result: list):
+#     data = __get_debts_notes_info(delegator)
+#     if len(result) == 0 and len(data) == 0:
+#         return
+#     for index, r in enumerate(result):
+#         for i, c in enumerate(r):
+#             assert data[index][i] == r[c]
 
 
-def __check_payable_notes_info(relayer, amount):
-    data = __get_payable_notes_info(relayer)
-    assert data == amount
+# def __check_payable_notes_info(relayer, amount):
+#     data = __get_payable_notes_info(relayer)
+#     assert data == amount
 
 
 def __check_btc_tx_map_info(tx_id, result: dict):

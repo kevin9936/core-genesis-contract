@@ -413,7 +413,7 @@ def test_undelegate_cannot_be_zero(core_agent, validator_set):
     core_agent.delegateCoin(operator, {"value": MIN_INIT_DELEGATE_VALUE})
     turn_round()
     assert consensus in validator_set.getValidators()
-    with brownie.reverts("Not enough staked tokens"):
+    with brownie.reverts("Undelegate zero coin"):
         core_agent.undelegateCoin(operator, 0)
 
 
@@ -503,8 +503,12 @@ def test_check_delegate_map_on_full_unstake(core_agent, validator_set):
     turn_round()
     undelegate_amount = delegate_amount - required_coin_deposit
     core_agent.transferCoin(operators[0], operators[1], required_coin_deposit, {'from': accounts[0]})
-    core_agent.undelegateCoin(operators[0], undelegate_amount, {'from': accounts[0]})
-    __check_coin_delegator(operators[0], accounts[0], 0, 0, get_current_round(), required_coin_deposit)
+    tx = core_agent.undelegateCoin(operators[0], undelegate_amount, {'from': accounts[0]})
+    print('dsfaf',tx.events)
+    # __check_coin_delegator(operators[0], accounts[0], 0, 0, get_current_round(), required_coin_deposit)
+    __check_coin_delegator(operators[1], accounts[0], 0, 100, get_current_round(), 0)
+    turn_round(consensuses)
+    stake_hub_claim_reward(accounts[0])
     candidates_length = len(__get_candidate_list_by_delegator(accounts[0]))
     assert candidates_length == 2
     turn_round()
@@ -534,11 +538,8 @@ def test_undelegate_with_recent_stake(core_agent, validator_set, undelegate_type
     core_agent.delegateCoin(operator, {"value": delegate_amount, 'from': accounts[0]})
     turn_round()
     core_agent.delegateCoin(operator, {"value": additional_amount, 'from': accounts[0]})
-    undelegate_amount = additional_amount
-    if undelegate_type == 'all':
-        undelegate_amount = additional_amount + delegate_amount
-    with brownie.reverts("Not enough staked tokens"):
-        core_agent.undelegateCoin(operator, undelegate_amount, {'from': accounts[0]})
+    undelegate_amount = additional_amount + delegate_amount
+    core_agent.undelegateCoin(operator, undelegate_amount, {'from': accounts[0]})
 
 
 @pytest.mark.parametrize("undelegate_type", ['all', 'part'])

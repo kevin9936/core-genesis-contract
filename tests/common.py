@@ -62,7 +62,7 @@ def register_relayer(relayer_address=None):
 
 def get_current_round():
     round_tag = CandidateHubMock[0].roundTag()
-    print('get_current_round', round_tag)
+    print('get_current_round>>>>>>>', round_tag)
     return round_tag
 
 
@@ -92,20 +92,20 @@ def claim_stake_and_relay_reward(account):
     if isinstance(account, list):
         for a in account:
             tx0 = stake_hub_claim_reward(a)
-            tx1 = claim_relayer_reward(a)
+            # tx1 = claim_relayer_reward(a)
     else:
         tx0 = stake_hub_claim_reward(account)
-        tx1 = claim_relayer_reward(account)
+        # tx1 = claim_relayer_reward(account)
     return tx0
 
 
-def claim_relayer_reward(account):
-    tx = None
-    if isinstance(account, list):
-        for i in account:
-            tx = StakeHubMock[0].claimRelayerReward({'from': i})
-            print('claim_relayer_reward>>>>>>>>>>>>>>>>', tx.events)
-    else:
-        tx = StakeHubMock[0].claimRelayerReward({'from': account})
-        print('claim_relayer_reward>>>>>>>>>>>>>>>>', tx.events)
-    return tx
+# def claim_relayer_reward(account):
+#     tx = None
+#     if isinstance(account, list):
+#         for i in account:
+#             tx = StakeHubMock[0].claimRelayerReward({'from': i})
+#             print('claim_relayer_reward>>>>>>>>>>>>>>>>', tx.events)
+#     else:
+#         tx = StakeHubMock[0].claimRelayerReward({'from': account})
+#         print('claim_relayer_reward>>>>>>>>>>>>>>>>', tx.events)
+#     return tx

@@ -24,8 +24,7 @@ MIN_INIT_DELEGATE_VALUE = 20000
 LOCK_SCRIPT = "0xa914cdf3d02dd323c14bea0bed94962496c80c09334487"
 REDEEM_SCRIPT = "0xa914047b9ba09367c1b213b5ba2184fba3fababcdc0287"
 LOCK_TIME = 1736956800
-BTC_LST_REWARD = 0
-FEE = 1
+FEE = 0
 TOTAL_REWARD = 0
 STAKE_ROUND = 3
 UTXO_FEE = 100
@@ -47,14 +46,13 @@ def set_relayer_register(relay_hub):
 def set_block_reward(validator_set, candidate_hub, btc_light_client, btc_stake, stake_hub, core_agent, btc_lst_stake,
                      gov_hub, lst_token):
     global BLOCK_REWARD, FEE, BTC_REWARD, TOTAL_REWARD
-    global BTC_STAKE, STAKE_HUB, CORE_AGENT, BTC_LST_STAKE, BTC_LST_REWARD, BTC_LIGHT_CLIENT, BTC_LST_TOKEN
+    global BTC_STAKE, STAKE_HUB, CORE_AGENT, BTC_LST_STAKE, BTC_LIGHT_CLIENT, BTC_LST_TOKEN
     FEE = FEE * 100
     block_reward = validator_set.blockReward()
     block_reward_incentive_percent = validator_set.blockRewardIncentivePercent()
     total_block_reward = block_reward + TX_FEE
     BLOCK_REWARD = total_block_reward * ((100 - block_reward_incentive_percent) / 100)
     TOTAL_REWARD = BLOCK_REWARD // 2
-    BTC_LST_REWARD = TOTAL_REWARD * btc_lst_stake.percentage() // Utils.DENOMINATOR
     BTC_STAKE = btc_stake
     STAKE_HUB = stake_hub
     CORE_AGENT = core_agent
@@ -463,28 +461,15 @@ def test_stake_in_current_round_with_new_validator(validator_set, set_candidate)
     pytest.param(3000, id="percentage is 3000"),
     pytest.param(8000, id="percentage is 8000")
 ])
-def test_claim_reward_after_percentage_update(btc_lst_stake, set_candidate, percentage):
+def test_claim_reward_after_percentage_update(btc_agent, set_candidate, percentage):
     operators, consensuses = set_candidate
     turn_round()
     delegate_btc_lst_success(accounts[0], BTC_VALUE, LOCK_SCRIPT)
     turn_round(consensuses, round_count=2)
     tracker = get_tracker(accounts[0])
-    btc_lst_stake.setPercentage(percentage)
+    btc_agent.setPercentage(percentage)
     claim_stake_and_relay_reward(accounts[0])
     assert tracker.delta() == TOTAL_REWARD * 3 * percentage // Utils.DENOMINATOR
-
-
-def test_claim_reward_after_grade_active_disabled(btc_lst_stake, set_candidate):
-    update_system_contract_address(btc_lst_stake, gov_hub=accounts[0])
-    hex_value = padding_left(Web3.to_hex(0), 64)
-    btc_lst_stake.updateParam('gradeActive', hex_value)
-    operators, consensuses = set_candidate
-    turn_round()
-    delegate_btc_lst_success(accounts[0], BTC_VALUE, LOCK_SCRIPT)
-    turn_round(consensuses, round_count=2)
-    tracker = get_tracker(accounts[0])
-    claim_stake_and_relay_reward(accounts[0])
-    assert tracker.delta() == TOTAL_REWARD * 3
 
 
 def test_deduct_relay_fee_after_transfer(set_candidate):
@@ -526,24 +511,24 @@ def test_porter_fee_deduction_success_over_multiple_rounds(set_candidate):
     assert tracker1.delta() == FEE
 
 
-def test_relay_fee_deduction_in_multiple_steps(set_candidate):
-    operators, consensuses = set_candidate
-    turn_round()
-    fee = 255
-    btc_tx0 = build_btc_lst_tx(accounts[0], BTC_VALUE, LOCK_SCRIPT, fee=fee)
-    remain_fee = fee * Utils.CORE_DECIMAL
-    BTC_LST_STAKE.delegate(btc_tx0, 1, [], 0, LOCK_SCRIPT, {"from": accounts[1]})
-    turn_round(consensuses, round_count=2)
-    tracker0 = get_tracker(accounts[0])
-    tracker1 = get_tracker(accounts[1])
-    claim_stake_and_relay_reward(accounts[:2])
-    assert tracker0.delta() == 0
-    assert tracker1.delta() == TOTAL_REWARD * 3 // 2
-    remain_fee -= TOTAL_REWARD * 3 // 2
-    turn_round(consensuses)
-    claim_stake_and_relay_reward(accounts[:2])
-    assert tracker0.delta() == TOTAL_REWARD * 3 // 2 - remain_fee
-    assert tracker1.delta() == remain_fee
+# def test_relay_fee_deduction_in_multiple_steps(set_candidate):
+#     operators, consensuses = set_candidate
+#     turn_round()
+#     fee = 255
+#     btc_tx0 = build_btc_lst_tx(accounts[0], BTC_VALUE, LOCK_SCRIPT, fee=fee)
+#     remain_fee = fee * Utils.CORE_DECIMAL
+#     BTC_LST_STAKE.delegate(btc_tx0, 1, [], 0, LOCK_SCRIPT, {"from": accounts[1]})
+#     turn_round(consensuses, round_count=2)
+#     tracker0 = get_tracker(accounts[0])
+#     tracker1 = get_tracker(accounts[1])
+#     claim_stake_and_relay_reward(accounts[:2])
+#     assert tracker0.delta() == 0
+#     assert tracker1.delta() == TOTAL_REWARD * 3 // 2
+#     remain_fee -= TOTAL_REWARD * 3 // 2
+#     turn_round(consensuses)
+#     claim_stake_and_relay_reward(accounts[:2])
+#     assert tracker0.delta() == TOTAL_REWARD * 3 // 2 - remain_fee
+#     assert tracker1.delta() == remain_fee
 
 
 def test_claim_reward_after_self_transfer(set_candidate):
@@ -646,9 +631,10 @@ def test_transfer_with_validator_slashed(set_candidate, slash_indicator, validat
     turn_round(consensuses)
 
 
-def test_contract_stake_and_claim_reward(set_candidate, btc_lst_stake, stake_hub, relay_hub, lst_token):
+def test_contract_stake_and_claim_reward(set_candidate, btc_agent, btc_lst_stake, stake_hub, relay_hub, lst_token):
     operators, consensuses = set_candidate
     turn_round()
+    btc_agent.setPercentage(Utils.DENOMINATOR // 2)
     btc_lst_stake = delegateBtcLstProxy.deploy(btc_lst_stake.address, stake_hub.address, lst_token,
                                                {'from': accounts[0]})
     btc_lst_stake.setReceiveState(True)
@@ -668,13 +654,14 @@ def test_contract_stake_and_claim_reward(set_candidate, btc_lst_stake, stake_hub
     turn_round(consensuses)
 
 
-def test_contract_stake_and_redeem(set_candidate, btc_lst_stake, stake_hub, relay_hub, lst_token):
+def test_contract_stake_and_redeem(set_candidate, btc_agent, btc_lst_stake, stake_hub, relay_hub, lst_token):
     operators, consensuses = set_candidate
     turn_round()
     btc_lst_stake = delegateBtcLstProxy.deploy(btc_lst_stake.address, stake_hub.address, lst_token.address,
                                                {'from': accounts[0]})
     btc_tx = build_btc_lst_tx(btc_lst_stake.address, BTC_VALUE, LOCK_SCRIPT)
     tx = btc_lst_stake.delegateBtcLst(btc_tx, 1, [], 1, LOCK_SCRIPT)
+    btc_agent.setPercentage(Utils.DENOMINATOR // 2)
     assert 'delegated' in tx.events
     turn_round()
     tx = btc_lst_stake.redeemBtcLst(BTC_VALUE // 2, REDEEM_SCRIPT)
@@ -828,4 +815,3 @@ def __check_redeem_requests(redeem_index, result: dict):
     redeem_request = BTC_LST_STAKE.redeemRequests(redeem_index)
     for i in result:
         assert redeem_request[i] == result[i]
-

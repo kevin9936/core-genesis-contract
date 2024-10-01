@@ -414,6 +414,21 @@ def test_get_acc_stake_amount_success(btc_agent, set_candidate):
     assert acc_staked_amount == BTC_LST_VALUE + btc_value
 
 
+@pytest.mark.parametrize("percentage", [400, 1000, 8800, 10000])
+def test_lst_claim_reward_percentage_change(btc_agent, btc_stake, btc_lst_stake, set_candidate, percentage):
+    operators, consensuses = set_candidate
+    turn_round()
+    delegate_btc_lst_success(accounts[0], BTC_LST_VALUE, BTCLST_LOCK_SCRIPT)
+    turn_round(consensuses, round_count=2)
+    update_system_contract_address(btc_agent, gov_hub=accounts[0], stake_hub=accounts[0])
+    hex_value = padding_left(Web3.to_hex(int(percentage)), 64)
+    btc_agent.updateParam('lstGradePercentage', hex_value, {'from': accounts[0]})
+    return_value = btc_agent.claimReward(accounts[0], 0).return_value
+    btc_lst_reward = TOTAL_REWARD * 3
+    claimed_reward = btc_lst_reward * percentage // Utils.DENOMINATOR
+    assert return_value == [claimed_reward, -(btc_lst_reward - claimed_reward), BTC_LST_VALUE]
+
+
 def test_update_param_failed(btc_agent):
     update_system_contract_address(btc_agent, gov_hub=accounts[0])
     with brownie.reverts("UnsupportedGovParam: error key"):
@@ -530,6 +545,34 @@ def test_percentage_cannot_be_zero(btc_agent):
     grades_encode = rlp.encode([[1000, 0]])
     with brownie.reverts(f"lowest stakeRate must be zero"):
         btc_agent.updateParam('grades', grades_encode)
+
+
+def test_update_param_percentage_success(btc_agent):
+    percentage = 4000
+    update_system_contract_address(btc_agent, gov_hub=accounts[0])
+    hex_value = padding_left(Web3.to_hex(int(percentage)), 64)
+    tx = btc_agent.updateParam('lstGradePercentage', hex_value)
+    assert btc_agent.lstGradePercentage() == percentage
+    expect_event(tx, 'paramChange', {
+        'key': 'lstGradePercentage',
+        'value': hex_value
+    })
+
+
+def test_revert_on_percentage_zero(btc_agent):
+    percentage = 0
+    update_system_contract_address(btc_agent, gov_hub=accounts[0])
+    hex_value = padding_left(Web3.to_hex(percentage), 64)
+    with brownie.reverts(f"OutOfBounds: lstGradePercentage, {percentage}, 1, 100000"):
+        btc_agent.updateParam('lstGradePercentage', hex_value)
+
+
+def test_revert_on_percentage_exceeding_limit(btc_agent):
+    percentage = 100001
+    update_system_contract_address(btc_agent, gov_hub=accounts[0])
+    hex_value = padding_left(Web3.to_hex(percentage), 64)
+    with brownie.reverts(f"OutOfBounds: lstGradePercentage, {percentage}, 1, 100000"):
+        btc_agent.updateParam('lstGradePercentage', hex_value)
 
 
 @pytest.mark.parametrize("grade_active", [0, 1])

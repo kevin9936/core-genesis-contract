@@ -333,9 +333,11 @@ def old_undelegate_coin_success(candidate, account=None, amount=0, old=True):
         account = accounts[0]
     if old is True:
         tx = PledgeAgentMock[0].undelegateCoinOld(candidate, amount, {'from': account})
+        assert 'undelegatedCoinOld' in tx.events
+
     else:
         tx = PledgeAgentMock[0].undelegateCoin(candidate, amount, {'from': account})
-    assert 'undelegatedCoin' in tx.events
+        assert 'undelegatedCoin' in tx.events
     return tx
 
 
@@ -344,9 +346,10 @@ def old_transfer_coin_success(source_agent, target_agent, account=None, amount=0
         account = accounts[0]
     if old is True:
         tx = PledgeAgentMock[0].transferCoinOld(source_agent, target_agent, amount, {'from': account})
+        assert 'transferredCoinOld' in tx.events
     else:
         tx = PledgeAgentMock[0].transferCoin(source_agent, target_agent, amount, {'from': account})
-    assert 'transferredCoin' in tx.events
+        assert 'transferredCoin' in tx.events
     return tx
 
 

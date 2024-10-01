@@ -4,8 +4,7 @@ import pytest
 from web3 import Web3
 import brownie
 from brownie import *
-from .common import register_candidate, turn_round, stake_hub_claim_reward, get_current_round, set_round_tag, \
-    claim_stake_and_relay_reward
+from .common import register_candidate, turn_round, stake_hub_claim_reward, get_current_round, set_round_tag
 from .delegate import *
 from .utils import get_tracker, random_address, expect_event, update_system_contract_address
 from .calc_reward import *
@@ -648,19 +647,22 @@ def test_move_core_data(pledge_agent, core_agent):
     pledge_agent.delegateCoinOld(operator2, {"value": MIN_INIT_DELEGATE_VALUE})
     __old_turn_round()
     __old_turn_round([consensus])
+    tracker = get_tracker(accounts[0])
     pledge_agent.delegateCoinOld(operator, {"value": MIN_INIT_DELEGATE_VALUE})
     pledge_agent.transferCoinOld(operator, operator2, MIN_INIT_DELEGATE_VALUE * 2)
-
+    assert tracker.delta() == TOTAL_REWARD - MIN_INIT_DELEGATE_VALUE
     __init_hybrid_score_mock()
-    turn_round(round_count=2)
-
+    turn_round([consensus])
+    turn_round([consensus])
     pledge_agent.moveCOREData(operator, accounts[0])
-
+    old_claim_reward_success([operator], accounts[0])
+    assert tracker.delta() == TOTAL_REWARD * 2
     delegator_info_in_core_agent = core_agent.getDelegator(operator, accounts[0])
-    _staked_amount, _realtime_amount, _, _transferred_amount = delegator_info_in_core_agent
+    _staked_amount, _realtime_amount, _transferred_amount, changeRound = delegator_info_in_core_agent
     assert _staked_amount == MIN_INIT_DELEGATE_VALUE
     assert _realtime_amount == MIN_INIT_DELEGATE_VALUE
     assert _transferred_amount == 0
+    assert changeRound == get_current_round()
 
 
 @pytest.mark.parametrize("round", [0, 1, 2, 3])
@@ -1427,7 +1429,7 @@ def test_new_validator_join_current_round(pledge_agent, set_candidate):
     assert tracker1.delta() == TOTAL_REWARD * 3
 
 
-def test_move_data_core_cannot_cancel(pledge_agent, set_candidate):
+def test_cancel_allowed_current_round_after_move_data(pledge_agent, set_candidate):
     operators, consensuses = __register_candidates(accounts[2:4])
     delegate_amount = MIN_INIT_DELEGATE_VALUE * 4
     __old_turn_round()
@@ -1442,10 +1444,8 @@ def test_move_data_core_cannot_cancel(pledge_agent, set_candidate):
     __check_old_reward(operators, accounts[0], 0)
     __check_old_reward(operators, accounts[1], 0)
     undelegate_coin_success(operators[0], delegate_amount, accounts[1])
-    with brownie.reverts("Not enough staked tokens"):
-        undelegate_coin_success(operators[0], MIN_INIT_DELEGATE_VALUE, accounts[1])
-    with brownie.reverts("Not enough staked tokens"):
-        undelegate_coin_success(operators[-1], MIN_INIT_DELEGATE_VALUE, accounts[0])
+    undelegate_coin_success(operators[0], MIN_INIT_DELEGATE_VALUE, accounts[1])
+    undelegate_coin_success(operators[-1], MIN_INIT_DELEGATE_VALUE, accounts[0])
     turn_round(consensuses)
     undelegate_coin_success(operators[0], MIN_INIT_DELEGATE_VALUE, accounts[1])
     undelegate_coin_success(operators[-1], MIN_INIT_DELEGATE_VALUE, accounts[0])
@@ -2042,37 +2042,28 @@ def test_proxy_delegate_after_multiple_rounds(stake_hub, pledge_agent, core_agen
 
 @pytest.mark.parametrize("round_count", [0, 1, 2])
 @pytest.mark.parametrize("tests", ['undelgate', 'transfer'])
-def test_proxy_delegate_no_cancel_or_transfer_current_round(stake_hub, core_agent, set_candidate, tests, round_count):
+def test_proxy_delegate_current_round_cancel_and_transfer_allowed(stake_hub, core_agent, set_candidate, tests,
+                                                                  round_count):
     delegate_amount = 1000
     operators, consensuses = set_candidate
     old_delegate_coin_success(operators[0], accounts[0], delegate_amount, old=False)
     old_delegate_coin_success(operators[0], accounts[1], delegate_amount, old=False)
     if tests == 'undelgate':
-        with brownie.reverts("call CORE_AGENT_ADDR.proxyUnDelegate() failed"):
-            old_undelegate_coin_success(operators[0], accounts[0], delegate_amount, old=False)
+        old_undelegate_coin_success(operators[0], accounts[0], delegate_amount, old=False)
     elif tests == 'transfer':
-        with brownie.reverts("call CORE_AGENT_ADDR.proxyTransfer() failed"):
-            old_transfer_coin_success(operators[0], operators[1], accounts[0], delegate_amount, old=False)
+        old_transfer_coin_success(operators[0], operators[1], accounts[0], delegate_amount, old=False)
     turn_round()
     old_delegate_coin_success(operators[0], accounts[0], delegate_amount, old=False)
     turn_round(consensuses, round_count=round_count)
-    if round_count == 0:
-        if tests == 'undelgate':
-            with brownie.reverts("call CORE_AGENT_ADDR.proxyUnDelegate() failed"):
-                old_undelegate_coin_success(operators[0], accounts[0], delegate_amount * 2, old=False)
-        elif tests == 'transfer':
-            with brownie.reverts("call CORE_AGENT_ADDR.proxyTransfer() failed"):
-                old_transfer_coin_success(operators[0], operators[1], accounts[0], delegate_amount * 2, old=False)
-    else:
-        if tests == 'undelgate':
-            old_undelegate_coin_success(operators[0], accounts[0], delegate_amount, old=False)
-        elif tests == 'transfer':
-            old_transfer_coin_success(operators[0], operators[2], accounts[0], delegate_amount, old=False)
+    if tests == 'undelgate':
+        old_undelegate_coin_success(operators[0], accounts[0], delegate_amount // 2, old=False)
+    elif tests == 'transfer':
+        old_transfer_coin_success(operators[0], operators[1], accounts[0], delegate_amount // 2, old=False)
 
 
 @pytest.mark.parametrize("round_count", [0, 1, 2])
 @pytest.mark.parametrize("tests", ['undelgate', 'transfer'])
-def test_transfer_no_cancel_current_round(stake_hub, core_agent, set_candidate, tests, round_count):
+def test_current_round_transfer_can_cancel_and_transfer(stake_hub, core_agent, set_candidate, tests, round_count):
     delegate_amount = 1000
     operators, consensuses = set_candidate
     old_delegate_coin_success(operators[0], accounts[0], delegate_amount, old=False)
@@ -2080,18 +2071,10 @@ def test_transfer_no_cancel_current_round(stake_hub, core_agent, set_candidate, 
     turn_round()
     old_transfer_coin_success(operators[0], operators[1], accounts[0], delegate_amount, old=False)
     turn_round(consensuses, round_count=round_count)
-    if round_count == 0:
-        if tests == 'undelgate':
-            with brownie.reverts("call CORE_AGENT_ADDR.proxyUnDelegate() failed"):
-                old_undelegate_coin_success(operators[1], accounts[0], delegate_amount, old=False)
-        elif tests == 'transfer':
-            with brownie.reverts("call CORE_AGENT_ADDR.proxyTransfer() failed"):
-                old_transfer_coin_success(operators[1], operators[2], accounts[0], delegate_amount, old=False)
-    else:
-        if tests == 'undelgate':
-            old_undelegate_coin_success(operators[1], accounts[0], delegate_amount, old=False)
-        elif tests == 'transfer':
-            old_transfer_coin_success(operators[1], operators[2], accounts[0], delegate_amount, old=False)
+    if tests == 'undelgate':
+        old_undelegate_coin_success(operators[1], accounts[0], delegate_amount, old=False)
+    elif tests == 'transfer':
+        old_transfer_coin_success(operators[1], operators[2], accounts[0], delegate_amount, old=False)
 
 
 @pytest.mark.parametrize("round_count", [0, 1, 2])
@@ -2166,7 +2149,7 @@ def test_cancel_stake_with_zero_amount(stake_hub, core_agent, set_candidate):
     turn_round()
     old_delegate_coin_success(operators[0], accounts[0], delegate_amount, old=False)
     old_transfer_coin_success(operators[0], operators[2], accounts[0], 0, False)
-    with brownie.reverts("Not enough staked tokens"):
+    with brownie.reverts("Undelegate zero coin"):
         undelegate_coin_success(operators[0], 0, accounts[0])
     turn_round(consensuses)
     tracker = get_tracker(accounts[0])

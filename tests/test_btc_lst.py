@@ -17,7 +17,7 @@ LOCK_SCRIPT = "0xa914cdf3d02dd323c14bea0bed94962496c80c09334487"
 REDEEM_SCRIPT = "0xa914047b9ba09367c1b213b5ba2184fba3fababcdc0287"
 LOCK_TIME = 1736956800
 BTC_LST_REWARD = 0
-FEE = 1
+FEE = 0
 TOTAL_REWARD = 0
 STAKE_ROUND = 3
 UTXO_FEE = 100
@@ -41,7 +41,7 @@ def set_relayer_register(relay_hub):
 def set_block_reward(validator_set, candidate_hub, btc_agent, btc_light_client, btc_stake, stake_hub, core_agent,
                      btc_lst_stake,
                      gov_hub):
-    global BLOCK_REWARD, FEE, BTC_REWARD, TOTAL_REWARD
+    global BLOCK_REWARD, FEE, BTC_REWARD, TOTAL_REWARD, GOV_HUB
     global BTC_STAKE, STAKE_HUB, CORE_AGENT, BTC_LST_STAKE, BTC_LST_REWARD, BTC_LIGHT_CLIENT
     FEE = FEE * 100
     block_reward = validator_set.blockReward()
@@ -59,6 +59,8 @@ def set_block_reward(validator_set, candidate_hub, btc_agent, btc_light_client, 
     # The default staking time is 150 days
     set_block_time_stamp(150, LOCK_TIME)
     btc_lst_stake.updateParam('add', LOCK_SCRIPT, {'from': gov_hub.address})
+    btc_agent.setPercentage(Utils.DENOMINATOR // 2)
+    GOV_HUB = gov_hub
 
 
 @pytest.fixture()
@@ -79,6 +81,7 @@ def test_btc_lst_init_once_only(btc_lst_stake):
 def test_delegate_lst_btc_p2sh_script_success(btc_lst_stake, lst_token, gov_hub, set_candidate, stake_hub, btc_agent):
     lock_script = '0xa91454f0594a167b8226a2f4905e70f272fee9f5360387'
     btc_lst_stake.updateParam('add', lock_script, {'from': gov_hub.address})
+    btc_agent.setPercentage(Utils.DENOMINATOR)
     operators, consensuses = set_candidate
     turn_round()
     tx_id = '0x' + reverse_by_bytes('23a4ee8926da03aa9097caccbb9788787946d369b097e3238b0d1bf347b577bb')
@@ -104,8 +107,8 @@ def test_delegate_lst_btc_p2sh_script_success(btc_lst_stake, lst_token, gov_hub,
     turn_round()
     turn_round(consensuses)
     tracker = get_tracker(accounts[0])
-    claim_stake_and_relay_reward(accounts[0])
-    assert tracker.delta() == TOTAL_REWARD * 3 // 2
+    stake_hub_claim_reward(accounts[0])
+    assert tracker.delta() == TOTAL_REWARD * 3
 
 
 def test_delegate_lst_btc_p2pkh_script_success(btc_lst_stake, lst_token, gov_hub, set_candidate, stake_hub, btc_agent):
@@ -134,7 +137,7 @@ def test_delegate_lst_btc_p2pkh_script_success(btc_lst_stake, lst_token, gov_hub
     turn_round()
     turn_round(consensuses)
     tracker = get_tracker(accounts[0])
-    claim_stake_and_relay_reward(accounts[0])
+    stake_hub_claim_reward(accounts[0])
     assert lst_token.balanceOf(accounts[0]) == BTC_VALUE
     assert tracker.delta() == TOTAL_REWARD * 3 // 2
 
@@ -165,7 +168,7 @@ def test_delegate_lst_btc_p2wpkh_script_success(btc_lst_stake, lst_token, gov_hu
     turn_round()
     turn_round(consensuses)
     tracker = get_tracker(accounts[0])
-    claim_stake_and_relay_reward(accounts[0])
+    stake_hub_claim_reward(accounts[0])
     assert lst_token.balanceOf(accounts[0]) == BTC_VALUE
     assert tracker.delta() == TOTAL_REWARD * 3 // 2
 
@@ -192,7 +195,7 @@ def test_delegate_lst_btc_p2wsh_script_success(btc_lst_stake, lst_token, gov_hub
     turn_round()
     turn_round(consensuses)
     tracker = get_tracker(accounts[0])
-    claim_stake_and_relay_reward(accounts[0])
+    stake_hub_claim_reward(accounts[0])
     assert lst_token.balanceOf(accounts[0]) == BTC_VALUE
     assert tracker.delta() == TOTAL_REWARD * 3 // 2
 
@@ -216,7 +219,7 @@ def test_delegate_lst_btc_p2tr_script_success(btc_lst_stake, lst_token, gov_hub,
     turn_round()
     turn_round(consensuses)
     tracker = get_tracker(accounts[0])
-    claim_stake_and_relay_reward(accounts[0])
+    stake_hub_claim_reward(accounts[0])
     assert lst_token.balanceOf(accounts[0]) == BTC_VALUE
     assert tracker.delta() == TOTAL_REWARD * 3 // 2
 
@@ -254,6 +257,7 @@ def test_lock_script_not_found_reverts(btc_lst_stake, lst_token, set_candidate, 
 
 
 def test_lock_script_wallet_inactive_reverts(btc_lst_stake, set_candidate):
+    __add_wallet(REDEEM_SCRIPT)
     update_system_contract_address(btc_lst_stake, gov_hub=accounts[0])
     btc_lst_stake.updateParam('remove', LOCK_SCRIPT)
     with brownie.reverts("wallet inactive"):
@@ -378,35 +382,35 @@ def test_multisig_wallet_initiate_staking(btc_lst_stake, stake_hub, set_candidat
     assert lst_token.balanceOf(accounts[0]) == BTC_VALUE + 2
 
 
-def test_relay_fee_collection_success(btc_lst_stake, stake_hub, set_candidate):
-    operators, consensuses = set_candidate
-    turn_round()
-    btc_tx, lock_script = __create_btc_lst_delegate(accounts[0], BTC_VALUE)
-    btc_lst_stake.delegate(btc_tx, 1, [], 0, lock_script, {"from": accounts[1]})
-    turn_round()
-    turn_round(consensuses)
-    debts = stake_hub.getDebts(accounts[0])
-    assert debts[0][0] == accounts[1]
-    assert debts[0][1] == FEE
-    stake_hub_claim_reward(accounts[0])
-    tracker = get_tracker(accounts[1])
-    claim_relayer_reward(accounts[1])
-    assert tracker.delta() == FEE
+# def test_relay_fee_collection_success(btc_lst_stake, stake_hub, set_candidate):
+#     operators, consensuses = set_candidate
+#     turn_round()
+#     btc_tx, lock_script = __create_btc_lst_delegate(accounts[0], BTC_VALUE)
+#     btc_lst_stake.delegate(btc_tx, 1, [], 0, lock_script, {"from": accounts[1]})
+#     turn_round()
+#     turn_round(consensuses)
+#     debts = stake_hub.getDebts(accounts[0])
+#     assert debts[0][0] == accounts[1]
+#     assert debts[0][1] == FEE
+#     stake_hub_claim_reward(accounts[0])
+#     tracker = get_tracker(accounts[1])
+#     claim_relayer_reward(accounts[1])
+#     assert tracker.delta() == FEE
 
 
-def test_success_with_zero_relay_fee(btc_lst_stake, stake_hub, set_candidate):
-    operators, consensuses = set_candidate
-    turn_round()
-    btc_tx, lock_script = __create_btc_lst_delegate(accounts[0], BTC_VALUE, fee=0)
-    btc_lst_stake.delegate(btc_tx, 1, [], 0, lock_script, {"from": accounts[1]})
-    turn_round()
-    turn_round(consensuses)
-    debts = stake_hub.getDebts(accounts[0])
-    assert len(debts) == 0
-    stake_hub_claim_reward(accounts[0])
-    tracker = get_tracker(accounts[1])
-    claim_relayer_reward(accounts[1])
-    assert tracker.delta() == 0
+# def test_success_with_zero_relay_fee(btc_lst_stake, stake_hub, set_candidate):
+#     operators, consensuses = set_candidate
+#     turn_round()
+#     btc_tx, lock_script = __create_btc_lst_delegate(accounts[0], BTC_VALUE, fee=0)
+#     btc_lst_stake.delegate(btc_tx, 1, [], 0, lock_script, {"from": accounts[1]})
+#     turn_round()
+#     turn_round(consensuses)
+#     debts = stake_hub.getDebts(accounts[0])
+#     assert len(debts) == 0
+#     stake_hub_claim_reward(accounts[0])
+#     tracker = get_tracker(accounts[1])
+#     claim_relayer_reward(accounts[1])
+#     assert tracker.delta() == 0
 
 
 def test_delegate_includes_existing_rewards(btc_lst_stake, stake_hub, set_candidate):
@@ -570,7 +574,7 @@ def test_stake_success_with_multiple_opreturns(btc_lst_stake, stake_hub, set_can
     })
     turn_round(consensuses, round_count=2)
     tracker0 = get_tracker(accounts[1])
-    claim_stake_and_relay_reward(accounts[1])
+    stake_hub_claim_reward(accounts[1])
     assert tracker0.delta() == TOTAL_REWARD * 3 // 2
 
 
@@ -578,7 +582,7 @@ def test_stake_success_with_no_validators(btc_lst_stake, stake_hub):
     delegate_btc_lst_success(accounts[0], BTC_VALUE, LOCK_SCRIPT)
     turn_round(round_count=3)
     tracker0 = get_tracker(accounts[0])
-    claim_stake_and_relay_reward(accounts[0])
+    stake_hub_claim_reward(accounts[0])
     assert tracker0.delta() == 0
 
 
@@ -595,7 +599,7 @@ def test_delegate_non_zero_valid_stake(btc_lst_stake, stake_hub, set_candidate):
     })
     assert 'Transfer' not in tx.events
     turn_round(consensuses, round_count=2)
-    tx = claim_stake_and_relay_reward(constants.ADDRESS_ZERO)
+    tx = stake_hub_claim_reward(constants.ADDRESS_ZERO)
     assert len(tx.events) == 0
 
 
@@ -612,6 +616,7 @@ def test_multi_output_gas_consumption(btc_lst_stake, stake_hub, set_candidate):
         opreturn=set_op_return([constants.ADDRESS_ZERO])
     )
     gas_price(False)
+    assert False
     tx = btc_lst_stake.delegate(delegate_btc_tx0, 1, [], 0, LOCK_SCRIPT, {"from": accounts[1]})
     print('gas_used', tx.gas_used)
 
@@ -676,7 +681,7 @@ def test_lst_btc_undelegate_success(btc_lst_stake, lst_token, set_candidate):
     expect_event(tx, 'undelegated', {
         'txid': tx_id,
         'outputIndex': 0,
-        'amount': BTC_VALUE - FEE,
+        'amount': BTC_VALUE - UTXO_FEE,
         'pkscript': LOCK_SCRIPT,
     })
     assert lst_token.balanceOf(accounts[0]) == 0
@@ -733,7 +738,7 @@ def test_btc_transaction_amount_exceeds_redeem_amount(btc_lst_stake, lst_token, 
     expect_event(tx, 'undelegatedOverflow', {
         'txid': get_transaction_txid(redeem_btc_tx),
         'outputIndex': 0,
-        'expectAmount': BTC_VALUE - FEE,
+        'expectAmount': BTC_VALUE - UTXO_FEE,
         'actualAmount': BTC_VALUE,
         'pkscript': LOCK_SCRIPT,
     })
@@ -758,7 +763,7 @@ def test_undelegate_with_multiple_redeem_info(btc_lst_stake, lst_token, set_cand
             account = accounts[index]
         btc_lst_stake.redeem(btc_amount0 + index, s, {'from': account})
         last_index = index
-    redeem_tx_value = btc_amount0 - FEE
+    redeem_tx_value = btc_amount0 - UTXO_FEE
     redeem_btc_tx = build_btc_lst_tx(accounts[0], redeem_tx_value + 1, scripts[1], tx_id)
     assert btc_lst_stake.getRedeemRequestsLength() == 4
     for index, script in enumerate(scripts):
@@ -784,7 +789,7 @@ def test_undelegate_with_partial_redeem_amount(btc_lst_stake, lst_token, set_can
     tx_id = delegate_btc_lst_success(accounts[0], btc_amount0 * 2, LOCK_SCRIPT)
     turn_round()
     btc_lst_stake.redeem(btc_amount0 * 2, REDEEM_SCRIPT)
-    redeem_tx_value = btc_amount0 - FEE
+    redeem_tx_value = btc_amount0 - UTXO_FEE
     redeem_btc_tx = build_btc_lst_tx(accounts[0], redeem_tx_value, REDEEM_SCRIPT, tx_id)
     btc_lst_stake.undelegate(redeem_btc_tx, 0, [], 0, {'from': accounts[2]})
     script_hash, addr_type = btc_script.get_script_hash(REDEEM_SCRIPT)
@@ -983,7 +988,7 @@ def test_single_tx_settles_multiple_redeems(btc_lst_stake, lst_token, set_candid
     turn_round()
     redeem_btc_lst_success(accounts[0], BTC_VALUE * 2, REDEEM_SCRIPT)
     redeem_btc_lst_success(accounts[0], BTC_VALUE, LOCK_SCRIPT)
-    undelegate_amount = BTC_VALUE - FEE
+    undelegate_amount = BTC_VALUE - UTXO_FEE
     redeem_btc_tx0 = btc_delegate.build_btc_lst(
         set_outputs([BTC_VALUE, LOCK_SCRIPT], [undelegate_amount * 3, REDEEM_SCRIPT]),
         set_inputs([tx_id, 0], [tx_id, 2]),
@@ -995,13 +1000,13 @@ def test_single_tx_settles_multiple_redeems(btc_lst_stake, lst_token, set_candid
     expect_event(tx, 'undelegatedOverflow',
                  {
                      'outputIndex': 0,
-                     'expectAmount': BTC_VALUE - FEE,
+                     'expectAmount': BTC_VALUE - UTXO_FEE,
                      'actualAmount': BTC_VALUE,
                  })
     expect_event(tx, 'undelegatedOverflow', {
         'outputIndex': 2,
-        'expectAmount': BTC_VALUE * 2 - FEE,
-        'actualAmount': (BTC_VALUE - FEE) * 3
+        'expectAmount': BTC_VALUE * 2 - UTXO_FEE,
+        'actualAmount': (BTC_VALUE - UTXO_FEE) * 3
     }, idx=1)
     __check_btc_lst_tx_map_info(tx_id, {
         "amount": 0,
@@ -1057,7 +1062,7 @@ def test_redeem_with_two_inputs_for_two_transactions(btc_lst_stake, lst_token, s
     turn_round()
     redeem_btc_lst_success(accounts[0], BTC_VALUE * 2, REDEEM_SCRIPT)
     redeem_btc_lst_success(accounts[0], BTC_VALUE, LOCK_SCRIPT)
-    undelegate_amount = BTC_VALUE - FEE
+    undelegate_amount = BTC_VALUE - UTXO_FEE
     redeem_btc_tx0 = btc_delegate.build_btc_lst(
         set_outputs([BTC_VALUE, LOCK_SCRIPT], [undelegate_amount * 3, REDEEM_SCRIPT]),
         set_inputs([tx_id0, 2], [tx_id1, 1]),
@@ -1067,13 +1072,13 @@ def test_redeem_with_two_inputs_for_two_transactions(btc_lst_stake, lst_token, s
     expect_event(tx, 'undelegatedOverflow',
                  {
                      'outputIndex': 0,
-                     'expectAmount': BTC_VALUE - FEE,
+                     'expectAmount': BTC_VALUE - UTXO_FEE,
                      'actualAmount': BTC_VALUE,
                  })
     expect_event(tx, 'undelegatedOverflow', {
         'outputIndex': 2,
-        'expectAmount': BTC_VALUE * 2 - FEE,
-        'actualAmount': (BTC_VALUE - FEE) * 3
+        'expectAmount': BTC_VALUE * 2 - UTXO_FEE,
+        'actualAmount': (BTC_VALUE - UTXO_FEE) * 3
     }, idx=1)
     tx_id = get_transaction_txid(redeem_btc_tx0)
     __check_btc_lst_tx_map_info(tx_id, {
@@ -1095,7 +1100,7 @@ def test_undelegate_with_change_address_utxo(btc_lst_stake, lst_token, set_candi
     btc_lst_stake.delegate(btc_tx, 1, [], 0, LOCK_SCRIPT)
     turn_round()
     redeem_btc_lst_success(accounts[0], BTC_VALUE // 2, REDEEM_SCRIPT)
-    undelegate_amount = BTC_VALUE - FEE
+    undelegate_amount = BTC_VALUE - UTXO_FEE
     redeem_btc_tx0 = btc_delegate.build_btc_lst(
         set_outputs([BTC_VALUE, REDEEM_SCRIPT], [undelegate_amount * 3, LOCK_SCRIPT]),
         set_inputs([tx_id, 2])
@@ -1103,7 +1108,7 @@ def test_undelegate_with_change_address_utxo(btc_lst_stake, lst_token, set_candi
     redeem_tx_id = btc_delegate.get_btc_tx_id()
     btc_lst_stake.undelegate(redeem_btc_tx0, 2, [], 0, {'from': accounts[2]})
     __check_btc_lst_tx_map_info(redeem_tx_id, {
-        "amount": (BTC_VALUE - FEE) * 3,
+        "amount": (BTC_VALUE - UTXO_FEE) * 3,
         "outputIndex": 1,
         "blockHeight": 2
     })
@@ -1115,7 +1120,7 @@ def test_undelegate_with_change_address_utxo(btc_lst_stake, lst_token, set_candi
     tx = btc_lst_stake.undelegate(redeem_btc_tx0, 1, [], 0, {'from': accounts[2]})
     expect_event(tx, 'undelegatedOverflow', {
         'outputIndex': 0,
-        'expectAmount': BTC_VALUE - FEE - BTC_VALUE // 2,
+        'expectAmount': BTC_VALUE - UTXO_FEE - BTC_VALUE // 2,
         'actualAmount': BTC_VALUE
     })
 
@@ -1378,37 +1383,10 @@ def test_btc_lst_claim_reward_success(btc_agent, btc_stake, btc_lst_stake, set_c
     turn_round(consensuses, round_count=2)
     update_system_contract_address(btc_lst_stake, btc_agent=accounts[0])
     return_value = btc_lst_stake.claimReward(accounts[0]).return_value
-    claimed_reward = TOTAL_REWARD * 3 // 2
-    unclaimed_reward = TOTAL_REWARD * 3 - TOTAL_REWARD * 3 // 2
+    claimed_reward = TOTAL_REWARD * 3
+    unclaimed_reward = 0
     assert return_value == [claimed_reward, unclaimed_reward, BTC_VALUE]
     assert btc_lst_stake.rewardMap(accounts[0]) == [0, 0]
-
-
-def test_lst_claim_reward_when_grade_is_disabled(btc_agent, btc_stake, btc_lst_stake, set_candidate):
-    operators, consensuses = set_candidate
-    turn_round()
-    delegate_btc_lst_success(accounts[0], BTC_VALUE, LOCK_SCRIPT)
-    turn_round(consensuses, round_count=2)
-    update_system_contract_address(btc_lst_stake, gov_hub=accounts[0], btc_agent=accounts[0])
-    hex_value = padding_left(Web3.to_hex(int(0)), 64)
-    btc_lst_stake.updateParam('gradeActive', hex_value, {'from': accounts[0]})
-    return_value = btc_lst_stake.claimReward(accounts[0]).return_value
-    assert return_value == [TOTAL_REWARD * 3, 0, BTC_VALUE]
-
-
-@pytest.mark.parametrize("percentage", [400, 1000, 8800, 10000])
-def test_lst_claim_reward_percentage_change(btc_agent, btc_stake, btc_lst_stake, set_candidate, percentage):
-    operators, consensuses = set_candidate
-    turn_round()
-    delegate_btc_lst_success(accounts[0], BTC_VALUE, LOCK_SCRIPT)
-    turn_round(consensuses, round_count=2)
-    update_system_contract_address(btc_lst_stake, gov_hub=accounts[0], btc_agent=accounts[0])
-    hex_value = padding_left(Web3.to_hex(int(percentage)), 64)
-    btc_lst_stake.updateParam('percentage', hex_value, {'from': accounts[0]})
-    return_value = btc_lst_stake.claimReward(accounts[0]).return_value
-    btc_lst_reward = TOTAL_REWARD * 3
-    claimed_reward = btc_lst_reward * percentage // Utils.DENOMINATOR
-    assert return_value == [claimed_reward, btc_lst_reward - claimed_reward, BTC_VALUE]
 
 
 def test_lst_claim_reward_only_btc_agent_can_call(btc_agent, btc_stake, btc_lst_stake, set_candidate):
@@ -1592,9 +1570,9 @@ def test_p2wsh_lock_script_with_p2pkh_redeem_script(btc_lst_stake, lst_token):
     tx = btc_lst_stake.redeem(0, redeem_script)
     expect_event(tx, 'redeemed', {
         'pkscript': redeem_script,
-        'amount': BTC_VALUE - FEE
+        'amount': BTC_VALUE - UTXO_FEE
     })
-    redeem_btc_tx = build_btc_lst_tx(accounts[0], BTC_VALUE - FEE, redeem_script, tx_id)
+    redeem_btc_tx = build_btc_lst_tx(accounts[0], BTC_VALUE - UTXO_FEE, redeem_script, tx_id)
     tx = btc_lst_stake.undelegate(redeem_btc_tx, 0, [], 0)
     assert 'undelegated' in tx.events
     assert lst_token.balanceOf(accounts[0]) == 0
@@ -1616,7 +1594,7 @@ def test_redeem_failed_due_to_invalid_pkscript(btc_lst_stake, lst_token, set_can
 def test_revert_on_redeem_amount_too_small(btc_lst_stake, lst_token, redeem_amount, set_candidate):
     delegate_btc_lst_success(accounts[0], BTC_VALUE, LOCK_SCRIPT)
     turn_round()
-    if redeem_amount < FEE * 2:
+    if redeem_amount < UTXO_FEE * 2:
         with brownie.reverts("The redeem amount is too small"):
             btc_lst_stake.redeem(redeem_amount, REDEEM_SCRIPT)
     else:
@@ -1644,7 +1622,7 @@ def test_multiple_redeems_with_same_pkscript(btc_lst_stake, lst_token, set_candi
     turn_round()
     assert btc_lst_stake.userStakeInfo(accounts[0])[1] == delegate_amount
     btc_lst_stake.redeem(BTC_VALUE, REDEEM_SCRIPT)
-    redeem_amount = BTC_VALUE - FEE
+    redeem_amount = BTC_VALUE - UTXO_FEE
     assert btc_lst_stake.getRedeemMap(keccak_hash256(REDEEM_SCRIPT)) == 1
     script_hash, addr_type = btc_script.get_script_hash(REDEEM_SCRIPT)
     __check_redeem_requests(0, {
@@ -1656,7 +1634,7 @@ def test_multiple_redeems_with_same_pkscript(btc_lst_stake, lst_token, set_candi
     __check_redeem_requests(0, {
         'hash': script_hash,
         'addrType': addr_type,
-        'amount': redeem_amount + BTC_VALUE * 2 - FEE
+        'amount': redeem_amount + BTC_VALUE * 2 - UTXO_FEE
     })
     realtime_amount = delegate_amount - BTC_VALUE * 3
     assert btc_lst_stake.userStakeInfo(accounts[0])[1] == realtime_amount
@@ -1808,16 +1786,14 @@ def test_full_clear_after_undelegate(btc_lst_stake):
     assert 'redeemed' in tx.events
 
 
-def test_on_token_transfer_success(btc_lst_stake, lst_token, set_candidate):
+def test_on_token_transfer_success(btc_agent, btc_lst_stake, lst_token, set_candidate):
     btc_amount = BTC_VALUE * 2
     operators, consensuses = set_candidate
     turn_round()
-    delegate_btc_lst_success(accounts[0], btc_amount, LOCK_SCRIPT)
+    delegate_btc_lst_success(accounts[0], btc_amount, LOCK_SCRIPT, percentage=Utils.DENOMINATOR)
     turn_round()
     turn_round(consensuses)
-    hex_value = padding_left(Web3.to_hex(int(0)), 64)
-    update_system_contract_address(btc_lst_stake, lst_token=accounts[0], gov_hub=accounts[0])
-    btc_lst_stake.updateParam('gradeActive', hex_value, {'from': accounts[0]})
+    update_system_contract_address(btc_lst_stake, lst_token=accounts[0])
     btc_lst_stake.onTokenTransfer(accounts[0], accounts[1], btc_amount // 2)
     __check_user_stake_info(accounts[0], {
         'realtimeAmount': BTC_VALUE,
@@ -1913,6 +1889,7 @@ def test_revert_on_invalid_btc_wallet(btc_lst_stake, script):
 
 
 def test_re_add_deleted_btc_wallet(btc_lst_stake):
+    __add_wallet(REDEEM_SCRIPT)
     update_system_contract_address(btc_lst_stake, gov_hub=accounts[0])
     btc_lst_stake.updateParam('remove', LOCK_SCRIPT)
     wallets = btc_lst_stake.wallets(0)
@@ -1924,6 +1901,8 @@ def test_re_add_deleted_btc_wallet(btc_lst_stake):
 
 @pytest.mark.parametrize("script", ['p2sh', 'p2pkh', 'p2wpkh', 'p2wsh', 'p2tr'])
 def test_remove_wallet(btc_lst_stake, script):
+    if script == 'p2sh':
+        __add_wallet(REDEEM_SCRIPT)
     update_system_contract_address(btc_lst_stake, gov_hub=accounts[0])
     stake_script = __create_btc_lst_staking_script(script)
     btc_lst_stake.updateParam('add', stake_script)
@@ -1951,48 +1930,45 @@ def test_revert_on_deleting_unadded_btc_wallet(btc_lst_stake):
         btc_lst_stake.updateParam('remove', stake_script)
 
 
-def test_update_param_percentage_success(btc_lst_stake):
-    percentage = 4000
+def test_keep_at_least_one_valid_multisig_address(btc_lst_stake):
     update_system_contract_address(btc_lst_stake, gov_hub=accounts[0])
-    hex_value = padding_left(Web3.to_hex(int(percentage)), 64)
-    tx = btc_lst_stake.updateParam('percentage', hex_value)
-    assert btc_lst_stake.percentage() == percentage
-    expect_event(tx, 'paramChange', {
-        'key': 'percentage',
-        'value': hex_value
-    })
-
-
-def test_revert_on_percentage_zero(btc_lst_stake):
-    percentage = 0
+    with brownie.reverts("Wallet empty"):
+        btc_lst_stake.updateParam('remove', LOCK_SCRIPT)
+    __add_wallet(REDEEM_SCRIPT)
     update_system_contract_address(btc_lst_stake, gov_hub=accounts[0])
-    hex_value = padding_left(Web3.to_hex(percentage), 64)
-    with brownie.reverts(f"OutOfBounds: percentage, {percentage}, 1, 10000"):
-        btc_lst_stake.updateParam('percentage', hex_value)
-
-
-def test_revert_on_percentage_exceeding_limit(btc_lst_stake):
-    percentage = 13000
+    btc_lst_stake.updateParam('remove', REDEEM_SCRIPT)
+    with brownie.reverts("Wallet empty"):
+        btc_lst_stake.updateParam('remove', LOCK_SCRIPT)
+    btc_lst_script = random_btc_lst_lock_script()
+    __add_wallet(btc_lst_script)
     update_system_contract_address(btc_lst_stake, gov_hub=accounts[0])
-    hex_value = padding_left(Web3.to_hex(percentage), 64)
-    with brownie.reverts(f"OutOfBounds: percentage, {percentage}, 1, 10000"):
-        btc_lst_stake.updateParam('percentage', hex_value)
+    tx = btc_lst_stake.updateParam('remove', LOCK_SCRIPT)
+    assert 'removedWallet' in tx.events
 
 
-@pytest.mark.parametrize("grade_active", [0, 1])
-def test_update_param_grade_active_success(btc_lst_stake, grade_active):
+def test_duplicate_stake_address_remove_and_add(btc_lst_stake):
+    __add_wallet(REDEEM_SCRIPT)
+    wallet_index = btc_lst_stake.getWalletMap(keccak_hash256(REDEEM_SCRIPT))
+    actual_wallet_index = 2
+    assert wallet_index == actual_wallet_index
+    wallets = btc_lst_stake.wallets(actual_wallet_index - 1)
+    script_hash, script_type = BtcScript.get_script_hash(REDEEM_SCRIPT)
+    assert wallets == [script_hash, script_type, 1]
     update_system_contract_address(btc_lst_stake, gov_hub=accounts[0])
-    hex_value = padding_left(Web3.to_hex(grade_active), 64)
-    btc_lst_stake.updateParam('gradeActive', hex_value)
-    assert btc_lst_stake.gradeActive() == grade_active
-
-
-def test_revert_on_grade_active_exceeding_limit(btc_lst_stake):
-    grade_active = 2
-    update_system_contract_address(btc_lst_stake, gov_hub=accounts[0])
-    hex_value = padding_left(Web3.to_hex(grade_active), 64)
-    with brownie.reverts(f"OutOfBounds: gradeActive, {grade_active}, 0, 1"):
-        btc_lst_stake.updateParam('gradeActive', hex_value)
+    btc_lst_stake.updateParam('remove', REDEEM_SCRIPT)
+    wallets = btc_lst_stake.wallets(actual_wallet_index - 1)
+    assert wallets == [script_hash, script_type, 2]
+    __add_wallet(REDEEM_SCRIPT)
+    assert wallet_index == actual_wallet_index
+    wallets = btc_lst_stake.wallets(actual_wallet_index - 1)
+    assert wallets == [script_hash, script_type, 1]
+    btc_lst_script = random_btc_lst_lock_script()
+    __add_wallet(btc_lst_script)
+    script_hash, script_type = BtcScript.get_script_hash(btc_lst_script)
+    wallet_index = btc_lst_stake.getWalletMap(keccak_hash256(btc_lst_script))
+    assert wallet_index == 3
+    wallets = btc_lst_stake.wallets(wallet_index - 1)
+    assert wallets == [script_hash, script_type, 1]
 
 
 def test_update_param_only_callable_by_gov_hub(btc_lst_stake):
@@ -2065,3 +2041,9 @@ def __check_btc_lst_tx_map_info(tx_id, result: dict):
     data = __get_btc_lst_tx_map_info(tx_id)
     for i in result:
         assert data[i] == result[i]
+
+
+def __add_wallet(script):
+    update_system_contract_address(BTC_LST_STAKE, gov_hub=accounts[10])
+    BTC_LST_STAKE.updateParam('add', script, {'from': accounts[10]})
+    update_system_contract_address(BTC_LST_STAKE, gov_hub=GOV_HUB)

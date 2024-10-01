@@ -158,7 +158,6 @@ contract ClaimBtcRewardReentry is ReentryPledgeAgentProxy {
     constructor(address _pledgeAgentAddress, address _stakeHub) ReentryPledgeAgentProxy(_pledgeAgentAddress, _stakeHub) {}
 
     receive() external payable {
-        IPledgeAgent(impl).claimBtcReward(txidList);
         IStakeHub(stakeHub).claimReward();
     }
 }

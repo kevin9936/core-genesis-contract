@@ -2,8 +2,7 @@ import brownie
 import pytest
 from brownie import *
 from .calc_reward import set_delegate, parse_delegation, Discount, set_btc_lst_delegate
-from .common import register_candidate, turn_round, get_current_round, claim_stake_and_relay_reward, \
-    stake_hub_claim_reward, claim_relayer_reward, set_round_tag
+from .common import register_candidate, turn_round, get_current_round,stake_hub_claim_reward, set_round_tag
 from .delegate import *
 from .utils import *
 

@@ -182,7 +182,7 @@ contract PledgeAgentMock is PledgeAgent {
         }
 
         if (rewardAmount != 0) {
-            _distributeReward(payable(delegator));
+            distributeRewardMock(payable(delegator), rewardAmount);
         }
         return d.newDeposit;
     }

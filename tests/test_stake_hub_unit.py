@@ -277,25 +277,25 @@ def test_set_new_round_success(stake_hub, core_agent, btc_lst_stake, btc_stake):
     assert core_agent.roundTag() == btc_lst_stake.roundTag() == btc_stake.roundTag() == round_tag
 
 
-def test_only_operators_can_call(stake_hub, core_agent, btc_lst_stake, btc_stake):
-    amount = 100
-    with brownie.reverts("only debt operators"):
-        stake_hub.addNotePayable(accounts[0], accounts[1], amount)
+# def test_only_operators_can_call(stake_hub, core_agent, btc_lst_stake, btc_stake):
+#     amount = 100
+#     with brownie.reverts("only debt operators"):
+#         stake_hub.addNotePayable(accounts[0], accounts[1], amount)
 
-
-def test_add_note_payable_success(stake_hub, core_agent, btc_lst_stake, btc_stake, set_candidate):
-    btc_value = 1000
-    operators, consensuses = set_candidate
-    lock_script = '0480db8767b17576a914574fdd26858c28ede5225a809f747c01fcc1f92a88ac'
-    delegate_btc_success(operators[0], accounts[1], btc_value, lock_script, relay=accounts[1])
-    turn_round()
-    turn_round(consensuses)
-    amount = 200
-    stake_hub.setOperators(accounts[0], True)
-    stake_hub.addNotePayable(accounts[1], accounts[2], amount)
-    stake_hub_claim_reward(accounts[1])
-    tx = stake_hub.claimRelayerReward({'from': accounts[2]})
-    assert tx.events['claimedRelayerReward']['amount'] == amount
+# 
+# def test_add_note_payable_success(stake_hub, core_agent, btc_lst_stake, btc_stake, set_candidate):
+#     btc_value = 1000
+#     operators, consensuses = set_candidate
+#     lock_script = '0480db8767b17576a914574fdd26858c28ede5225a809f747c01fcc1f92a88ac'
+#     delegate_btc_success(operators[0], accounts[1], btc_value, lock_script, relay=accounts[1])
+#     turn_round()
+#     turn_round(consensuses)
+#     amount = 200
+#     stake_hub.setOperators(accounts[0], True)
+#     stake_hub.addNotePayable(accounts[1], accounts[2], amount)
+#     stake_hub_claim_reward(accounts[1])
+#     tx = stake_hub.claimRelayerReward({'from': accounts[2]})
+#     assert tx.events['claimedRelayerReward']['amount'] == amount
 
 
 def __mock_stake_hub_reward():
@@ -438,7 +438,7 @@ def test_only_pledge_agent_can_call(stake_hub):
 
 
 def test_proxy_claim_reward_success(stake_hub, btc_agent, pledge_agent, set_candidate):
-    fee = 100
+    fee = 0
     operators, consensuses = set_candidate
     turn_round()
     delegate_coin_success(operators[0], 1000000, accounts[2])
@@ -467,11 +467,8 @@ def test_calculate_reward_success(stake_hub, btc_agent, core_agent, btc_lst_stak
     __set_lp_rates([[0, 5000]])
     btc_agent.setPercentage(5000)
     stake_hub.setOperators(accounts[3], True)
-    amount = 1000
-    stake_hub.addNotePayable(accounts[0], accounts[2], amount, {'from': accounts[3]})
-    rewards, debt_amount = stake_hub.calculateRewardMock(accounts[0]).return_value
+    rewards = stake_hub.calculateRewardMock(accounts[0]).return_value
     assert rewards == actual_rewards
-    assert debt_amount == amount
     assert stake_hub.surplus() == reward
 
 
@@ -508,7 +505,7 @@ def test_calculate_reward_update_surplus(stake_hub, btc_agent, btc_lst_stake, te
     reward = stake_hub.calculateRewardMock(accounts[0]).return_value
     assert actual_reward == tests['expect_reward']
     assert stake_hub.surplus() == tests['expect_surplus']
-    assert reward == [[0, 0, actual_reward], 0]
+    assert reward == [0, 0, actual_reward]
 
 
 @pytest.mark.parametrize("lp_rates", [
@@ -527,80 +524,80 @@ def test_claim_rewards_multiple_grades(stake_hub, core_agent, btc_lst_stake, has
     btc_agent.setPercentage(5000)
     for lp in lp_rates:
         btc_agent.setLpRates(lp[0], lp[1])
-    rewards, debt_amount = stake_hub.calculateRewardMock(accounts[0]).return_value
+    rewards = stake_hub.calculateRewardMock(accounts[0]).return_value
     assert rewards == actual_rewards
 
+# 
+# @pytest.mark.parametrize("fee", [
+#     3000,
+#     5000,
+#     10000,
+#     12000,
+#     20000
+# ])
+# def test_calc_rewards_with_extra_fee(stake_hub, core_agent, btc_lst_stake, hash_power_agent, fee):
+#     accounts[3].transfer(stake_hub, Web3.to_wei(1, 'ether'))
+#     reward = 10000
+#     core_agent.setCoreRewardMap(accounts[0], reward, 0)
+#     stake_hub.setOperators(accounts[3], True)
+#     stake_hub.addNotePayable(accounts[0], accounts[2], fee, {'from': accounts[3]})
+#     _, debt_amount = stake_hub.calculateRewardMock(accounts[0]).return_value
+#     remain_fee = 0
+#     debt_fee = fee
+#     if fee > reward:
+#         debt_fee = reward
+#         remain_fee = fee - reward
+#     assert debt_amount == debt_fee
+#     reward = 10000
+#     core_agent.setCoreRewardMap(accounts[0], reward, 0)
+#     _, debt_amount = stake_hub.calculateRewardMock(accounts[0]).return_value
+#     assert remain_fee == debt_amount
+# 
+# 
+# def test_calc_rewards_with_multiple_fees(stake_hub, core_agent):
+#     accounts[3].transfer(stake_hub, Web3.to_wei(1, 'ether'))
+#     reward = 10000
+#     core_agent.setCoreRewardMap(accounts[0], reward, 0)
+#     stake_hub.setOperators(accounts[3], True)
+#     fee0 = 3000
+#     fee1 = 3000
+#     stake_hub.addNotePayable(accounts[0], accounts[2], fee0, {'from': accounts[3]})
+#     stake_hub.addNotePayable(accounts[0], accounts[2], fee1, {'from': accounts[3]})
+#     _, debt_amount = stake_hub.calculateRewardMock(accounts[0]).return_value
+#     assert debt_amount == fee0 + fee1
 
-@pytest.mark.parametrize("fee", [
-    3000,
-    5000,
-    10000,
-    12000,
-    20000
-])
-def test_calc_rewards_with_extra_fee(stake_hub, core_agent, btc_lst_stake, hash_power_agent, fee):
-    accounts[3].transfer(stake_hub, Web3.to_wei(1, 'ether'))
-    reward = 10000
-    core_agent.setCoreRewardMap(accounts[0], reward, 0)
-    stake_hub.setOperators(accounts[3], True)
-    stake_hub.addNotePayable(accounts[0], accounts[2], fee, {'from': accounts[3]})
-    _, debt_amount = stake_hub.calculateRewardMock(accounts[0]).return_value
-    remain_fee = 0
-    debt_fee = fee
-    if fee > reward:
-        debt_fee = reward
-        remain_fee = fee - reward
-    assert debt_amount == debt_fee
-    reward = 10000
-    core_agent.setCoreRewardMap(accounts[0], reward, 0)
-    _, debt_amount = stake_hub.calculateRewardMock(accounts[0]).return_value
-    assert remain_fee == debt_amount
+# 
+# def test_multi_stake_reward_with_fee_payment(stake_hub, core_agent):
+#     accounts[3].transfer(stake_hub, Web3.to_wei(1, 'ether'))
+#     __mock_core_reward_map(accounts[0], 2000, 0)
+#     __mock_power_reward_map(accounts[0], 2000, 0)
+#     __mock_btc_lst_reward_map(accounts[0], 1000, 0)
+#     __mock_btc_reward_map(accounts[0], 1000, 0, 0)
+#     stake_hub.setOperators(accounts[3], True)
+#     fee0 = 3000
+#     fee1 = 3000
+#     stake_hub.addNotePayable(accounts[0], accounts[2], fee0, {'from': accounts[3]})
+#     stake_hub.addNotePayable(accounts[0], accounts[2], fee1, {'from': accounts[3]})
+#     _, debt_amount = stake_hub.calculateRewardMock(accounts[0]).return_value
+#     assert debt_amount == fee0 + fee1
 
-
-def test_calc_rewards_with_multiple_fees(stake_hub, core_agent):
-    accounts[3].transfer(stake_hub, Web3.to_wei(1, 'ether'))
-    reward = 10000
-    core_agent.setCoreRewardMap(accounts[0], reward, 0)
-    stake_hub.setOperators(accounts[3], True)
-    fee0 = 3000
-    fee1 = 3000
-    stake_hub.addNotePayable(accounts[0], accounts[2], fee0, {'from': accounts[3]})
-    stake_hub.addNotePayable(accounts[0], accounts[2], fee1, {'from': accounts[3]})
-    _, debt_amount = stake_hub.calculateRewardMock(accounts[0]).return_value
-    assert debt_amount == fee0 + fee1
-
-
-def test_multi_stake_reward_with_fee_payment(stake_hub, core_agent):
-    accounts[3].transfer(stake_hub, Web3.to_wei(1, 'ether'))
-    __mock_core_reward_map(accounts[0], 2000, 0)
-    __mock_power_reward_map(accounts[0], 2000, 0)
-    __mock_btc_lst_reward_map(accounts[0], 1000, 0)
-    __mock_btc_reward_map(accounts[0], 1000, 0, 0)
-    stake_hub.setOperators(accounts[3], True)
-    fee0 = 3000
-    fee1 = 3000
-    stake_hub.addNotePayable(accounts[0], accounts[2], fee0, {'from': accounts[3]})
-    stake_hub.addNotePayable(accounts[0], accounts[2], fee1, {'from': accounts[3]})
-    _, debt_amount = stake_hub.calculateRewardMock(accounts[0]).return_value
-    assert debt_amount == fee0 + fee1
-
-
-def test_duplicate_relayer_reward_claim(stake_hub, core_agent):
-    accounts[3].transfer(stake_hub, Web3.to_wei(1, 'ether'))
-    reward = 10000
-    core_agent.setCoreRewardMap(accounts[0], reward, MIN_INIT_DELEGATE_VALUE)
-    stake_hub.setOperators(accounts[3], True)
-    fee0 = 3000
-    fee1 = 2000
-    stake_hub.addNotePayable(accounts[0], accounts[2], fee0, {'from': accounts[3]})
-    stake_hub.addNotePayable(accounts[0], accounts[2], fee1, {'from': accounts[3]})
-    stake_hub_claim_reward(accounts[0])
-    tx = stake_hub.claimRelayerReward({'from': accounts[0]})
-    assert 'claimedRelayerReward' not in tx.events
-    tx = stake_hub.claimRelayerReward({'from': accounts[2]})
-    assert tx.events['claimedRelayerReward']['amount'] == fee0 + fee1
-    tx = stake_hub.claimRelayerReward({'from': accounts[2]})
-    assert 'claimedRelayerReward' not in tx.events
+# 
+# def test_duplicate_relayer_reward_claim(stake_hub, core_agent):
+#     accounts[3].transfer(stake_hub, Web3.to_wei(1, 'ether'))
+#     reward = 10000
+#     core_agent.setCoreRewardMap(accounts[0], reward, MIN_INIT_DELEGATE_VALUE)
+#     stake_hub.setOperators(accounts[3], True)
+#     fee0 = 3000
+#     fee1 = 2000
+#     stake_hub.addNotePayable(accounts[0], accounts[2], fee0, {'from': accounts[3]})
+#     stake_hub.addNotePayable(accounts[0], accounts[2], fee1, {'from': accounts[3]})
+#     stake_hub_claim_reward(accounts[0])
+#     tx = stake_hub.claimRelayerReward({'from': accounts[0]})
+#     assert 'claimedRelayerReward' not in tx.events
+#     tx = stake_hub.claimRelayerReward({'from': accounts[2]})
+#     assert tx.events['claimedRelayerReward']['amount'] == fee0 + fee1
+#     tx = stake_hub.claimRelayerReward({'from': accounts[2]})
+#     assert 'claimedRelayerReward' not in tx.events
 
 
 def test_only_govhub_can_call(stake_hub):
@@ -820,8 +817,8 @@ def test_stake_hup_calculate_reward(stake_hub, btc_agent, validator_set, candida
             btc_agent.setInitLpRates(*test['set_grades'])
 
         if test['status'] == 'success':
-            assert stake_hub.calculateRewardMock(test['delegator']).return_value[:2] == (
-                test['expect_rewards'], test['expect_debt_amount'])
+            assert stake_hub.calculateRewardMock(test['delegator']).return_value == (
+                test['expect_rewards'])
 
 
 def __mock_core_reward_map(delegator, reward, acc_stake_amount):
