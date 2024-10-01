@@ -12,7 +12,7 @@ def make_failed_scenario_file_path(start_round, stop_round, candidate_count, del
 
 @pytest.mark.parametrize("start_round,stop_round,candidate_count,delegator_count", [
     [7,17,6,5],
-    [10,50,21,15]
+    [10,50,26,15]
 ])
 def test_random_scenario(
     start_round,

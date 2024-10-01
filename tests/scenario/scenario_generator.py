@@ -113,6 +113,7 @@ class DelegatorStakeInfo:
     def stake_btc_lst(self, amount):
         self.btc_lst_amount += amount
 
+
     def redeem_btc_lst(self, amount):
         self.btc_lst_amount -= amount
         assert self.btc_lst_amount >= 0
@@ -156,6 +157,8 @@ class DataCenter:
         self.btc_lst_redeem_max_amount = 0
 
         self.utxo_fee = 0
+
+        self.unavailable_round = {}
 
         self.init_sponsees()
         self.init_delegators()
@@ -314,6 +317,16 @@ class DataCenter:
     def is_registered(self, operator):
         return self.candidates.get(operator) is not None
 
+    def can_unregistered(self, operator):
+        if not self.is_registered(operator):
+            return False
+
+        round = self.get_unavailable_round(operator)
+        if round == 0:
+            return False
+
+        return self.round > round
+
     def is_available(self, operator):
         candidates = self.get_available_candidates()
         if len(candidates) == 0:
@@ -328,6 +341,12 @@ class DataCenter:
         candidate.set_operator_name(operator)
 
         self.candidates[operator] = candidate
+
+        self.unset_unavailable_round(operator)
+        self.dirty_available_candidates = True
+
+    def unregister_candidate(self, operator):
+        self.candidates.pop(operator)
         self.dirty_available_candidates = True
 
     def slash_validator(self, operator, count):
@@ -379,17 +398,32 @@ class DataCenter:
 
         self.dirty_available_candidates = True
 
+    def set_unavailable_round(self, operator):
+        self.unavailable_round[operator] = self.round
+
+    def unset_unavailable_round(self, operator):
+        if self.unavailable_round.get(operator) is None:
+            return
+
+        self.unavailable_round.pop(operator)
+
+    def get_unavailable_round(self, operator):
+        return self.unavailable_round.get(operator, 0)
+
     def refuse_delegate(self, operator):
         candidate = self.candidates.get(operator)
         candidate.disable_delegate()
 
+        self.set_unavailable_round(operator)
         self.dirty_available_candidates = True
 
     def accept_delegate(self, operator):
         candidate = self.candidates.get(operator)
         candidate.enable_delegate()
 
+        self.unset_unavailable_round(operator)
         self.dirty_available_candidates = True
+
 
     def choice_candidate(self):
         candidates = self.get_candidates()
@@ -428,6 +462,9 @@ class DataCenter:
         count = random.randint(1, max_count)
 
         return random.choices(self.delegators, k=count)
+
+    def choice_delegator(self):
+        return random.choice(self.delegators)
     ############## end delegator ####################
 
 
@@ -469,6 +506,10 @@ class DataCenter:
     def redeem_btc_lst(self, redeemer, amount):
         stake_info = self.get_stake_info(redeemer)
         stake_info.redeem_btc_lst(amount)
+
+    def transfer_btc_lst(self, from_delegator, to_delegator, amount):
+        self.redeem_btc_lst(from_delegator, amount)
+        self.stake_btc_lst(to_delegator, "", amount)
 
     def choice_transferable_btc(self, delegator):
         stake_info = self.get_stake_info(delegator)
@@ -751,6 +792,7 @@ class CandidateTaskGenerator(TaskGenerator):
             AcceptDelegate(),
             SlashValidator(),
             RefuseDelegate(),
+            UnregisterCandidate(),
             StakePower()
         ]
 
@@ -801,6 +843,7 @@ class DelegatorTaskGenerator(TaskGenerator):
             StakeBtc(),
             TransferBtc(),
             StakeLSTBtc(),
+            TransferLSTBtc(),
             BurnLSTBtcAndPayBtcToRedeemer(),
             ClaimReward()
         ]
@@ -853,6 +896,7 @@ class TaskType(Enum):
     AddMargin = CANDIDATE_TASK_BASE_TYPE + 2
     RefuseDelegate = CANDIDATE_TASK_BASE_TYPE + 3
     AcceptDelegate = CANDIDATE_TASK_BASE_TYPE + 4
+    UnregisterCandidate = CANDIDATE_TASK_BASE_TYPE + 5
     StakeCore = DELEGATOR_TASK_BASE_TYPE
     UnstakeCore = DELEGATOR_TASK_BASE_TYPE + 1
     TransferCore = DELEGATOR_TASK_BASE_TYPE + 2
@@ -860,9 +904,10 @@ class TaskType(Enum):
     StakeBtc = DELEGATOR_TASK_BASE_TYPE + 4
     TransferBtc = DELEGATOR_TASK_BASE_TYPE + 5
     StakeLSTBtc = DELEGATOR_TASK_BASE_TYPE + 6
-    BurnLSTBtcAndPayBtcToRedeemer = DELEGATOR_TASK_BASE_TYPE + 7
-    UnstakeLSTBtc = DELEGATOR_TASK_BASE_TYPE + 8
-    ClaimReward = DELEGATOR_TASK_BASE_TYPE + 9
+    TransferLSTBtc = DELEGATOR_TASK_BASE_TYPE + 7
+    BurnLSTBtcAndPayBtcToRedeemer = DELEGATOR_TASK_BASE_TYPE + 8
+    UnstakeLSTBtc = DELEGATOR_TASK_BASE_TYPE + 9
+    ClaimReward = DELEGATOR_TASK_BASE_TYPE + 10
 
 
 class TaskBuilder:
@@ -1202,6 +1247,26 @@ class RefuseDelegate(TaskBuilder):
         data_center.refuse_delegate(operator)
         return [task]
 
+
+class UnregisterCandidate(TaskBuilder):
+    def __init__(self):
+        super().__init__()
+        self.type = TaskType.UnregisterCandidate.value
+
+    def self_build(self, task_generator):
+        operator = task_generator.get_operator()
+
+        data_center = task_generator.get_data_center()
+        if not data_center.can_unregistered(operator):
+            return
+
+        data_center.unregister_candidate(operator)
+
+        task = [self.__class__.__name__, operator]
+        return [task]
+
+
+
 class AcceptDelegate(TaskBuilder):
     def __init__(self):
         super().__init__()
@@ -1363,8 +1428,8 @@ class StakeBtc(AssetOperationBuilder):
         data_center = task_generator.get_data_center()
         delegatee = data_center.choice_candidate()
 
-        # bitcoin amount 0.01 ~ 100
-        amount = random.randint(1,10000) / 100
+        # bitcoin amount 0.01 ~ 2
+        amount = random.randint(1,200) / 100
 
         # lock round
         lock_round = random.randint(5, 365)
@@ -1441,8 +1506,8 @@ class StakeLSTBtc(AssetOperationBuilder):
         # delegator
         delegator = task_generator.get_delegator()
 
-        # bitcoin amount 0.01 ~ 100
-        amount = random.randint(1,10000) / 100
+        # bitcoin amount 0.01 ~ 2
+        amount = random.randint(1,200) / 100
 
         # payment type
         payment_type, redeem_script_type = \
@@ -1466,6 +1531,32 @@ class StakeLSTBtc(AssetOperationBuilder):
                 amount,
                 payment_type
             ], tx_symbol,  amount, delegator
+
+class TransferLSTBtc(AssetOperationBuilder):
+    def __init__(self):
+        super().__init__()
+        self.type = TaskType.TransferLSTBtc.value
+
+    def self_build(self, task_generator):
+        from_delegator = task_generator.get_delegator()
+
+
+        data_center = task_generator.get_data_center()
+        stake_amount = data_center.get_stake_info(from_delegator).get_btc_lst_stake_amount()
+        if stake_amount == 0:
+            return
+
+        transfer_amount = round(random.uniform(0, stake_amount), 8)
+
+        to_delegator = data_center.choice_delegator()
+        if to_delegator == from_delegator:
+            return
+
+        task = [self.__class__.__name__, from_delegator, to_delegator, transfer_amount]
+
+        data_center.transfer_btc_lst(from_delegator, to_delegator, transfer_amount)
+        return [task]
+
 
 class UnstakeLSTBtc(TaskBuilder):
     pass

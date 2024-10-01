@@ -429,8 +429,8 @@ class ChainChecker:
         delegator = tx.get_delegator()
         round = tx.get_round()
 
-        assert_result("tx_delegatee", delegatee, delegatee_on_chain)
-        assert_result("tx_delegator", delegator, delegator_on_chain)
+        assert_result("tx_delegatee", addr_to_name(delegatee), addr_to_name(delegatee_on_chain))
+        assert_result("tx_delegator", addr_to_name(delegator), addr_to_name(delegator_on_chain))
         assert_result("tx_round", round, round_on_chain)
 
 
@@ -438,7 +438,7 @@ class ChainChecker:
         realtime_amount = self.chain.get_btc_stake_realtime_amount(delegatee)
         realtime_amount_on_chain = self.chain.get_btc_stake_realtime_amount_on_chain(delegatee)
 
-        assert_result("realtime_amount", realtime_amount, realtime_amount_on_chain)
+        assert_result(f"{addr_to_name(delegatee)}_realtime_amount", realtime_amount, realtime_amount_on_chain)
 
     def check_delegator_btc_realtime_amount(self, delegator):
         # cannot check, delegatorMap on chain is private
@@ -467,6 +467,8 @@ class ChainChecker:
     def check_total_unclaimed_reward(self):
         unclaim_reward = self.chain.get_total_unclaimed_reward()
         unclaim_reward_on_chain = self.chain.get_total_unclaimed_reward_on_chain()
+
+        print(f"total_unclaimed_reward off_chain={unclaim_reward}, on_chain={unclaim_reward_on_chain}")
 
         assert_result("total_unclaim_reward", unclaim_reward, unclaim_reward_on_chain)
 

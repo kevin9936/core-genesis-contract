@@ -249,12 +249,15 @@ class CoreAsset(Asset):
         remove_list = []
         staked_candidates = delegator_stake_state.get_core_stake_candidates(delegator)
         for addr in staked_candidates.keys():
-            reward, accured_stake_amount = self.collect_reward_in_candidate(round, delegator, candidates[addr])
+            candidate = candidates.get(addr)
+            assert candidate is not None
+
+            reward, accured_stake_amount = self.collect_reward_in_candidate(round, delegator, candidate)
             total_reward += reward
             total_accured_stake_amount += accured_stake_amount
             print(f"{self.name} reward, candidate={addr}, {addr_to_name(addr)}, reward={reward}")
 
-            candidate_stake_state = candidates[addr].get_stake_state()
+            candidate_stake_state = candidate.get_stake_state()
             if candidate_stake_state.get_delegator_realtime_amount(self.name, delegator) == 0 and \
                 candidate_stake_state.get_delegator_transferred_amount(self.name, delegator) == 0:
                 remove_list.append(addr)
