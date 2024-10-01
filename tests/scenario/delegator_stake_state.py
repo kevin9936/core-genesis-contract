@@ -262,10 +262,29 @@ class DelegatorStakeState:
         self.core_stake_candidates[delegator][delegatee] = True
 
     def rm_core_stake_candidate(self, delegator, delegatee):
-        if self.core_stake_candidates.get(delegator) is None:
+        delegatees = self.get_core_stake_candidates(delegator)
+
+        candidate_count = len(delegatees)
+        if candidate_count == 0:
             return
 
-        self.core_stake_candidates[delegator].pop(delegatee)
+        if candidate_count == 1:
+            delegatees.pop(delegatee)
+            return
+
+        idx = 0
+        for addr in delegatees.keys():
+            if addr == delegatee:
+                break
+            idx += 1
+
+        assert idx < candidate_count
+        items = list(delegatees.items())
+        if idx < candidate_count-1:
+            items[idx] = items[candidate_count-1]
+
+        items.pop()
+        self.core_stake_candidates[delegator] = dict(items)
 
     def get_btc_lst_total_stake_amount(self):
         return self.btc_lst_total_stake_amount

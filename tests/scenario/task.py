@@ -64,7 +64,7 @@ class SponsorFund(Task):
     def pre_execute(self, params):
         super().pre_execute(params)
 
-        self.sponsor = get_sponsor_addr("S0")
+        self.sponsor = get_sponsor_addr("S1")
 
         assert len(params) >= 1, f"Invalid params"
         self.sponsee = get_sponsee_addr(params[0])
@@ -72,7 +72,8 @@ class SponsorFund(Task):
         amount = params[1] if len(params) == 2 else random.randint(1,100)
         self.amount = int(amount * constants.CORE_DECIMALS)
 
-        assert self.amount <= self.sponsor.balance() // 2, f"The amount is too large"
+        assert self.amount <= self.sponsor.balance() // 2, \
+            f"The amount is too large, {self.amount}, {self.sponsor.balance() // 2}"
 
     def execute(self):
         super().execute()

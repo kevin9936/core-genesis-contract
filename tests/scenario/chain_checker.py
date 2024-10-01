@@ -238,7 +238,7 @@ class ChainChecker:
         change_round = candidate_stake_state.get_delegator_change_round(core_asset_name, delegator)
 
         tuple_data = self.chain.get_delegator_core_stake_state_on_chain(delegator, delegatee)
-        change_round_on_chain = tuple_data[2]
+        change_round_on_chain = tuple_data[3]
 
         assert_result(
             f"{addr_to_name(delegator)}_{addr_to_name(delegatee)}_change_round",
@@ -253,15 +253,13 @@ class ChainChecker:
         transferred_amount = candidate_stake_state.get_delegator_transferred_amount(core_asset_name, delegator)
 
         tuple_data = self.chain.get_delegator_core_stake_state_on_chain(delegator, delegatee)
-        transferred_amount_on_chain = tuple_data[3]
+        transferred_amount_on_chain = tuple_data[2]
 
         assert_result(
             f"{addr_to_name(delegator)}_{addr_to_name(delegatee)}_transferred_amount",
             transferred_amount,
             transferred_amount_on_chain
         )
-
-
 
     def check_delegator_core_total_amount(self, delegator):
         delegator_stake_state = self.chain.get_delegator_stake_state()
@@ -278,9 +276,10 @@ class ChainChecker:
         if len(nodes) != len(nodes_on_chain):
             assert False, f"{addr_to_name(delegator)}_stake_nodes off_chain={nodes.keys()}, on_chain={nodes_on_chain}"
 
-        for node in nodes_on_chain:
-            if nodes.get(node) is None:
-                assert False, f"{addr_to_name(delegator)}_stake_nodes {addr_to_name(node)} does not exist"
+        assert_result(f"{addr_to_name(delegator)}_stake_nodes", list(nodes.keys()), list(nodes_on_chain))
+        # for node in nodes_on_chain:
+        #     if nodes.get(node) is None:
+        #         assert False, f"{addr_to_name(delegator)}_stake_nodes {addr_to_name(node)} does not exist"
 
     def check_core_history_reward(self, delegator):
         reward = self.chain.get_delegator_stake_state().get_core_history_reward(delegator)

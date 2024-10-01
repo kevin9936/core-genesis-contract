@@ -174,7 +174,7 @@ class DataCenter:
     def init_sponsees(self):
         self.sponsees = {
             "ValidatorSet": 10000000,
-            "SystemReward": 1000
+            "SystemReward": 40000000
         }
 
     def init_delegators(self):

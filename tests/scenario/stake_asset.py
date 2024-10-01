@@ -246,9 +246,9 @@ class CoreAsset(Asset):
         core_accured_stake_amount=0):
         total_reward = 0
         total_accured_stake_amount = 0
-        remove_list = []
+        # remove_list = []
         staked_candidates = delegator_stake_state.get_core_stake_candidates(delegator)
-        for addr in staked_candidates.keys():
+        for addr in reversed(list(staked_candidates.keys())):
             candidate = candidates.get(addr)
             assert candidate is not None
 
@@ -260,11 +260,12 @@ class CoreAsset(Asset):
             candidate_stake_state = candidate.get_stake_state()
             if candidate_stake_state.get_delegator_realtime_amount(self.name, delegator) == 0 and \
                 candidate_stake_state.get_delegator_transferred_amount(self.name, delegator) == 0:
-                remove_list.append(addr)
+                # remove_list.append(addr)
+                delegator_stake_state.rm_core_stake_candidate(delegator, addr)
                 candidate_stake_state.update_delegator_change_round(self.name, delegator, 0)
 
-        for addr in remove_list:
-            delegator_stake_state.rm_core_stake_candidate(delegator, addr)
+        # for addr in remove_list:
+        #     delegator_stake_state.rm_core_stake_candidate(delegator, addr)
 
         history_reward = delegator_stake_state.get_core_history_reward(delegator)
         if history_reward > 0:

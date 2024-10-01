@@ -484,13 +484,12 @@ class ChainHandler:
             self.pay_delegator_debts(delegator, total_claimable_reward, delegator_stake_state)
         print(f"    pay debts={total_payment}, remain claimable={total_claimable_reward}")
 
-        self.chain.add_balance(delegator, total_claimable_reward)
-        self.chain.add_balance(StakeHubMock[0], -total_claimable_reward)
-
         total_float_reward = self.check_float_reward_pool(total_unclaimable_reward)
         self.chain.add_total_unclaimed_reward(-total_float_reward)
         print(f"finale total_unclaimed_reward = {self.chain.get_total_unclaimed_reward()}")
 
+        self.chain.add_balance(delegator, total_claimable_reward)
+        self.chain.add_balance(StakeHubMock[0], -total_claimable_reward)
         # ## for debug
         # arr = StakeHubMock[0].getDataArr()
         # print(f"STAKEHUB Debug on chain: {arr}")
@@ -498,8 +497,8 @@ class ChainHandler:
         # arr = BitcoinAgentMock[0].getDataArr()
         # print(f"BITCOINAGENT Debug: {arr}")
 
-        curFloadRewards = StakeHubMock[0].getCurFloadRewards()
-        print(f"dnjsdjks {curFloadRewards}")
+        # curFloadRewards = StakeHubMock[0].getCurFloadRewards()
+        # print(f"dnjsdjks {curFloadRewards}")
 
 
     def check_float_reward_pool(self, total_unclaimable_reward):
@@ -608,20 +607,21 @@ class ChainHandler:
                 delegator_stake_state.add_core_history_accured_stake_amount(delegator, accured_stake_amount)
 
         stake_amount = candidate_stake_state.get_delegator_stake_amount(asset_name, delegator)
-        assert stake_amount >= amount
+        realtime_amount = candidate_stake_state.get_delegator_realtime_amount(asset_name, delegator)
+        assert realtime_amount >= amount
 
         # update candidate's total realtime amount
         candidate_stake_state.add_realtime_amount(asset_name, -amount) # candidate total realtime anount
 
         if is_transfer:
             # update delegator's transferred amount in this candidate
-            candidate_stake_state.add_delegator_transferred_amount(asset_name, delegator, amount)
+            candidate_stake_state.add_delegator_transferred_amount(asset_name, delegator, min(amount, stake_amount))
         else:
             # update delegator's total staked amount in all candidate
             delegator_stake_state.add_core_amount(delegator, -amount) # delegator total amount
 
         # update delegator's stake amount and realtime amount in this candidate
-        candidate_stake_state.add_delegator_stake_amount(asset_name, delegator, -amount) # delegator stake amount
+        candidate_stake_state.add_delegator_stake_amount(asset_name, delegator, -min(amount, stake_amount)) # delegator stake amount
         candidate_stake_state.add_delegator_realtime_amount(asset_name, delegator, -amount) # delegator realtime amount
 
         # if the delegator's realtime amount and transfferd amount at the current candidate is 0, remove the related information.
@@ -634,6 +634,42 @@ class ChainHandler:
         # update balance
         self.chain.add_balance(delegator, amount)
         self.chain.add_balance(CoreAgentMock[0], -amount)
+
+        self._deduct_transferred_amount_from_staked_candidates(delegator, amount-min(amount, stake_amount))
+
+    def _deduct_transferred_amount_from_staked_candidates(self, delegator, amount):
+        if amount <= 0:
+            return
+
+        delegator_stake_state = self.chain.get_delegator_stake_state()
+        staked_candidates = delegator_stake_state.get_core_stake_candidates(delegator)
+        if staked_candidates is None or len(staked_candidates) == 0:
+            return
+
+        core_asset = self.chain.get_core_asset()
+        asset_name = core_asset.get_name()
+
+        for delegatee in reversed(list(staked_candidates.keys())):
+            candidate = self.chain.get_candidate(delegatee)
+            candidate_stake_state = candidate.get_stake_state()
+            transferred_amount = candidate_stake_state.\
+                get_delegator_transferred_amount(asset_name, delegator)
+
+            if transferred_amount == 0:
+                continue
+
+            if transferred_amount < amount:
+                candidate_stake_state.update_delegator_transferred_amount(asset_name, delegator, 0)
+                amount -= transferred_amount
+
+                realtime_amount = candidate_stake_state.get_delegator_realtime_amount(asset_name, delegator)
+                if realtime_amount == 0:
+                    delegator_stake_state.rm_core_stake_candidate(delegator, delegatee)
+                    candidate_stake_state.update_delegator_change_round(asset_name, delegator, 0)
+            else:
+                candidate_stake_state.add_delegator_transferred_amount(asset_name, delegator, -amount)
+                break
+
 
     def transfer_core(self, delegator, from_delegatee, to_delegatee, amount):
         self.undelegate_core(delegator, from_delegatee, amount, True)

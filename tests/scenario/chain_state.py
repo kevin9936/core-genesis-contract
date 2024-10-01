@@ -358,8 +358,9 @@ class ChainState:
         return self.balances.get(addr, 0)
 
     def add_balance(self, addr, delta_amount):
-        self.balances[addr] = self.get_balance(addr) + delta_amount
-        assert self.balances[addr] >= 0
+        old_balance = self.get_balance(addr)
+        self.balances[addr] = old_balance + delta_amount
+        assert self.balances[addr] >= 0, f"old_balance={old_balance} delta_amount={delta_amount}"
 
     def update_balance(self, addr, amount):
         assert amount >= 0
