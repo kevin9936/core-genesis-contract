@@ -166,7 +166,7 @@ def test_undelegate_coin_next_round(core_agent, stake_hub):
     core_agent.undelegateCoin(operator, MIN_INIT_DELEGATE_VALUE)
     turn_round([consensus])
     reward_sum = stake_hub.claimReward.call()
-    assert reward_sum == [[0, 0, 0], 0]
+    assert reward_sum == [0, 0, 0]
 
 
 def test_proxy_claim_reward_success(core_agent, stake_hub):
@@ -179,11 +179,8 @@ def test_proxy_claim_reward_success(core_agent, stake_hub):
     assert tx.events['delegatedCoin']['delegator'] == pledge_agent_proxy.address
     turn_round()
     turn_round([consensus])
-    liability_amount = pledge_agent_proxy.claimReward.call()
-    assert liability_amount == 0
     tx = pledge_agent_proxy.claimReward()
     expect_event(tx, "claim", {
-        "liabilityAmount": 0,
         "allClaimed": True,
         "delegator": accounts[0],
         "rewards": [COIN_REWARD, 0, 0],
@@ -1814,11 +1811,9 @@ def test_cancel_with_same_round_additional_stake_reverts(core_agent, validator_s
     turn_round()
     delegate_coin_success(operators[0], delegate_amount, accounts[0])
     if operate == 'undelegate':
-        with brownie.reverts("Not enough staked tokens"):
-            core_agent.undelegateCoin(operators[0], undelegate_amount, {'from': accounts[0]})
+        core_agent.undelegateCoin(operators[0], undelegate_amount, {'from': accounts[0]})
     else:
-        with brownie.reverts("Not enough staked tokens"):
-            core_agent.transferCoin(operators[0], operators[1], undelegate_amount, {'from': accounts[0]})
+        core_agent.transferCoin(operators[0], operators[1], undelegate_amount, {'from': accounts[0]})
 
 
 @pytest.mark.parametrize("operate", ['undelegate', 'transfer'])
@@ -1841,7 +1836,7 @@ def test_cancel_with_additional_stake_succeeds_after_round_switch(core_agent, va
 
 @pytest.mark.parametrize("threshold_type", ['minor', 'major'])
 def test_stake_then_cancel_same_round_on_slashed_validator(core_agent, slash_indicator, threshold_type, set_candidate):
-    delegate_amount = MIN_INIT_DELEGATE_VALUE * 2
+    delegate_amount = MIN_INIT_DELEGATE_VALUE * 4
     operators, consensuses = set_candidate
     turn_round()
     delegate_coin_success(operators[0], delegate_amount, accounts[0])
@@ -1855,10 +1850,8 @@ def test_stake_then_cancel_same_round_on_slashed_validator(core_agent, slash_ind
     for count in range(slash_threshold):
         tx = slash_indicator.slash(consensuses[0])
     assert event_name in tx.events
-    with brownie.reverts("Not enough staked tokens"):
-        core_agent.undelegateCoin(operators[0], MIN_INIT_DELEGATE_VALUE, {'from': accounts[0]})
-    with brownie.reverts("Not enough staked tokens"):
-        core_agent.transferCoin(operators[0], operators[1], MIN_INIT_DELEGATE_VALUE, {'from': accounts[0]})
+    core_agent.undelegateCoin(operators[0], MIN_INIT_DELEGATE_VALUE, {'from': accounts[0]})
+    core_agent.transferCoin(operators[0], operators[1], MIN_INIT_DELEGATE_VALUE, {'from': accounts[0]})
     turn_round()
     tx = undelegate_coin_success(operators[0], MIN_INIT_DELEGATE_VALUE, accounts[0])
     assert 'undelegatedCoin' in tx.events
@@ -1876,10 +1869,8 @@ def test_cancel_current_round_stake_on_validator_with_different_status(core_agen
         candidate_hub.refuseDelegate({'from': operators[0]})
     elif validator_type == 'unregister':
         candidate_hub.unregister({'from': operators[0]})
-    with brownie.reverts("Not enough staked tokens"):
-        core_agent.undelegateCoin(operators[0], MIN_INIT_DELEGATE_VALUE, {'from': accounts[0]})
-    with brownie.reverts("Not enough staked tokens"):
-        core_agent.transferCoin(operators[0], operators[1], MIN_INIT_DELEGATE_VALUE, {'from': accounts[0]})
+    core_agent.undelegateCoin(operators[0], MIN_INIT_DELEGATE_VALUE, {'from': accounts[0]})
+    core_agent.transferCoin(operators[0], operators[1], MIN_INIT_DELEGATE_VALUE, {'from': accounts[0]})
 
 
 @pytest.mark.parametrize("operate", ['undelegate', 'transfer'])
@@ -1891,11 +1882,9 @@ def test_cancel_current_round_stake_and_transferred_amount(core_agent, validator
     turn_round()
     transfer_coin_success(operators[0], operators[1], undelegate_amount, accounts[0])
     if operate == 'undelegate':
-        with brownie.reverts("Not enough staked tokens"):
-            core_agent.undelegateCoin(operators[1], undelegate_amount, {'from': accounts[0]})
+        core_agent.undelegateCoin(operators[1], undelegate_amount, {'from': accounts[0]})
     else:
-        with brownie.reverts("Not enough staked tokens"):
-            core_agent.transferCoin(operators[1], operators[2], undelegate_amount, {'from': accounts[0]})
+        core_agent.transferCoin(operators[1], operators[2], undelegate_amount, {'from': accounts[0]})
 
 
 @pytest.mark.parametrize("operate", ['undelegate', 'transfer'])
@@ -1908,14 +1897,10 @@ def test_cancel_amount_transferred_in_current_round(core_agent, validator_set, o
     turn_round()
     transfer_coin_success(operators[0], operators[1], undelegate_amount, accounts[0])
     if operate == 'undelegate':
-        with brownie.reverts("Not enough staked tokens"):
-            core_agent.undelegateCoin(operators[1], delegate_amount + 1, {'from': accounts[0]})
-        tx = core_agent.undelegateCoin(operators[1], delegate_amount, {'from': accounts[0]})
+        tx = core_agent.undelegateCoin(operators[1], delegate_amount + 1, {'from': accounts[0]})
         event = 'undelegatedCoin'
     else:
-        with brownie.reverts("Not enough staked tokens"):
-            core_agent.transferCoin(operators[1], operators[2], delegate_amount + 1, {'from': accounts[0]})
-        tx = core_agent.transferCoin(operators[1], operators[2], undelegate_amount, {'from': accounts[0]})
+        tx = core_agent.transferCoin(operators[1], operators[2], delegate_amount + 1, {'from': accounts[0]})
         event = 'transferredCoin'
     assert event in tx.events
 

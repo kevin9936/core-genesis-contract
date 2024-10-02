@@ -191,12 +191,12 @@ def test_acc_stake_amount_success(hash_power_agent, set_candidate, stake_hub):
     turn_round(consensuses)
     update_system_contract_address(hash_power_agent, stake_hub=accounts[0])
     reward_sum, unclaimed, acc_staked_amount = hash_power_agent.claimReward(accounts[0], 0).return_value
-    assert acc_staked_amount ==  staked_amounts[0]
+    assert acc_staked_amount == staked_amounts[0]
 
 
 def test_only_stake_hub_can_call_claim_reward(hash_power_agent):
     with brownie.reverts("the msg sender must be stake hub contract"):
-        hash_power_agent.claimReward(accounts[0])
+        hash_power_agent.claimReward(accounts[0], 0)
 
 
 def test_update_param_callable_only_after_init(hash_power_agent):

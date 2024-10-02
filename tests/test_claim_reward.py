@@ -2,7 +2,8 @@ import brownie
 import pytest
 from brownie import *
 from .calc_reward import set_delegate, parse_delegation, Discount, set_btc_lst_delegate
-from .common import register_candidate, turn_round, get_current_round,stake_hub_claim_reward, set_round_tag
+from .common import register_candidate, turn_round, get_current_round, stake_hub_claim_reward, set_round_tag, \
+    claim_stake_and_relay_reward
 from .delegate import *
 from .utils import *
 
@@ -37,7 +38,7 @@ def deposit_for_reward(validator_set, gov_hub):
 
 @pytest.fixture(scope="module", autouse=True)
 def set_block_reward(validator_set, candidate_hub, btc_light_client, btc_stake, stake_hub, core_agent, pledge_agent,
-                     btc_lst_stake, gov_hub, hash_power_agent):
+                     btc_lst_stake, gov_hub, hash_power_agent, btc_agent):
     global BLOCK_REWARD, FEE, BTC_REWARD, COIN_REWARD, TOTAL_REWAR, DELEGATE_VALUE, TOTAL_REWARD, HASH_POWER_AGENT, PLEDGE_AGENT
     global BTC_STAKE, STAKE_HUB, CORE_AGENT, BTC_LIGHT_CLIENT, MIN_INIT_DELEGATE_VALUE, CANDIDATE_HUB, BTC_LST_STAKE
     FEE = FEE * 100
@@ -54,17 +55,14 @@ def set_block_reward(validator_set, candidate_hub, btc_light_client, btc_stake, 
     CORE_AGENT = core_agent
     CANDIDATE_HUB = candidate_hub
     BTC_LIGHT_CLIENT = btc_light_client
-    STAKE_HUB.setBtcPoolRate([6000, 0, 4000])
     candidate_hub.setControlRoundTimeTag(True)
     # The default staking time is 150 days
     set_block_time_stamp(150, LOCK_TIME)
     tlp_rates, lp_rates = Discount().get_init_discount()
     btc_stake.setInitTlpRates(*tlp_rates)
-    stake_hub.setInitLpRates(*lp_rates)
-    btc_stake.setIsActive(1)
-    btc_lst_stake.setIsActive(1)
-    core_lp = 4
-    stake_hub.setIsActive(core_lp)
+    btc_agent.setInitLpRates(*lp_rates)
+    btc_stake.setIsActive(True)
+    btc_agent.setIsActive(True)
     BTC_LST_STAKE = btc_lst_stake
     PLEDGE_AGENT = pledge_agent
     HASH_POWER_AGENT = hash_power_agent
@@ -199,14 +197,14 @@ class TestInitHardForkDelegate:
         for index, op in enumerate(operators):
             delegators[0].old_delegate_coin(op, BTC_VALUE + index)
         for index, op in enumerate(operators[0:10]):
-            tx_id = delegators[0].old_delegate_btc(BTC_VALUE + index, op, lock_time)
+            tx_id = delegators[0].old_delegate_btc(op,BTC_VALUE + index, lock_time)
             tx_ids.append(tx_id)
         lock_time, end_round = mock_btc_stake_lock_time(timestamp, 3)
         delegators[0].delegate_coin(operators[0], DELEGATE_VALUE)
         delegators[0].delegate_coin(operators[7], DELEGATE_VALUE)
         for index, op in enumerate(operators[10:12]):
             btc_amount = BTC_VALUE + (index + 10)
-            tx_id = delegators[1].old_delegate_btc(btc_amount, op, lock_time)
+            tx_id = delegators[1].old_delegate_btc(op,btc_amount, lock_time)
             tx_ids.append(tx_id)
         delegators[0].old_delegate_coin(operators[8], DELEGATE_VALUE)
         delegators[1].old_delegate_coin(operators[12], DELEGATE_VALUE)
@@ -221,8 +219,8 @@ class TestInitHardForkDelegate:
         init_hybrid_score_mock()
         turn_round(consensuses)
 
-    def test_init_hard_fork_delegate1(self, pledge_agent, stake_hub, candidate_hub, core_agent, btc_stake):
-        STAKE_HUB.setIsActive(0)
+    def test_init_hard_fork_delegate1(self, pledge_agent, btc_agent, stake_hub, candidate_hub, core_agent, btc_stake):
+        btc_agent.setIsActive(False)
         init_round_tag, timestamp = mock_current_round()
         old_turn_round()
         set_round_tag(init_round_tag)
@@ -235,13 +233,13 @@ class TestInitHardForkDelegate:
         for delegator in delegators[:3]:
             for op in operators:
                 delegator.old_delegate_coin(op, DELEGATE_VALUE)
-                tx_id = delegator.old_delegate_btc(BTC_VALUE, op, lock_time)
+                tx_id = delegator.old_delegate_btc(op,BTC_VALUE, lock_time)
                 tx_ids.append(tx_id)
         lock_time, end_round = mock_btc_stake_lock_time(timestamp, 4)
         for delegator in delegators[3:]:
             for op in operators:
                 delegator.old_delegate_coin(op, DELEGATE_VALUE)
-                tx_id = delegator.old_delegate_btc(BTC_VALUE, op, lock_time)
+                tx_id = delegator.old_delegate_btc(op,BTC_VALUE, lock_time)
                 tx_ids.append(tx_id)
         for index, delegator in enumerate(delegators[:3]):
             delegator.delegate_power(operators[index], 2)
@@ -259,7 +257,7 @@ class TestInitHardForkDelegate:
         print(CoreAgentMock[0].roundTag())
         print(BitcoinLSTStakeMock[0].roundTag())
         print(PledgeAgentMock[0].roundTag())
-        stake_hub.setFailed(1)
+        # stake_hub.setFailed(1)
         for delegator in delegators:
             for op in operators:
                 # delegators[i].old_delegate_coin(op, DELEGATE_VALUE, False)
@@ -274,8 +272,8 @@ class TestInitHardForkDelegate:
         for delegator in delegators:
             print('getDelegatorBtcMap', btc_stake.getDelegatorBtcMap(delegator.get_address()))
 
-    def test_move_btc_no_reward(self, pledge_agent, stake_hub, candidate_hub, core_agent, btc_stake):
-        STAKE_HUB.setIsActive(0)
+    def test_move_btc_no_reward(self, btc_agent, pledge_agent, stake_hub, candidate_hub, core_agent, btc_stake):
+        btc_agent.setIsActive(False)
         init_round_tag, timestamp = mock_current_round()
         old_turn_round()
         set_round_tag(init_round_tag)
@@ -297,8 +295,8 @@ class TestInitHardForkDelegate:
         turn_round(consensuses)
         delegators[0].claim_reward()
 
-    def test_move_btc_no_reward2(self, pledge_agent, stake_hub, candidate_hub, core_agent, btc_stake):
-        STAKE_HUB.setIsActive(0)
+    def test_move_btc_no_reward2(self, btc_agent, pledge_agent, stake_hub, candidate_hub, core_agent, btc_stake):
+        btc_agent.setIsActive(False)
         init_round_tag, timestamp = mock_current_round()
         old_turn_round()
         set_round_tag(init_round_tag)
@@ -365,5 +363,3 @@ class TestClaimReward:
         assert tracker0.delta() == account_rewards[accounts[0]]
         assert tracker1.delta() == account_rewards[accounts[1]]
         assert tracker2.delta() == account_rewards[accounts[2]]
-
-

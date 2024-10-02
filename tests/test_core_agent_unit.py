@@ -105,11 +105,11 @@ def test_core_agent_delegate_coin(core_agent, candidate_hub):
         {'status': 'failed', 'err': encode_args_with_signature("InactiveCandidate(address)", [accounts[2]]),
          'candidate': accounts[2], 'value': required_coin_deposit},
         {'status': 'success', 'candidate': accounts[1], 'value': required_coin_deposit,
-         'expect_cd': (0, required_coin_deposit, round_tag, 0)},
+         'expect_cd': (0, required_coin_deposit, 0, round_tag)},
         {'status': 'success', 'candidate': accounts[1], 'value': required_coin_deposit,
-         'expect_cd': (0, required_coin_deposit * 2, round_tag, 0)},
+         'expect_cd': (0, required_coin_deposit * 2, 0, round_tag)},
         {'status': 'success', 'candidate': accounts[1], 'value': required_coin_deposit,
-         'expect_cd': (required_coin_deposit * 2, required_coin_deposit * 3, round_tag + 1, 0), 'turn_round': 1},
+         'expect_cd': (required_coin_deposit * 2, required_coin_deposit * 3, 0, round_tag + 1), 'turn_round': 1},
     ]
 
     for test in tests:
@@ -127,25 +127,26 @@ def test_core_agent_delegate_coin(core_agent, candidate_hub):
 def test_core_agent_undelegate_coin(core_agent, candidate_hub):
     turn_round()
     register_candidate(operator=accounts[1])
-    core_agent.delegateCoin(accounts[1], {'from': accounts[0], 'value': required_coin_deposit * 2})
+    core_agent.delegateCoin(accounts[1], {'from': accounts[0], 'value': required_coin_deposit * 3})
     round_tag = candidate_hub.roundTag()
     tests = [
-        {'status': 'failed', 'err': 'undelegate amount is too small', 'candidate': accounts[2],
+        {'status': 'failed', 'err': 'undelegate amount is too small', 'candidate': accounts[1],
          'value': required_coin_deposit - 1},
         {'status': 'failed', 'err': 'no delegator information found', 'candidate': accounts[2],
          'value': required_coin_deposit},
-        {'status': 'failed', 'err': 'Not enough staked tokens', 'candidate': accounts[1],
-         'value': required_coin_deposit},
+        {'status': 'success', 'candidate': accounts[1], 'value': required_coin_deposit,
+         'expect_cd': (0, required_coin_deposit * 2, 0, round_tag)},
         {'status': 'failed', 'err': 'Not enough staked tokens', 'candidate': accounts[1],
          'value': required_coin_deposit * 2 + 1, 'turn_round': 1},
         {'status': 'failed', 'err': 'remain amount is too small', 'candidate': accounts[1],
          'value': required_coin_deposit * 2 - 1},
         {'status': 'success', 'candidate': accounts[1], 'value': required_coin_deposit,
-         'expect_cd': (required_coin_deposit, required_coin_deposit, round_tag + 1, 0)},
+         'expect_cd': (required_coin_deposit, required_coin_deposit, 0, round_tag + 1)},
         {'status': 'success', 'candidate': accounts[1], 'value': required_coin_deposit, 'expect_cd': (0, 0, 0, 0)},
     ]
 
     for test in tests:
+        print('fsdfafa')
         if 'turn_round' in test:
             turn_round([accounts[1]])
         if test['status'] == 'success':
@@ -179,11 +180,11 @@ def test_core_agent_transfer_coin(core_agent, candidate_hub):
          'target_candidate': accounts[2], 'value': required_coin_deposit * 2 - 1},
         {'status': 'success', 'source_andidate': accounts[1], 'target_candidate': accounts[2],
          'value': required_coin_deposit,
-         'expect_scd': (required_coin_deposit, required_coin_deposit, round_tag, required_coin_deposit),
-         'expect_tcd': (0, required_coin_deposit, round_tag, 0)},
+         'expect_scd': (required_coin_deposit, required_coin_deposit, required_coin_deposit, round_tag),
+         'expect_tcd': (0, required_coin_deposit, 0, round_tag)},
         {'status': 'success', 'source_andidate': accounts[1], 'target_candidate': accounts[2],
-         'value': required_coin_deposit, 'expect_scd': (0, 0, round_tag, required_coin_deposit * 2),
-         'expect_tcd': (0, required_coin_deposit * 2, round_tag, 0)},
+         'value': required_coin_deposit, 'expect_scd': (0, 0, required_coin_deposit * 2, round_tag),
+         'expect_tcd': (0, required_coin_deposit * 2, 0, round_tag)},
     ]
 
     for test in tests:

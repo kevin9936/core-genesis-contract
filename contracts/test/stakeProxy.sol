@@ -6,7 +6,7 @@ contract delegateCoinProxy {
     bool public  receiveState;
 
     event delegate(bool success);
-    event claim(uint256 liabilityAmount, bool allClaimed, address delegator, uint256 [] rewards);
+    event claim(bool allClaimed, address delegator, uint256 [] rewards);
     constructor(address pledgeAgentAddress, address stakeHubAddress) public {
         pledgeAgent = pledgeAgentAddress;
         stakeHub = stakeHubAddress;
@@ -17,13 +17,12 @@ contract delegateCoinProxy {
         emit delegate(success);
     }
 
-    function claimReward() external returns (uint256) {
+    function claimReward() external {
         bytes memory payload = abi.encodeWithSignature("claimReward()");
         (bool success, bytes memory returnData) = stakeHub.call(payload);
         require(success, "call to claimReward failed");
-        (uint256[] memory rewards,uint256 liabilityAmount) = abi.decode(returnData, (uint256 [], uint256));
-        emit claim(liabilityAmount, success, msg.sender, rewards);
-        return liabilityAmount;
+        (uint256[] memory rewards) = abi.decode(returnData, (uint256 []));
+        emit claim(success, msg.sender, rewards);
     }
 
     function setReceiveState(bool state) external {
@@ -70,7 +69,7 @@ contract delegateBtcLstProxy {
         (bool success, bytes memory returnData) = btcLstToken.call(payload);
         emit transferBtcLstSuccess(success);
     }
-                
+
 
     function claimReward() external returns (uint256) {
         bytes memory payload = abi.encodeWithSignature("claimReward()");

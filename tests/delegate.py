@@ -388,10 +388,9 @@ def old_turn_round(miners: list = None, tx_fee=100, round_count=1):
 def old_delegate_btc_success(btc_value, agent, delegator, lock_time=None, tx_id=None, script=None, fee=1):
     if script is None:
         script, _, timestamp = random_btc_lock_script()
+        lock_time = timestamp
     if tx_id is None:
         tx_id = random_btc_tx_id()
-    if lock_time is None:
-        lock_time = timestamp
     PledgeAgentMock[0].delegateBtcMock(tx_id, btc_value, agent, delegator, script, lock_time, fee)
     return tx_id
 
