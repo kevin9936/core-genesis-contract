@@ -243,6 +243,7 @@ def transfer_coin_success(source_agent, target_agent, amount, delegator):
 def undelegate_coin_success(candidate, amount, delegator):
     tx = CoreAgentMock[0].undelegateCoin(candidate, amount, {'from': delegator})
     assert 'undelegatedCoin' in tx.events
+    print('undelegate_coin_success>>>>',tx.events)
     return tx
 
 

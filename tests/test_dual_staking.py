@@ -867,6 +867,30 @@ def test_claim_reward_after_modify_asset_weight(btc_stake, btc_agent,
     assert rewards[-1] == TOTAL_REWARD
 
 
+@pytest.mark.parametrize("tesets", [
+    {'rate': [[0, 1000], [2500, 10000], [10000, 1000], [10001, 3000]], 'coin': 10000, 'btc': 2,'expect_reward':6772+13545},
+    {'rate': [[0, 5000], [2500, 10000], [10000, 1000], [10001, 3000]], 'coin': 10000, 'btc': 3,'expect_reward':6772+6772},
+])
+def test_cancel_immediately_after_transfer(btc_stake, stake_hub, set_candidate, btc_lst_stake, tesets):
+    delegate_amount = tesets['coin']
+    btc_value = tesets['btc']
+    rates = tesets['rate']
+    __set_lp_rates(rates)
+    __set_is_stake_hub_active(True)
+    operators, consensuses = set_candidate
+    set_round_tag(LOCK_TIME // Utils.ROUND_INTERVAL - 3)
+    turn_round()
+    delegate_coin_success(operators[0], delegate_amount, accounts[0])
+    delegate_btc_success(operators[1], accounts[0], btc_value, LOCK_SCRIPT, stake_duration=YEAR)
+    turn_round(consensuses)
+    transfer_coin_success(operators[0], operators[2], delegate_amount, accounts[0])
+    undelegate_coin_success(operators[2], delegate_amount // 2, accounts[0])
+    turn_round(consensuses)
+    tracker = get_tracker(accounts[0])
+    stake_hub_claim_reward(accounts[0])
+    assert tracker.delta() == tesets['expect_reward']
+
+
 def __set_is_btc_stake_active(value=0):
     BTC_STAKE.setIsActive(value)
 

@@ -2092,10 +2092,7 @@ def test_proxy_undelegate_cancel_all(stake_hub, core_agent, set_candidate, tests
     turn_round(consensuses, round_count=round_count)
     tracker = get_tracker(accounts[0])
     old_undelegate_coin_success(operators[1], accounts[0], 0, old=False)
-    if round_count == 0:
-        actual_amount = delegate_amount
-    else:
-        actual_amount = delegate_amount * 2
+    actual_amount = delegate_amount * 2
     assert tracker.delta() == actual_amount
     turn_round(consensuses)
 
@@ -2114,10 +2111,7 @@ def test_proxy_transfer_cancel_all(stake_hub, core_agent, set_candidate, tests, 
         old_transfer_coin_success(operators[0], operators[1], accounts[0], delegate_amount, old=False)
     turn_round(consensuses, round_count=round_count)
     tx = old_transfer_coin_success(operators[1], operators[2], accounts[0], 0, old=False)
-    if round_count == 0:
-        actual_amount = delegate_amount
-    else:
-        actual_amount = delegate_amount * 2
+    actual_amount = delegate_amount * 2
     assert tx.events['transferredCoin']['amount'] == actual_amount
     assert tx.events['transferredCoin']['realtimeAmount'] == actual_amount
     turn_round(consensuses)
@@ -2525,6 +2519,179 @@ def test_claim_reward_after_multiple_rounds_candidate(stake_hub, btc_stake, core
     account_reward1 = account_rewards[accounts[1]] * 2 + old_reward0
     account_reward2 = account_rewards[accounts[2]] * 2 + old_reward1
     assert_trackers(trackers, [account_reward0, account_reward1, account_reward2])
+
+
+@pytest.mark.parametrize("inter_round_cancel", [True, False])
+@pytest.mark.parametrize("tests", [
+    {'transfer': 500, 'undelagate': 0, 'amount': 500, 'expect_reward': 13544 + 3386},
+    {'transfer': 500, 'undelagate': 1, 'amount': 500, 'expect_reward': 13544 + 3386},
+    {'transfer': 500, 'undelagate': 2, 'amount': 500, 'expect_reward': 13544 + 3386},
+    {'transfer': 500, 'undelagate': 0, 'amount': 250, 'expect_reward': 13544 + 13545 * 750 // 2000},
+    {'transfer': 500, 'undelagate': 1, 'amount': 250, 'expect_reward': 13544 + 13545 * 750 // 2000},
+    {'transfer': 500, 'undelagate': 2, 'amount': 250, 'expect_reward': 13544 + 13545 * 750 // 2000},
+    {'transfer': 500, 'undelagate': 1, 'amount': 750, 'expect_reward': 13544 + 13545 * 250 // 2000},
+    {'transfer': 500, 'undelagate': 2, 'amount': 750, 'expect_reward': 13544 + 13545 * 250 // 2000},
+    {'transfer': 500, 'undelagate': 1, 'amount': 1000, 'expect_reward': 13544},
+    {'transfer': 500, 'undelagate': 2, 'amount': 1200, 'expect_reward': 6772 + 13545 * 800 // 2000},
+    {'transfer': 500, 'undelagate': 2, 'amount': 1500, 'expect_reward': 6772 + 13545 * 500 // 2000},
+])
+def test_cancel_stake_after_transfer_with_validator(pledge_agent, validator_set, set_candidate, tests,
+                                                    inter_round_cancel):
+    delegate_amount = MIN_INIT_DELEGATE_VALUE * 10
+    undelegate_amount = tests['amount']
+    transfer_amount = tests['transfer']
+    expect_reward = tests['expect_reward']
+    agent_index = tests['undelagate']
+    operators, consensuses = set_candidate
+    for op in operators:
+        old_delegate_coin_success(op, accounts[0], delegate_amount, False)
+        old_delegate_coin_success(op, accounts[1], delegate_amount, False)
+    turn_round()
+    tracker0 = get_tracker(accounts[0])
+    if inter_round_cancel:
+        turn_round(consensuses)
+        stake_hub_claim_reward(accounts[0])
+        expect_reward += TOTAL_REWARD // 2 * 3
+    old_transfer_coin_success(operators[0], operators[2], accounts[0], transfer_amount, False)
+    tx = old_undelegate_coin_success(operators[agent_index], accounts[0], undelegate_amount, False)
+    turn_round(consensuses)
+    stake_hub_claim_reward(accounts[0])
+    assert tracker0.delta() == expect_reward + undelegate_amount
+
+
+@pytest.mark.parametrize("old", [True, False])
+@pytest.mark.parametrize("tests", [
+    {'transfer': 4000, 'undelagate': [1, 2], 'amount': [2000, 2000], 'expect_reward': 13545 // 6},
+    {'transfer': 4000, 'undelagate': [1, 2], 'amount': [0, 0], 'expect_reward': 0},
+    {'transfer': 3000, 'undelagate': [0, 1], 'amount': [0, 0], 'expect_reward': 13545 // 6 + 6772},
+    {'transfer': 2500, 'undelagate': [1, 2], 'amount': [1500, 1000], 'expect_reward': 13545 * 2500 // 6000},
+    {'transfer': 2500, 'undelagate': [1, 2], 'amount': [2000, 1500], 'expect_reward': 13545 * 1500 // 6000},
+    {'transfer': 2500, 'undelagate': [1, 2], 'amount': [1000, 1000], 'expect_reward': 6772},
+    {'transfer': 2500, 'undelagate': [1, 2], 'amount': [1000, 500], 'expect_reward': 6772 + 3386},
+    {'transfer': 3000, 'undelagate': [0, 2], 'amount': [1000, 2000], 'expect_reward': 13545 // 6 + 6772},
+    {'transfer': 2000, 'undelagate': [0, 2], 'amount': [500, 500], 'expect_reward': 13545 * 2500 // 6000 + 6772 + 3386},
+    {'transfer': 2000, 'undelagate': [0, 1], 'amount': [2000, 2000], 'expect_reward': 6772},
+    {'transfer': 3000, 'undelagate': [0, 1, 2], 'amount': [1000, 2000, 2000], 'expect_reward': 0},
+    {'transfer': 3000, 'undelagate': [0, 1, 2], 'amount': [0, 2000, 0], 'expect_reward': 0},
+    {'transfer': 3000, 'undelagate': [0, 1, 2], 'amount': [0, 0, 0], 'expect_reward': 0}
+])
+def test_cancel_stake_from_validators_after_multiple_additions(core_agent, validator_set, set_candidate, tests, old):
+    delegate_amount = MIN_INIT_DELEGATE_VALUE * 10
+    undelegate_amount = tests['amount']
+    transfer_amount = tests['transfer']
+    expect_reward = tests['expect_reward']
+    agent_index = tests['undelagate']
+    operators, consensuses = set_candidate
+    for index, op in enumerate(operators):
+        delegate_value = delegate_amount
+        if index == 0:
+            delegate_value = delegate_amount * 3
+        old_delegate_coin_success(op, accounts[0], delegate_value, False)
+        old_delegate_coin_success(op, accounts[1], delegate_value, False)
+    turn_round()
+    for index, op in enumerate(operators):
+        delegate_value = delegate_amount
+        old_delegate_coin_success(op, accounts[0], delegate_value, False)
+        if old:
+            delegate_coin_success(op, delegate_value, accounts[1])
+        else:
+            old_delegate_coin_success(op, accounts[1], delegate_value, False)
+    if old:
+        old_transfer_coin_success(operators[0], operators[2], accounts[0], transfer_amount, False)
+    else:
+        transfer_coin_success(operators[0], operators[2], transfer_amount, accounts[0])
+    for index, a in enumerate(agent_index):
+        old_undelegate_coin_success(operators[a], accounts[0], undelegate_amount[index], False)
+    turn_round(consensuses)
+    tracker0 = get_tracker(accounts[0])
+    old_claim_reward_success(operators, accounts[0])
+    assert tracker0.delta() == expect_reward
+
+
+@pytest.mark.parametrize("round_count", [0, 1, 2])
+@pytest.mark.parametrize("tests", [
+    {'transfer': 500, 'candidate': 0, 'amount': 500, 'expect_reward': 3386, 'tow_round_reward': 13545 + 3386},
+    {'transfer': 500, 'candidate': 2, 'amount': 500, 'expect_reward': 3386, 'tow_round_reward': 13545 // 3 + 3386},
+    {'transfer': 500, 'candidate': 0, 'amount': 250, 'expect_reward': 13545 * 750 // 2000,
+     'tow_round_reward': 13545 + 13545 * 750 // 2000 + 13545 * 250 // 1250},
+    {'transfer': 500, 'candidate': 2, 'amount': 250, 'expect_reward': 13545 * 750 // 2000,
+     'tow_round_reward': 13545 + 13545 * 750 // 2000 + 13545 * 500 // 1500}
+])
+def test_claim_reward_after_cancel_coin_transfer(core_agent, validator_set, set_candidate, tests, round_count):
+    delegate_amount = MIN_INIT_DELEGATE_VALUE * 10
+    undelegate_amount = tests['amount']
+    transfer_amount = tests['transfer']
+    expect_reward = tests['expect_reward']
+    agent_index = tests['candidate']
+    operators, consensuses = set_candidate
+    old_delegate_coin_success(operators[0], accounts[0], delegate_amount, False)
+    old_delegate_coin_success(operators[0], accounts[1], delegate_amount, False)
+    turn_round()
+    old_transfer_coin_success(operators[0], operators[2], accounts[0], transfer_amount, False)
+    tracker0 = get_tracker(accounts[0])
+    old_undelegate_coin_success(operators[agent_index], accounts[0], undelegate_amount, False)
+    turn_round(consensuses, round_count=round_count)
+    old_claim_reward_success(operators, accounts[0])
+    if round_count == 0:
+        expect_reward = 0
+    elif round_count > 1:
+        expect_reward = tests['tow_round_reward']
+    assert tracker0.delta() == expect_reward + undelegate_amount
+
+
+def test_claim_rewards_after_cancel_all_in_two_rounds(core_agent, validator_set, set_candidate):
+    delegate_amount = MIN_INIT_DELEGATE_VALUE * 10
+    operators, consensuses = set_candidate
+    old_delegate_coin_success(operators[0], accounts[0], delegate_amount, False)
+    old_delegate_coin_success(operators[0], accounts[1], delegate_amount, False)
+    turn_round()
+    old_transfer_coin_success(operators[0], operators[2], accounts[0], delegate_amount // 2, False)
+    old_undelegate_coin_success(operators[0], accounts[0], 0, False)
+    old_undelegate_coin_success(operators[2], accounts[0], 0, False)
+    tracker0 = get_tracker(accounts[0])
+    turn_round(consensuses, round_count=2)
+    old_claim_reward_success(operators, accounts[0])
+    assert tracker0.delta() == 0
+    turn_round(consensuses, round_count=2)
+    old_claim_reward_success(operators, accounts[0])
+    assert tracker0.delta() == 0
+
+
+@pytest.mark.parametrize("tests", ['transfer', 'undelegate'])
+def test_cancel_and_transfer_after_adding_stake(core_agent, validator_set, set_candidate, tests):
+    delegate_amount = MIN_INIT_DELEGATE_VALUE * 10
+    operators, consensuses = set_candidate
+    old_delegate_coin_success(operators[0], accounts[0], delegate_amount, False)
+    old_delegate_coin_success(operators[0], accounts[1], delegate_amount, False)
+    turn_round()
+    old_delegate_coin_success(operators[0], accounts[0], delegate_amount, False)
+    old_delegate_coin_success(operators[1], accounts[0], delegate_amount, False)
+    if tests == 'transfer':
+        old_transfer_coin_success(operators[0], operators[1], accounts[0], 0, False)
+        __check_delegate_info(operators[0], accounts[0], {
+            'stakedAmount': 0,
+            'realtimeAmount': 0,
+            'changeRound': get_current_round(),
+            'transferredAmount': delegate_amount,
+        })
+        __check_delegate_info(operators[1], accounts[0], {
+            'stakedAmount': 0,
+            'realtimeAmount': delegate_amount * 3,
+        })
+        expect_reward = TOTAL_REWARD // 2
+    else:
+        old_undelegate_coin_success(operators[0], accounts[0], 0, False)
+        __check_delegate_info(operators[0], accounts[0], {
+            'stakedAmount': 0,
+            'realtimeAmount': 0,
+            'changeRound': 0,
+            'transferredAmount': 0,
+        })
+        expect_reward = 0
+    turn_round(consensuses)
+    tracker = get_tracker(accounts[0])
+    old_claim_reward_success(operators, accounts[0])
+    assert tracker.delta() == expect_reward
 
 
 def __init_hybrid_score_mock():

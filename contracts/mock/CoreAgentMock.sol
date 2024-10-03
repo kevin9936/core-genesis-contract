@@ -14,6 +14,14 @@ contract CoreAgentMock is CoreAgent {
         roundTag = value;
     }
 
+    function setRequiredCoinDeposit(uint newRequiredCoinDeposit) external {
+        requiredCoinDeposit = newRequiredCoinDeposit;
+    }
+
+    function deductTransferredAmountMock(address delegator, uint256 amount) external {
+        _deductTransferredAmount(delegator, amount);
+    }
+
 
     function getDelegatorMap(address delegator) external view returns (address[] memory, uint256) {
         address[] memory candidates = delegatorMap[delegator].candidates;
