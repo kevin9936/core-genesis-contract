@@ -291,7 +291,7 @@ contract CoreAgent is IAgent, System, IParamSubscriber {
       amount = candidateMap[candidate].cDelegatorMap[delegator].realtimeAmount;
     }
     uint256 dAmount = _undelegateCoin(candidate, delegator, amount, false);
-    _deductTransferredAmount(msg.sender, dAmount);
+    _deductTransferredAmount(delegator, dAmount);
     Address.sendValue(payable(PLEDGE_AGENT_ADDR), amount);
     emit undelegatedCoin(candidate, delegator, amount);
     return amount;
