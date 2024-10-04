@@ -538,6 +538,8 @@ def test_btc_delegate_no_amount_limit(btc_stake, set_candidate, delegate_btc_val
     assert "claimedReward" in tx.events
     assert tracker.delta() == TOTAL_REWARD - FEE
     assert tracker.delta() == FEE
+
+
 # 
 # 
 # def test_collect_porter_fee_success(btc_stake, set_candidate, delegate_btc_valid_tx):
@@ -1130,6 +1132,13 @@ def test_move_data_with_btc_already_collateralized(btc_stake, pledge_agent, set_
     btc_stake.moveData([tx_id])
 
 
+def test_get_grades_success(btc_stake, pledge_agent, set_candidate):
+    update_system_contract_address(btc_stake, gov_hub=accounts[0])
+    grades = [[0, 1], [1000, 2000]]
+    grades_encode = rlp.encode(grades)
+    btc_stake.updateParam('grades', grades_encode)
+    assert btc_stake.getGrades() == [[0, 1],  [grades[1][0] * Utils.ROUND_INTERVAL,2000]]
+
 def test_update_param_only_callable_by_gov_hub(btc_stake):
     with brownie.reverts("the msg sender must be governance contract"):
         btc_stake.updateParam('grades', '1')
@@ -1202,19 +1211,6 @@ def test_lock_duration_sorting_error_reverts(btc_stake, grades):
 
 
 @pytest.mark.parametrize("grades", [
-    [[1, 1], [0, 10000]],
-    [[40, 1000], [3000, 2000], [2, 4000], [4000, 9000], [40, 10000]],
-    [[3000, 1000], [1, 2000], [2, 10000], [4000, 9000], [40, 1000]],
-    [[1, 1000], [1, 2000], [2, 3000], [3, 9000], [4, 10000]],
-])
-def test_lock_duration_sorting_error_reverts(btc_stake, grades):
-    update_system_contract_address(btc_stake, gov_hub=accounts[0])
-    grades_encode = rlp.encode(grades)
-    with brownie.reverts(f"lockDuration disorder"):
-        btc_stake.updateParam('grades', grades_encode)
-
-
-@pytest.mark.parametrize("grades", [
     [[0, 10000], [1, 1000]],
     [[40, 10000], [50, 2000], [60, 4000], [70, 9000], [80, 2000]],
     [[300, 1000], [400, 2000], [500, 10000], [600, 9000], [4000, 1000]],
@@ -1231,6 +1227,13 @@ def test_lock_duration_not_starting_from_zero_reverts(btc_stake):
     update_system_contract_address(btc_stake, gov_hub=accounts[0])
     grades_encode = rlp.encode([[1, 1000], [2, 2000]])
     with brownie.reverts("lowest lockDuration must be zero"):
+        btc_stake.updateParam('grades', grades_encode)
+
+
+def test_grades_length_zero(btc_stake):
+    update_system_contract_address(btc_stake, gov_hub=accounts[0])
+    grades_encode = rlp.encode([])
+    with brownie.reverts("MismatchParamLength: grades"):
         btc_stake.updateParam('grades', grades_encode)
 
 

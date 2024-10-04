@@ -118,7 +118,7 @@ def test_add_round_reward_success(validator_set, core_agent, btc_light_client, b
     for index, round_reward in enumerate(tx.events['roundReward']):
         amounts = []
         for v1, v2 in enumerate(validators):
-            scores = stake_hub.getCandidateScoresMap(v2)
+            scores = stake_hub.getCandidateScores(v2)
             reward = reward_list[v1] * scores[index + 1] // scores[0]
             amounts.append(reward)
         assert round_reward['amount'] == amounts
@@ -203,7 +203,7 @@ def test_get_hybrid_score_success(core_agent, btc_light_client, btc_stake, candi
     for index, asset in enumerate(assets):
         factor = stake_hub.stateMap(asset)
         assert factor == [values[index], int(factors[index])]
-    candidate_scores = stake_hub.getCandidateScoresMap(validators[0])
+    candidate_scores = stake_hub.getCandidateScores(validators[0])
     assert candidate_scores[0] == sum(candidate_scores[1:4])
     for index, score in enumerate(candidate_scores[1:]):
         assert score == values[index] * factors[index]
@@ -527,6 +527,7 @@ def test_claim_rewards_multiple_grades(stake_hub, core_agent, btc_lst_stake, has
     rewards = stake_hub.calculateRewardMock(accounts[0]).return_value
     assert rewards == actual_rewards
 
+
 # 
 # @pytest.mark.parametrize("fee", [
 #     3000,
@@ -598,6 +599,12 @@ def test_claim_rewards_multiple_grades(stake_hub, core_agent, btc_lst_stake, has
 #     assert tx.events['claimedRelayerReward']['amount'] == fee0 + fee1
 #     tx = stake_hub.claimRelayerReward({'from': accounts[2]})
 #     assert 'claimedRelayerReward' not in tx.events
+
+
+def test_get_assets_success(stake_hub, core_agent, hash_power_agent, btc_agent):
+    assets = stake_hub.getAssets()
+    assert assets == [['CORE', core_agent.address, 6000], ['HASHPOWER', hash_power_agent.address, 2000],
+                      ['BTC', btc_agent.address, 4000]]
 
 
 def test_only_govhub_can_call(stake_hub):

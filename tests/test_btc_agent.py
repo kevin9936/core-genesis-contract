@@ -429,6 +429,14 @@ def test_lst_claim_reward_percentage_change(btc_agent, btc_stake, btc_lst_stake,
     assert return_value == [claimed_reward, -(btc_lst_reward - claimed_reward), BTC_LST_VALUE]
 
 
+def test_get_grades(btc_agent, btc_stake):
+    old_grades = [[0, 1000], [2000, 10000]]
+    update_system_contract_address(btc_agent, gov_hub=accounts[0])
+    grades_encode = rlp.encode(old_grades)
+    btc_agent.updateParam('grades', grades_encode)
+    assert old_grades == btc_agent.getGrades()
+
+
 def test_update_param_failed(btc_agent):
     update_system_contract_address(btc_agent, gov_hub=accounts[0])
     with brownie.reverts("UnsupportedGovParam: error key"):
@@ -509,7 +517,7 @@ def test_final_percentage_below_1_reverts(btc_agent):
         btc_agent.updateParam('grades', grades_encode)
 
 
-def test_non_last_percentage_exceeds_limit_reverts(btc_agent):
+def test_non_last_percentage_can_exceed_limit(btc_agent):
     update_system_contract_address(btc_agent, gov_hub=accounts[0])
     grades = [[0, 1000], [2000, 11000], [3000, 12000]]
     grades_encode = rlp.encode(grades)
@@ -559,6 +567,14 @@ def test_update_param_percentage_success(btc_agent):
     })
 
 
+def test_update_param_percentage_length_error(btc_agent):
+    percentage = 4000
+    update_system_contract_address(btc_agent, gov_hub=accounts[0])
+    hex_value = padding_left(Web3.to_hex(int(percentage)), 65)
+    with brownie.reverts(f"MismatchParamLength: lstGradePercentage"):
+        btc_agent.updateParam('lstGradePercentage', hex_value)
+
+
 def test_revert_on_percentage_zero(btc_agent):
     percentage = 0
     update_system_contract_address(btc_agent, gov_hub=accounts[0])
@@ -579,7 +595,11 @@ def test_revert_on_percentage_exceeding_limit(btc_agent):
 def test_update_param_grade_active_success(btc_agent, grade_active):
     update_system_contract_address(btc_agent, gov_hub=accounts[0])
     btc_agent.updateParam('gradeActive', grade_active)
-    assert btc_agent.gradeActive() == grade_active
+    if grade_active:
+        actual_active = True
+    else:
+        actual_active = False
+    assert btc_agent.gradeActive() == actual_active
 
 
 @pytest.mark.parametrize("grade_active", [2, 3, 4])
@@ -591,7 +611,7 @@ def test_update_param_grade_active_failed(btc_agent, grade_active):
 
 def test_update_param_grade_active_length_failed(btc_agent):
     update_system_contract_address(btc_agent, gov_hub=accounts[0])
-    hex_value = padding_left(Web3.to_hex(0), 65)
+    hex_value = padding_left(Web3.to_hex(0), 2)
     with brownie.reverts(f"MismatchParamLength: gradeActive"):
         btc_agent.updateParam('gradeActive', hex_value)
 

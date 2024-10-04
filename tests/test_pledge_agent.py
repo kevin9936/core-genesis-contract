@@ -2694,6 +2694,42 @@ def test_cancel_and_transfer_after_adding_stake(core_agent, validator_set, set_c
     assert tracker.delta() == expect_reward
 
 
+@pytest.mark.parametrize("tests", ['transfer', 'undelegate'])
+def test_cancel_all_after_transfer(core_agent, validator_set, set_candidate, tests):
+    delegate_amount = MIN_INIT_DELEGATE_VALUE * 10
+    operators, consensuses = set_candidate
+    old_delegate_coin_success(operators[0], accounts[0], delegate_amount, False)
+    old_delegate_coin_success(operators[1], accounts[0], delegate_amount, False)
+    turn_round()
+    old_transfer_coin_success(operators[1], operators[0], accounts[0], 0, False)
+    if tests == 'transfer':
+        old_transfer_coin_success(operators[0], operators[2], accounts[0], 0, False)
+        __check_delegate_info(operators[0], accounts[0], {
+            'stakedAmount': 0,
+            'realtimeAmount': 0,
+            'changeRound': get_current_round(),
+            'transferredAmount': delegate_amount,
+        })
+        __check_delegate_info(operators[2], accounts[0], {
+            'stakedAmount': 0,
+            'realtimeAmount': delegate_amount * 2,
+        })
+        expect_reward = TOTAL_REWARD * 2
+    else:
+        old_undelegate_coin_success(operators[0], accounts[0], 0, False)
+        __check_delegate_info(operators[0], accounts[0], {
+            'stakedAmount': 0,
+            'realtimeAmount': 0,
+            'changeRound': 0,
+            'transferredAmount': 0,
+        })
+        expect_reward = 0
+    turn_round(consensuses)
+    tracker = get_tracker(accounts[0])
+    old_claim_reward_success(operators, accounts[0])
+    assert tracker.delta() == expect_reward
+
+
 def __init_hybrid_score_mock():
     tx = STAKE_HUB.initHybridScoreMock()
     print('__init_hybrid_score_mock>>>>>>', tx.events)

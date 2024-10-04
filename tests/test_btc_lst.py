@@ -669,6 +669,13 @@ def test_successful_call_after_unpause(btc_lst_stake, lst_token, set_candidate, 
         transfer_btc_lst_success(accounts[0], BTC_VALUE, accounts[1])
 
 
+def test_stake_with_inactive_wallet_address(btc_lst_stake, lst_token, set_candidate):
+    __add_wallet(REDEEM_SCRIPT)
+    __remove_wallet(REDEEM_SCRIPT)
+    with brownie.reverts("wallet inactive"):
+        delegate_btc_lst_success(accounts[0], BTC_VALUE, REDEEM_SCRIPT)
+
+
 def test_lst_btc_undelegate_success(btc_lst_stake, lst_token, set_candidate):
     tx_id = delegate_btc_lst_success(accounts[0], BTC_VALUE, LOCK_SCRIPT)
     btc_lst_stake.redeem(BTC_VALUE, LOCK_SCRIPT)
@@ -1786,6 +1793,22 @@ def test_full_clear_after_undelegate(btc_lst_stake):
     assert 'redeemed' in tx.events
 
 
+@pytest.mark.parametrize("burn_btc_limit", [1000, 1e6, 20e8, 100e8])
+def test_redeem_after_modifying_btc_limit(btc_lst_stake, burn_btc_limit):
+    update_system_contract_address(btc_lst_stake, gov_hub=accounts[0])
+    hex_value = padding_left(Web3.to_hex(int(burn_btc_limit)), 64)
+    btc_lst_stake.updateParam('burnBTCLimit', hex_value)
+    btc_value = 210e8
+    tx_id = delegate_btc_lst_success(accounts[0], btc_value, LOCK_SCRIPT)
+    btc_lst_stake.redeem(burn_btc_limit + UTXO_FEE, REDEEM_SCRIPT)
+    with brownie.reverts("The cumulative burn amount has reached the upper limit"):
+        btc_lst_stake.redeem(burn_btc_limit, REDEEM_SCRIPT)
+    redeem_btc_tx = build_btc_lst_tx(accounts[0], btc_value, REDEEM_SCRIPT, tx_id, 0)
+    btc_lst_stake.undelegate(redeem_btc_tx, 0, [], 0)
+    tx = btc_lst_stake.redeem(burn_btc_limit + UTXO_FEE, REDEEM_SCRIPT)
+    assert 'redeemed' in tx.events
+
+
 def test_on_token_transfer_success(btc_agent, btc_lst_stake, lst_token, set_candidate):
     btc_amount = BTC_VALUE * 2
     operators, consensuses = set_candidate
@@ -1854,6 +1877,13 @@ def test_lst_token_transfer_amount_exceeds_balance(btc_lst_stake, lst_token, set
         btc_lst_stake.onTokenTransfer(accounts[0], constants.ADDRESS_ZERO, BTC_VALUE + 1)
 
 
+def test_get_wallets_success(btc_lst_stake):
+    __add_wallet(REDEEM_SCRIPT)
+    hash1, type1 = BtcScript.get_script_hash(LOCK_SCRIPT)
+    hash2, type2 = BtcScript.get_script_hash(REDEEM_SCRIPT)
+    assert btc_lst_stake.getWallets() == [[hash1, type1, 1], [hash2, type2, 1]]
+
+
 @pytest.mark.parametrize("script", ['p2sh', 'p2pkh', 'p2wpkh', 'p2wsh', 'p2tr'])
 def test_add_wallet_success(btc_lst_stake, script):
     update_system_contract_address(btc_lst_stake, gov_hub=accounts[0])
@@ -1868,12 +1898,14 @@ def test_add_wallet_success(btc_lst_stake, script):
 
 def test_duplicate_add_wallet_calls(btc_lst_stake):
     update_system_contract_address(btc_lst_stake, gov_hub=accounts[0])
-    tx = btc_lst_stake.updateParam('add', LOCK_SCRIPT)
     script_info = btc_script.get_script_hash(LOCK_SCRIPT)
+    assert btc_lst_stake.wallets(0) == [script_info[0], script_info[1], 1]
+    tx = btc_lst_stake.updateParam('add', LOCK_SCRIPT)
     expect_event(tx, 'addedWallet', {
         '_hash': script_info[0],
         '_type': script_info[1]
     })
+    assert btc_lst_stake.wallets(0) == [script_info[0], script_info[1], 1]
 
 
 @pytest.mark.parametrize("script", [
@@ -1896,6 +1928,12 @@ def test_re_add_deleted_btc_wallet(btc_lst_stake):
     assert wallets[2] == 2
     btc_lst_stake.updateParam('add', LOCK_SCRIPT)
     wallets = btc_lst_stake.wallets(0)
+    assert wallets[2] == 1
+    btc_lst_stake.updateParam('remove', REDEEM_SCRIPT)
+    wallets = btc_lst_stake.wallets(1)
+    assert wallets[2] == 2
+    btc_lst_stake.updateParam('add', REDEEM_SCRIPT)
+    wallets = btc_lst_stake.wallets(1)
     assert wallets[2] == 1
 
 
@@ -1971,10 +2009,60 @@ def test_duplicate_stake_address_remove_and_add(btc_lst_stake):
     assert wallets == [script_hash, script_type, 1]
 
 
+@pytest.mark.parametrize("paused", [0, 1])
+def test_update_paused_success(btc_lst_stake, paused):
+    update_system_contract_address(btc_lst_stake, gov_hub=accounts[0])
+    if paused:
+        btc_lst_stake.updateParam('paused', 1)
+        paused_ = True
+    else:
+        btc_lst_stake.updateParam('paused', 1)
+        btc_lst_stake.updateParam('paused', 0)
+        paused_ = False
+    assert btc_lst_stake.paused() is paused_
+
+
+def test_update_paused_length_error(btc_lst_stake):
+    update_system_contract_address(btc_lst_stake, gov_hub=accounts[0])
+    hex_value = padding_left(Web3.to_hex(1), 64)
+    with brownie.reverts("MismatchParamLength: paused"):
+        btc_lst_stake.updateParam('paused', hex_value)
+
+
+@pytest.mark.parametrize("paused", [2, 3, 4])
+def test_update_paused_range_error(btc_lst_stake, paused):
+    update_system_contract_address(btc_lst_stake, gov_hub=accounts[0])
+    with brownie.reverts(f"OutOfBounds: paused, {paused}, 0, 1"):
+        btc_lst_stake.updateParam('paused', paused)
+
+
+@pytest.mark.parametrize("burn_btc_limit", [1e5, 2e8, 10e8, 100e8])
+def test_update_burn_btc_limit_success(btc_lst_stake, burn_btc_limit):
+    update_system_contract_address(btc_lst_stake, gov_hub=accounts[0])
+    hex_value = padding_left(Web3.to_hex(int(burn_btc_limit)), 64)
+    btc_lst_stake.updateParam('burnBTCLimit', hex_value)
+    assert btc_lst_stake.burnBTCLimit() == int(burn_btc_limit)
+
+
+def test_update_burn_btc_limit_param_length_error(btc_lst_stake):
+    burn_btc_limit = 10e8
+    update_system_contract_address(btc_lst_stake, gov_hub=accounts[0])
+    hex_value = padding_left(Web3.to_hex(int(burn_btc_limit)), 62)
+    with brownie.reverts("MismatchParamLength: burnBTCLimit"):
+        btc_lst_stake.updateParam('burnBTCLimit', hex_value)
+
+
+def test_governance_param_not_exist(btc_lst_stake):
+    test_value = 10e8
+    update_system_contract_address(btc_lst_stake, gov_hub=accounts[0])
+    with brownie.reverts("UnsupportedGovParam: test"):
+        btc_lst_stake.updateParam('test', int(test_value))
+
+
 def test_update_param_only_callable_by_gov_hub(btc_lst_stake):
     hex_value = padding_left(Web3.to_hex(0), 64)
     with brownie.reverts("the msg sender must be governance contract"):
-        btc_lst_stake.updateParam('gradeActive', hex_value)
+        btc_lst_stake.updateParam('burnBTCLimit', hex_value)
 
 
 def __create_btc_lst_staking_script(script_type='p2sh', script_public_key=None):
@@ -2046,4 +2134,10 @@ def __check_btc_lst_tx_map_info(tx_id, result: dict):
 def __add_wallet(script):
     update_system_contract_address(BTC_LST_STAKE, gov_hub=accounts[10])
     BTC_LST_STAKE.updateParam('add', script, {'from': accounts[10]})
+    update_system_contract_address(BTC_LST_STAKE, gov_hub=GOV_HUB)
+
+
+def __remove_wallet(script):
+    update_system_contract_address(BTC_LST_STAKE, gov_hub=accounts[10])
+    BTC_LST_STAKE.updateParam('remove', script, {'from': accounts[10]})
     update_system_contract_address(BTC_LST_STAKE, gov_hub=GOV_HUB)
