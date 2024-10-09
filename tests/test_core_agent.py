@@ -651,7 +651,6 @@ def test_cancel_all_without_amount_limit(core_agent, validator_set):
     assert tx.events['undelegatedCoin']['amount'] == undelegate_value1
 
 
-
 def test_remove_validator_info_after_full_cancel_stake(core_agent, set_candidate):
     operators, consensuses = set_candidate
     delegate_value = MIN_INIT_DELEGATE_VALUE * 10
@@ -752,6 +751,7 @@ def test_remove_validator_after_full_transfer_deduction(core_agent, deduct_equal
     core_agent.deductTransferredAmountMock(accounts[0], undelegate_value)
     candidate_list = core_agent.getCandidateListByDelegator(accounts[0])
     assert actual_candidate_list == candidate_list
+
 
 @pytest.mark.parametrize("tests", [
     {'existing_stake': True, 'amount': 100, 'stakedAmount': 500, 'transferAmount': 400, 'realtimeAmount': 500,
@@ -1122,6 +1122,24 @@ def test_acc_stake_amount_cross_round_success(core_agent, set_candidate, stake_h
     reward, reward_unclaimed, acc_staked_amount = core_agent.claimReward(accounts[0], 0).return_value
     expect_stake_amount = tests[0]
     assert acc_staked_amount == expect_stake_amount
+
+def test_clear_acc_stake_amount_after_claiming_rewards(core_agent, slash_indicator, stake_hub, set_candidate):
+    operators, consensuses = set_candidate
+    delegate_coin_success(operators[0], accounts[0], MIN_INIT_DELEGATE_VALUE)
+    turn_round()
+    felony_threshold = slash_indicator.felonyThreshold()
+    for _ in range(felony_threshold):
+        slash_indicator.slash(consensuses[0])
+    turn_round(consensuses, round_count=2)
+    update_system_contract_address(core_agent, stake_hub=accounts[0])
+    reward, reward_unclaimed, acc_staked_amount = core_agent.claimReward(accounts[0], 0).return_value
+    assert reward == 0
+    assert acc_staked_amount == MIN_INIT_DELEGATE_VALUE * 2
+    update_system_contract_address(core_agent, stake_hub=stake_hub)
+    turn_round(consensuses, round_count=2)
+    update_system_contract_address(core_agent, stake_hub=accounts[0])
+    reward, reward_unclaimed, acc_staked_amount = core_agent.claimReward(accounts[0], 0).return_value
+    assert acc_staked_amount == MIN_INIT_DELEGATE_VALUE * 2
 
 
 @pytest.mark.parametrize("round_count", [0, 1, 2])

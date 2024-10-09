@@ -2009,6 +2009,28 @@ def test_update_burn_btc_limit_param_length_error(btc_lst_stake):
         btc_lst_stake.updateParam('burnBTCLimit', hex_value)
 
 
+@pytest.mark.parametrize("utxo_fee", [1e4, 1e5, 1e8, 1e10, 1e12])
+def test_update_utxo_fee_success(btc_lst_stake, utxo_fee):
+    update_system_contract_address(btc_lst_stake, gov_hub=accounts[0])
+    hex_value = padding_left(Web3.to_hex(int(utxo_fee)), 16)
+    btc_lst_stake.updateParam('utxoFee', hex_value)
+    assert btc_lst_stake.utxoFee() == utxo_fee
+
+
+def test_utxo_fee_length_incorrect(btc_lst_stake):
+    update_system_contract_address(btc_lst_stake, gov_hub=accounts[0])
+    hex_value = padding_left(Web3.to_hex(int(1e8)), 32)
+    with brownie.reverts("MismatchParamLength: utxoFee"):
+        btc_lst_stake.updateParam('utxoFee', hex_value)
+
+
+def test_utxo_fee_too_low(btc_lst_stake):
+    update_system_contract_address(btc_lst_stake, gov_hub=accounts[0])
+    hex_value = padding_left(Web3.to_hex(int(1e2)), 16)
+    with brownie.reverts("OutOfBounds: utxoFee, 100, 1000, 18446744073709551615"):
+        btc_lst_stake.updateParam('utxoFee', hex_value)
+
+
 def test_governance_param_not_exist(btc_lst_stake):
     test_value = 10e8
     update_system_contract_address(btc_lst_stake, gov_hub=accounts[0])

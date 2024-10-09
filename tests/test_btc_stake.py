@@ -781,6 +781,26 @@ def test_check_acc_stake_amount_after_btc_expiration(btc_stake, btc_agent, set_c
     assert acc_staked_amount == BTC_VALUE
 
 
+def test_clear_acc_stake_amount_after_claiming_rewards(btc_stake, slash_indicator, btc_agent, set_candidate):
+    operators, consensuses = set_candidate
+    set_last_round_tag(20)
+    delegate_btc_success(operators[0], accounts[0], BTC_VALUE, LOCK_SCRIPT)
+    turn_round()
+    felony_threshold = slash_indicator.felonyThreshold()
+    for _ in range(felony_threshold):
+        slash_indicator.slash(consensuses[0])
+    turn_round(consensuses, round_count=2)
+    update_system_contract_address(btc_stake, btc_agent=accounts[0])
+    reward, reward_unclaimed, acc_staked_amount = btc_stake.claimReward(accounts[0]).return_value
+    assert reward == 0
+    assert acc_staked_amount == BTC_VALUE * 2
+    update_system_contract_address(btc_stake, btc_agent=btc_agent)
+    turn_round(consensuses, round_count=2)
+    update_system_contract_address(btc_stake, btc_agent=accounts[0])
+    reward, reward_unclaimed, acc_staked_amount = btc_stake.claimReward(accounts[0]).return_value
+    assert acc_staked_amount == BTC_VALUE * 2
+
+
 def test_only_btc_agent_can_call_set_new_round(btc_stake, btc_agent):
     round_tag = get_current_round()
     with brownie.reverts("the msg sender must be bitcoin agent contract"):
