@@ -76,8 +76,10 @@ def stake_hub_claim_reward(account):
     if isinstance(account, list):
         for i in account:
             tx = StakeHubMock[0].claimReward({'from': i})
+            print('stake_hub_claim_reward>>>', tx.events)
     else:
         tx = StakeHubMock[0].claimReward({'from': account})
+        print('stake_hub_claim_reward>>>',tx.events)
     return tx
 
 

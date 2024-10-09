@@ -348,6 +348,7 @@ def old_claim_btc_reward_success(tx_ids, account=None):
     if account is None:
         account = accounts[0]
     tx = PledgeAgentMock[0].claimBtcReward(tx_ids, {'from': account})
+    print('old_claim_btc_reward_success>>>>>>>>',tx.events)
     return tx
 
 
