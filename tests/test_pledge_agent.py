@@ -1019,6 +1019,85 @@ def test_deregister_multiple_rounds_then_move_candidate(pledge_agent, validator_
     turn_round(consensuses)
 
 
+def test_move_candidate_with_duplicate_validator(pledge_agent, validator_set, candidate_hub):
+    operators = []
+    consensuses = []
+    for operator in accounts[5:10]:
+        operators.append(operator)
+        consensuses.append(register_candidate(operator=operator))
+    old_delegate_coin_success(operators[0], accounts[0], MIN_INIT_DELEGATE_VALUE)
+    old_delegate_btc_success(BTC_VALUE * 2, operators[0], accounts[0])
+    for index, op in enumerate(operators[:2]):
+        old_delegate_coin_success(op, accounts[1], MIN_INIT_DELEGATE_VALUE + index)
+    for i in range(4):
+        candidate_hub.unregister({'from': operators[i]})
+    __old_turn_round()
+    __init_hybrid_score_mock()
+    with brownie.reverts("the passed candidates are duplicated."):
+        pledge_agent.moveCandidateData([operators[0], operators[0], operators[1]])
+
+
+@pytest.mark.parametrize("round_count", [0, 1, 2, 3])
+def test_multiple_rounds_unregistration_with_duplicate_candidates(pledge_agent, validator_set, candidate_hub,
+                                                                  round_count):
+    operators = []
+    consensuses = []
+    for operator in accounts[5:10]:
+        operators.append(operator)
+        consensuses.append(register_candidate(operator=operator))
+    old_delegate_coin_success(operators[0], accounts[0], MIN_INIT_DELEGATE_VALUE)
+    for index, op in enumerate(operators[:2]):
+        old_delegate_coin_success(op, accounts[1], MIN_INIT_DELEGATE_VALUE + index)
+    __old_turn_round()
+    for i in range(4):
+        candidate_hub.refuseDelegate({'from': operators[i]})
+    __old_turn_round()
+    for i in range(4):
+        candidate_hub.unregister({'from': operators[i]})
+    __old_turn_round(consensuses, round_count=round_count)
+    __init_hybrid_score_mock()
+    with brownie.reverts("the passed candidates are duplicated."):
+        pledge_agent.moveCandidateData([operators[0], operators[0], operators[1]])
+
+
+@pytest.mark.parametrize("move", [True, False])
+@pytest.mark.parametrize("candidate",
+                         [[0, 1, 0, 2], [0, 0, 1, 2], [2, 1, 0, 0], [0, 1, 2, 0], [0, 0, 0, 0],
+                          [1, 0, 0, 1], [1, 0, 0, 0], [0, 2, 0, 0]])
+def test_move_duplicate_candidates(pledge_agent, set_candidate, candidate, move):
+    operators, consensuses = set_candidate
+    old_delegate_coin_success(operators[0], accounts[0], MIN_INIT_DELEGATE_VALUE)
+    for index, op in enumerate(operators[:2]):
+        old_delegate_coin_success(op, accounts[1], MIN_INIT_DELEGATE_VALUE + index)
+    __old_turn_round(consensuses)
+    amount = 0
+    if move:
+        pledge_agent.moveCandidateData([operators[0]])
+        amount = MIN_INIT_DELEGATE_VALUE * 2
+    candidates = []
+    for c in candidate:
+        candidates.append(operators[c])
+    with brownie.reverts("the passed candidates are duplicated."):
+        pledge_agent.moveCandidateData(candidates)
+    __check_candidate_map_info(operators[0], {
+        'amount': amount,
+        'realtimeAmount': amount
+    })
+
+
+@pytest.mark.skip(reason="skip gas-related tests")
+def test_move_multiple_validators_candidate_gas_consumption(pledge_agent):
+    operators = []
+    consensuses = []
+    for operator in accounts[5:55]:
+        operators.append(operator)
+        consensuses.append(register_candidate(operator=operator))
+    for index, op in enumerate(operators):
+        old_delegate_coin_success(op, accounts[1], MIN_INIT_DELEGATE_VALUE + index)
+    __old_turn_round(consensuses)
+    pledge_agent.moveCandidateData(operators)
+
+
 @pytest.mark.parametrize("round_count", [0, 1, 2, 3])
 def test_revert_after_handling_btc_data(pledge_agent, validator_set, candidate_hub,
                                         set_candidate, round_count):
