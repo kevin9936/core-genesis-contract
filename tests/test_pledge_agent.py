@@ -558,6 +558,41 @@ def test_upgrade_and_migrate_btc_data_successfully(pledge_agent, btc_stake, set_
     })
 
 
+@pytest.mark.parametrize("move", [True, False])
+@pytest.mark.parametrize("candidate",
+                         [[0, 1, 0, 2], [0, 0, 1, 2], [2, 1, 0, 0], [0, 1, 2, 0], [0, 0, 0, 0],
+                          [1, 0, 0, 1], [1, 0, 0, 0], [0, 2, 0, 0]])
+def test_btc_stake_with_duplicate_txid(pledge_agent, btc_stake, set_candidate, move, candidate):
+    operators, consensuses = set_candidate
+    pledge_agent.delegateCoinOld(operators[0], {"value": MIN_INIT_DELEGATE_VALUE})
+    __old_turn_round()
+    btc_value = 1000000
+    script = "0x1234"
+    fee = 0
+    tx_ids = []
+    for r in range(5):
+        tx_id0 = random_btc_tx_id()
+        pledge_agent.delegateBtcMock(tx_id0, btc_value, operators[0], accounts[r], script, LOCK_TIME, fee)
+        tx_ids.append(tx_id0)
+    __old_turn_round()
+    __old_turn_round(consensuses, round_count=2)
+    __init_hybrid_score_mock()
+    new_tx_ids = []
+    if move:
+        __move_btc_data([tx_ids[0]])
+    for i in candidate:
+        new_tx_ids.append(tx_ids[i])
+    __move_btc_data(new_tx_ids)
+    for tx_id in new_tx_ids:
+        __check_btc_tx_map_info(tx_id, {
+            'amount': btc_value,
+            'outputIndex': 0,
+            'blockTimestamp': 0,
+            'lockTime': LOCK_TIME // Utils.ROUND_INTERVAL * Utils.ROUND_INTERVAL,
+            'usedHeight': 0,
+        })
+
+
 @pytest.mark.parametrize("round_count", [0, 1, 2, 3])
 def test_move_expired_btc_data(pledge_agent, core_agent, btc_agent, btc_stake, candidate_hub, set_candidate,
                                round_count):
