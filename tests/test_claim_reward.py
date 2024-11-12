@@ -650,6 +650,221 @@ def test_claim_reward_after_hardcap_update(stake_hub, hard_cap, set_candidate):
     assert tracker2.delta() == account_rewards[accounts[2]]
 
 
+@pytest.mark.parametrize("tests", [
+    {'slash_agent': 0, 'validator': True, 'slash_type': 'felony', 'newRequiredMargin': 2000000, 'Margin': 1100000,
+     'claimed_reward': 13545},
+    {'slash_agent': 0, 'validator': True, 'slash_type': 'felony', 'newRequiredMargin': 2000000, 'Margin': 1100001,
+     'claimed_reward': 13545},
+    {'slash_agent': 1, 'validator': False, 'slash_type': 'felony', 'newRequiredMargin': 2000000, 'Margin': 1099999,
+     'claimed_reward': 0},
+    {'slash_agent': 0, 'validator': False, 'slash_type': 'felony', 'newRequiredMargin': 2000000, 'Margin': 1000000,
+     'claimed_reward': 0},
+    {'slash_agent': 0, 'validator': True, 'slash_type': 'minor', 'newRequiredMargin': 2000000, 'Margin': 900000,
+     'claimed_reward': 40635},
+    {'slash_agent': 0, 'validator': True, 'slash_type': 'minor', 'newRequiredMargin': 2000000, 'Margin': 1000000,
+     'claimed_reward': 40635}
+])
+def test_update_bond_after_slash(slash_indicator, tests, candidate_hub, validator_set):
+    delegate_value = MIN_INIT_DELEGATE_VALUE * 10
+    operators = []
+    consensuses = []
+    for operator in accounts[5:10]:
+        operators.append(operator)
+        consensuses.append(register_candidate(operator=operator))
+    old_delegate_coin_success(operators[tests['slash_agent']], accounts[0], delegate_value)
+    old_turn_round()
+    tx = None
+    if tests['slash_type'] == 'minor':
+        slash_threshold = slash_indicator.misdemeanorThreshold()
+        event_name = 'validatorMisdemeanor'
+    else:
+        slash_threshold = slash_indicator.felonyThreshold()
+        event_name = 'validatorFelony'
+    for count in range(slash_threshold):
+        tx = slash_indicator.slash(consensuses[tests['slash_agent']])
+    assert event_name in tx.events
+    old_turn_round(consensuses)
+    hex_value = padding_left(Web3.to_hex(int(tests['newRequiredMargin'])), 64)
+    update_system_contract_address(candidate_hub, gov_hub=accounts[0])
+    candidate_hub.updateParam('requiredMargin', hex_value)
+    init_hybrid_score_mock()
+    old_claim_reward_success(operators, accounts[0])
+    tx = candidate_hub.addMargin({'from': operators[tests['slash_agent']], 'value': tests['Margin']})
+    turn_round(consensuses, round_count=3)
+    if tests['validator']:
+        assert consensuses[tests['slash_agent']] in validator_set.getValidators()
+    else:
+        assert consensuses[tests['slash_agent']] not in validator_set.getValidators()
+    tracker = get_tracker(accounts[0])
+    stake_hub_claim_reward(accounts[0])
+    assert tracker.delta() == tests['claimed_reward']
+    turn_round(consensuses, round_count=2)
+
+
+def test_upgrade_bond_does_not_affect_active_validators(slash_indicator, candidate_hub, set_candidate, validator_set):
+    delegate_value = MIN_INIT_DELEGATE_VALUE * 10
+    operators, consensuses = set_candidate
+    old_delegate_coin_success(operators[0], accounts[0], delegate_value)
+    old_turn_round()
+    old_turn_round(consensuses)
+    init_margin = 2000000
+    hex_value = padding_left(Web3.to_hex(int(init_margin * 100)), 64)
+    update_system_contract_address(candidate_hub, gov_hub=accounts[0])
+    candidate_hub.updateParam('requiredMargin', hex_value)
+    init_hybrid_score_mock()
+    old_claim_reward_success(operators, accounts[0])
+    turn_round(consensuses, round_count=3)
+    assert consensuses[0] in validator_set.getValidators()
+    tracker = get_tracker(accounts[0])
+    stake_hub_claim_reward(accounts[0])
+    assert tracker.delta() == TOTAL_REWARD * 3
+    tx = candidate_hub.addMargin({'from': operators[0], 'value': 100})
+    turn_round(consensuses, round_count=2)
+    assert consensuses[0] in validator_set.getValidators()
+    turn_round(consensuses, round_count=2)
+
+
+def test_add_bond_multiple_times(slash_indicator, candidate_hub, set_candidate, validator_set):
+    delegate_value = MIN_INIT_DELEGATE_VALUE * 10
+    operators, consensuses = set_candidate
+    old_delegate_coin_success(operators[0], accounts[0], delegate_value)
+    old_turn_round()
+    slash_threshold = slash_indicator.felonyThreshold()
+    event_name = 'validatorFelony'
+    tx = None
+    for count in range(slash_threshold):
+        tx = slash_indicator.slash(consensuses[0])
+    assert event_name in tx.events
+    old_turn_round(consensuses)
+    assert consensuses[0] not in validator_set.getValidators()
+    init_margin = 2000000
+    hex_value = padding_left(Web3.to_hex(init_margin * 10000), 64)
+    update_system_contract_address(candidate_hub, gov_hub=accounts[0])
+    candidate_hub.updateParam('requiredMargin', hex_value)
+    new_margin = 10000000
+    candidate_hub.addMargin({'from': operators[0], 'value': new_margin})
+    init_hybrid_score_mock()
+    old_claim_reward_success(operators, accounts[0])
+    turn_round(consensuses, round_count=3)
+    assert consensuses[0] not in validator_set.getValidators()
+    update_system_contract_address(candidate_hub, gov_hub=accounts[0])
+    hex_value = padding_left(Web3.to_hex(int(new_margin)), 64)
+    candidate_hub.updateParam('requiredMargin', hex_value)
+    candidate_hub.addMargin({'from': operators[0], 'value': MIN_INIT_DELEGATE_VALUE})
+    turn_round(consensuses, round_count=2)
+    assert consensuses[0] in validator_set.getValidators()
+    turn_round(consensuses, round_count=2)
+
+
+@pytest.mark.parametrize("add_margin", [True, False])
+def test_bond_update_before_after_slash(slash_indicator, candidate_hub, set_candidate, validator_set, add_margin):
+    delegate_value = MIN_INIT_DELEGATE_VALUE * 10
+    operators, consensuses = set_candidate
+    old_delegate_coin_success(operators[0], accounts[0], delegate_value)
+    old_turn_round()
+    slash_threshold = slash_indicator.felonyThreshold()
+    event_name = 'validatorFelony'
+    tx = None
+    init_margin = 2000000
+    hex_value = padding_left(Web3.to_hex(init_margin * 10000), 64)
+    update_system_contract_address(candidate_hub, gov_hub=accounts[0])
+    candidate_hub.updateParam('requiredMargin', hex_value)
+    for count in range(slash_threshold):
+        tx = slash_indicator.slash(consensuses[0])
+    assert event_name in tx.events
+    old_turn_round(consensuses)
+    assert consensuses[0] not in validator_set.getValidators()
+    init_hybrid_score_mock()
+    old_claim_reward_success(operators, accounts[0])
+    turn_round(consensuses, round_count=3)
+    assert consensuses[0] not in validator_set.getValidators()
+    new_margin = 10002
+    update_system_contract_address(candidate_hub, gov_hub=accounts[0])
+    hex_value = padding_left(Web3.to_hex(int(new_margin)), 64)
+    candidate_hub.updateParam('requiredMargin', hex_value)
+    if add_margin:
+        candidate_hub.addMargin({'from': operators[0], 'value': MIN_INIT_DELEGATE_VALUE})
+    turn_round(consensuses, round_count=2)
+    if add_margin:
+        assert consensuses[0] in validator_set.getValidators()
+    else:
+        assert consensuses[0] not in validator_set.getValidators()
+    turn_round(consensuses, round_count=2)
+
+
+@pytest.mark.parametrize("add_margin", [True, False])
+def test_slash_in_upgrade_round(slash_indicator, candidate_hub, set_candidate, validator_set, add_margin):
+    delegate_value = MIN_INIT_DELEGATE_VALUE * 10
+    operators, consensuses = set_candidate
+    old_delegate_coin_success(operators[0], accounts[0], delegate_value)
+    init_margin = 2000000
+    hex_value = padding_left(Web3.to_hex(init_margin * 10000), 64)
+    update_system_contract_address(candidate_hub, gov_hub=accounts[0])
+    candidate_hub.updateParam('requiredMargin', hex_value)
+    old_turn_round()
+    assert consensuses[0] in validator_set.getValidators()
+    init_hybrid_score_mock()
+    slash_threshold = slash_indicator.felonyThreshold()
+    event_name = 'validatorFelony'
+    tx = None
+    for count in range(slash_threshold):
+        tx = slash_indicator.slash(consensuses[0])
+    assert event_name in tx.events
+    turn_round(consensuses, round_count=1)
+    assert consensuses[0] not in validator_set.getValidators()
+    new_margin = 10002
+    update_system_contract_address(candidate_hub, gov_hub=accounts[0])
+    hex_value = padding_left(Web3.to_hex(int(new_margin)), 64)
+    candidate_hub.updateParam('requiredMargin', hex_value)
+    if add_margin:
+        candidate_hub.addMargin({'from': operators[0], 'value': MIN_INIT_DELEGATE_VALUE})
+    turn_round(consensuses, round_count=2)
+    if add_margin:
+        assert consensuses[0] in validator_set.getValidators()
+    else:
+        assert consensuses[0] not in validator_set.getValidators()
+    turn_round(consensuses, round_count=2)
+
+
+@pytest.mark.parametrize("add_margin", [True, False])
+@pytest.mark.parametrize("round_count", [1, 2, 3])
+def test_slash_after_upgrade(slash_indicator, candidate_hub, set_candidate, validator_set, add_margin, round_count):
+    delegate_value = MIN_INIT_DELEGATE_VALUE * 10
+    operators, consensuses = set_candidate
+    old_delegate_coin_success(operators[0], accounts[0], delegate_value)
+    old_delegate_coin_success(operators[0], accounts[1], delegate_value)
+    tx_id = old_delegate_btc_success(BTC_VALUE, operators[0], accounts[1])
+    init_margin = 2000000
+    hex_value = padding_left(Web3.to_hex(init_margin * 10000), 64)
+    update_system_contract_address(candidate_hub, gov_hub=accounts[0])
+    candidate_hub.updateParam('requiredMargin', hex_value)
+    old_turn_round()
+    assert consensuses[0] in validator_set.getValidators()
+    init_hybrid_score_mock()
+    move_btc_data([tx_id])
+    turn_round(consensuses, round_count=round_count)
+    slash_threshold = slash_indicator.felonyThreshold()
+    event_name = 'validatorFelony'
+    tx = None
+    for count in range(slash_threshold):
+        tx = slash_indicator.slash(consensuses[0])
+    assert event_name in tx.events
+    turn_round(consensuses, round_count=1)
+    assert consensuses[0] not in validator_set.getValidators()
+    new_margin = 10002
+    update_system_contract_address(candidate_hub, gov_hub=accounts[0])
+    hex_value = padding_left(Web3.to_hex(int(new_margin)), 64)
+    candidate_hub.updateParam('requiredMargin', hex_value)
+    if add_margin:
+        candidate_hub.addMargin({'from': operators[0], 'value': MIN_INIT_DELEGATE_VALUE})
+    turn_round(consensuses, round_count=2)
+    if add_margin:
+        assert consensuses[0] in validator_set.getValidators()
+    else:
+        assert consensuses[0] not in validator_set.getValidators()
+    turn_round(consensuses, round_count=2)
+
+
 def test_no_multisig_wallet_stake(btc_lst_stake):
     with brownie.reverts("Wallet not found"):
         delegate_btc_lst_success(accounts[0], BTC_VALUE, BTCLST_LOCK_SCRIPT)
