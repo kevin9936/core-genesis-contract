@@ -10,9 +10,10 @@ import "./lib/BytesToTypes.sol";
 import "./lib/Memory.sol";
 import "./lib/SatoshiPlusHelper.sol";
 import "./System.sol";
+import {Test, console} from "forge-std/Test.sol";
 
 /// This contract handles CORE staking.
-contract CoreAgent is IAgent, System, IParamSubscriber {
+contract CoreAgent is IAgent, System, IParamSubscriber, Test {
 
   uint256 public constant INIT_REQUIRED_COIN_DEPOSIT = 1e18;
 
@@ -173,6 +174,7 @@ contract CoreAgent is IAgent, System, IParamSubscriber {
       revert InactiveCandidate(candidate);
     }
     require(msg.value >= requiredCoinDeposit, "delegate amount is too small");
+    console.log(requiredCoinDeposit);
     uint256 realtimeAmount = _delegateCoin(candidate, msg.sender, msg.value, false);
     emit delegatedCoin(candidate, msg.sender, msg.value, realtimeAmount);
   }
@@ -340,6 +342,7 @@ contract CoreAgent is IAgent, System, IParamSubscriber {
       rewardMap[delegator].accStakedAmount += accStakedAmount;
     }
     a.realtimeAmount += amount;
+//    console.log(a.realtimeAmount);
     cd.realtimeAmount += amount;
     if (!isTransfer) {
       delegatorMap[delegator].amount += amount;

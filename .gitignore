@@ -3,6 +3,8 @@ build/
 .idea
 pids
 logs
+out/
+cache/
 .idea/
 contracts/.prettierrc
 contracts/flattened/*.sol

@@ -248,7 +248,7 @@ library RLPDecode {
     }
 
     /*
-    * @param src Pointer to source
+    * @param contracts Pointer to source
     * @param dest Pointer to destination
     * @param len Amount of memory to copy from the source
     */
@@ -269,7 +269,7 @@ library RLPDecode {
         unchecked { 
             uint mask = 256 ** (WORD_SIZE - len) - 1;
             assembly {
-                let srcpart := and(mload(src), not(mask)) // zero out src
+                let srcpart := and(mload(src), not(mask)) // zero out contracts
                 let destpart := and(mload(dest), mask) // retrieve the bytes
                 mstore(dest, or(destpart, srcpart))
             }

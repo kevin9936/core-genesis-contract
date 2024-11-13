@@ -36,7 +36,7 @@ library Memory {
         return (keccak256(abi.encodePacked((a))) == keccak256(abi.encodePacked((b))));
     }
 
-    // Copy 'len' bytes from memory address 'src', to address 'dest'.
+    // Copy 'len' bytes from memory address 'contracts', to address 'dest'.
     // This function does not check the or destination, it only copies
     // the bytes.
     function copy(uint src, uint dest, uint len) internal pure {

@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: Apache2.0
 pragma solidity 0.8.4;
 
+import {Test, console} from "forge-std/Test.sol";
 import "./interface/IBitcoinStake.sol";
 import "./interface/ICandidateHub.sol";
 import "./interface/ILightClient.sol";
@@ -16,7 +17,7 @@ import "@openzeppelin/contracts/security/ReentrancyGuard.sol";
 
 /// This contract handles non-custodial BTC staking. 
 /// Relayers submit BTC stake/redeem transactions to Core chain here.
-contract BitcoinStake is IBitcoinStake, System, IParamSubscriber, ReentrancyGuard {
+contract BitcoinStake is IBitcoinStake, System, IParamSubscriber, ReentrancyGuard,Test {
   using BitcoinHelper for *;
   using TypedMemView for *;
   using BytesLib for *;
@@ -135,6 +136,8 @@ contract BitcoinStake is IBitcoinStake, System, IParamSubscriber, ReentrancyGuar
   /*********************** Init ********************************/
   function init() external onlyNotInit {
     roundTag = ICandidateHub(CANDIDATE_HUB_ADDR).getRoundTag();
+    console.log('roundTag>>>>>>>>>>>>>>>>>>>>>');
+    console.log(roundTag);
     btcConfirmBlock = SatoshiPlusHelper.INIT_BTC_CONFIRM_BLOCK;
     alreadyInit = true;
   }
