@@ -98,12 +98,12 @@ contract BitcoinStakeMock is BitcoinStake {
         return candidateMap[candidate].continuousRewardEndRounds;
     }
 
-    function calculateRewardMock(bytes32[] calldata txids) external returns (uint256 amount, uint256 accStakedAmount) {
+    function calculateRewardMock(bytes32[] calldata txids, uint256 settleRound) external returns (uint256 amount, uint256 accStakedAmount) {
         uint256 reward;
         uint256 stakedAmount;
         bool expired;
         for (uint256 i = txids.length; i != 0; i--) {
-            (reward, expired, stakedAmount) = _collectReward(txids[i - 1]);
+            (reward, expired, stakedAmount) = _collectReward(txids[i - 1], settleRound);
             amount += reward;
             accStakedAmount += stakedAmount;
         }

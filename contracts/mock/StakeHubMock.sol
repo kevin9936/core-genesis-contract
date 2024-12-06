@@ -14,23 +14,6 @@ contract StakeHubMock is StakeHub {
 
 
     function developmentInit() external {
-        // avoid altering the contract's global initialization state to prevent affecting other test cases.
-        // If changes to the default configuration are necessary for specific test cases,
-        // ensure they only apply to those cases
-        // _reinitAssetFactor();
-    }
-
-    function _reinitAssetFactor() internal {
-        address[] memory validators = IValidatorSet(VALIDATOR_CONTRACT_ADDR).getValidatorOps();
-        uint256 validatorSize = validators.length;
-        for (uint256 i = 0; i < validatorSize; ++i) {
-            address validator = validators[i];
-        }
-        // init asset factor of asset state map
-        uint256 assetLen = assets.length;
-        for (uint256 i = 1; i < assetLen; i++) {
-            stateMap[assets[i].agent].factor = 10000;
-        }
     }
 
     function setOperators(address delegator, bool value) external {
@@ -59,7 +42,7 @@ contract StakeHubMock is StakeHub {
 
 
     function initHybridScoreMock() external {
-        _initializeFromPledgeAgent();
+//        _initializeFromPledgeAgent();
     }
 
     function calculateRewardMock(address delegator) external returns (uint256[] memory rewards) {
