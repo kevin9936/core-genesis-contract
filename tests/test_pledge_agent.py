@@ -1379,6 +1379,27 @@ def test_move_core_data_with_reward(pledge_agent, core_agent, set_candidate):
     })
 
 
+def test_transfer_and_undelegate_before_upgrade_round(pledge_agent, core_agent, set_candidate):
+    operators, consensuses = set_candidate
+    old_delegate_coin_success(operators[0], accounts[0], MIN_INIT_DELEGATE_VALUE * 12)
+    old_delegate_coin_success(operators[0], accounts[1], MIN_INIT_DELEGATE_VALUE * 12)
+    __old_turn_round()
+    old_transfer_coin_success(operators[0], operators[1], accounts[0], MIN_INIT_DELEGATE_VALUE * 3)
+    old_transfer_coin_success(operators[0], operators[2], accounts[0], MIN_INIT_DELEGATE_VALUE * 3)
+    old_undelegate_coin_success(operators[1], accounts[0], MIN_INIT_DELEGATE_VALUE * 3)
+    old_undelegate_coin_success(operators[2], accounts[0], MIN_INIT_DELEGATE_VALUE * 3)
+    __init_hybrid_score_mock()
+    pledge_agent.moveCOREData(operators[2], accounts[0])
+    pledge_agent.moveCOREData(operators[0], accounts[0])
+    turn_round(consensuses)
+    tracker = get_tracker(accounts[0])
+    pledge_agent.claimReward(operators)
+    assert tracker.delta() == TOTAL_REWARD // 2
+    turn_round(consensuses)
+    pledge_agent.claimReward(operators)
+    assert tracker.delta() == TOTAL_REWARD // 3
+
+
 def test_cancel_move_data_after_transfer(pledge_agent, core_agent, set_candidate):
     operators, consensuses = set_candidate
     old_delegate_coin_success(operators[0], accounts[0], MIN_INIT_DELEGATE_VALUE * 2)
@@ -2176,6 +2197,62 @@ def test_upgrade_current_round_cancel(pledge_agent, stake_hub, set_candidate):
     stake_hub_claim_reward(accounts[:2])
     assert tracker0.delta() == TOTAL_REWARD // 4 + TOTAL_REWARD // 2
     assert tracker1.delta() == TOTAL_REWARD // 4 + TOTAL_REWARD // 2
+
+
+def test_candidate_becomes_validator_after_upgrade(pledge_agent, stake_hub, set_candidate, validator_set,
+                                                   candidate_hub):
+    candidate_hub.setValidatorCount(1)
+    operators, consensuses = set_candidate
+    delegate_amount = MIN_INIT_DELEGATE_VALUE * 4
+    __old_turn_round()
+    old_delegate_coin_success(operators[0], accounts[1], delegate_amount)
+    old_delegate_coin_success(operators[1], accounts[2], delegate_amount)
+    old_delegate_coin_success(operators[2], accounts[3], delegate_amount)
+    __old_turn_round(consensuses)
+    assert consensuses[0] not in validator_set.getValidators()
+    old_transfer_coin_success(operators[0], operators[2], accounts[1], delegate_amount)
+    assert consensuses[1] in validator_set.getValidators()
+    assert consensuses[2] not in validator_set.getValidators()
+    __init_hybrid_score_mock()
+    candidate_hub.setValidatorCount(3)
+    __check_old_reward(operators, accounts[1])
+    turn_round(consensuses, round_count=4)
+    tracker = get_tracker(accounts[1])
+    stake_hub_claim_reward(accounts[1])
+    assert tracker.delta() == TOTAL_REWARD // 2 * 3 + 1
+    turn_round(consensuses)
+
+
+def test_upgrade_current_round_cancel111(pledge_agent, stake_hub, set_candidate, validator_set, candidate_hub):
+    set_round_tag(7)
+    __old_turn_round()
+    candidate_hub.setValidatorCount(1)
+    operators, consensuses = set_candidate
+    delegate_amount = MIN_INIT_DELEGATE_VALUE * 8
+    __old_turn_round()
+    old_delegate_coin_success(operators[0], accounts[3], delegate_amount)
+    old_delegate_coin_success(operators[1], accounts[2], delegate_amount)
+    old_delegate_coin_success(operators[2], accounts[3], delegate_amount)
+    # delete
+    # old_delegate_coin_success(operators[0], accounts[2], delegate_amount)
+    # old_delegate_coin_success(operators[2], accounts[2], delegate_amount)
+    __old_turn_round(consensuses, round_count=1)
+    assert consensuses[0] not in validator_set.getValidators()
+    assert consensuses[1] in validator_set.getValidators()
+    assert consensuses[2] not in validator_set.getValidators()
+    candidate_hub.setValidatorCount(3)
+    __old_turn_round(consensuses, round_count=1)
+    assert consensuses[0] in validator_set.getValidators()
+    assert consensuses[1] in validator_set.getValidators()
+    assert consensuses[2] in validator_set.getValidators()
+    old_transfer_coin_success(operators[2], operators[0], accounts[3], delegate_amount)
+    old_undelegate_coin_success(operators[0], accounts[3], delegate_amount + delegate_amount // 2)
+    __old_turn_round(consensuses, round_count=1)
+    __init_hybrid_score_mock()
+    turn_round(consensuses)
+    turn_round(consensuses, round_count=4)
+    stake_hub_claim_reward(accounts[3])
+    old_claim_reward_success(operators, accounts[3])
 
 
 def test_upgrade_current_round_transfer(pledge_agent, btc_agent, stake_hub, set_candidate):
