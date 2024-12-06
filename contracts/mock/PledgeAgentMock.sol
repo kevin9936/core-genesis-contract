@@ -1,12 +1,28 @@
 pragma solidity 0.8.4;
 
 import "../PledgeAgent.sol";
-
+import "../interface/ICandidateHub.sol";
 contract PledgeAgentMock is PledgeAgent {
     int256 public constant CLAIM_ROUND_LIMIT = 500;
     uint256 public constant BTC_UNIT_CONVERSION_MOCK = 5;
+    uint256 public constant INIT_HASH_POWER_FACTOR = 20000;
+    uint256 public constant POWER_BLOCK_FACTOR = 1e18;
+    uint32 public constant INIT_BTC_CONFIRM_BLOCK = 6;
+    uint256 public constant INIT_MIN_BTC_LOCK_ROUND = 7;
+    uint256 public constant ROUND_INTERVAL = 86400;
+    uint256 public constant INIT_MIN_BTC_VALUE = 1e6;
+    uint256 public constant INIT_BTC_FACTOR = 5e4;
+    uint256 public constant BTC_STAKE_MAGIC = 0x5341542b;
+    uint256 public constant CHAINID = 1116;
+    uint256 public constant FEE_FACTOR = 1e18;
+    uint256 public constant BTC_UNIT_CONVERSION = 1e10;
+    uint256 public constant INIT_DELEGATE_BTC_GAS_PRICE = 1e12;
+
 
     event delegatedCoinOld(address indexed agent, address indexed delegator, uint256 amount, uint256 totalAmount);
+    event transferredBtcFee(bytes32 indexed txid, address payable feeReceiver, uint256 fee);
+    event failedTransferBtcFee(bytes32 indexed txid, address payable feeReceiver, uint256 fee);
+    event btcPledgeExpired(bytes32 indexed txid, address indexed delegator);
     event transferredCoinOld(
         address indexed sourceCandidate,
         address indexed targetCandidate,
@@ -105,7 +121,7 @@ contract PledgeAgentMock is PledgeAgent {
             require(amount >= requiredCoinDeposit, "undelegate amount is too small");
             require(newDeposit >= requiredCoinDeposit + amount, "remaining amount is too small");
         }
-        uint256 rewardAmount = _collectCoinReward(a, d);
+        uint256 rewardAmount = _collectCoinReward(a, d, delegator);
         a.totalDeposit -= amount;
         uint256 deposit = d.changeRound < roundTag ? newDeposit : d.deposit;
         newDeposit -= amount;
@@ -160,7 +176,7 @@ contract PledgeAgentMock is PledgeAgent {
         CoinDelegator storage d = a.cDelegatorMap[delegator];
         uint256 rewardAmount;
         if (d.changeRound != 0) {
-            rewardAmount = _collectCoinReward(a, d);
+            rewardAmount = _collectCoinReward(a, d, delegator);
         }
         a.totalDeposit += deposit;
 
@@ -253,6 +269,150 @@ contract PledgeAgentMock is PledgeAgent {
         br.rewardIndex = a.rewardSet.length;
         addExpire(br);
         a.totalBtc += br.value;
+    }
+    // HARDFORK V-1.0.7 
+    /// claim BTC staking rewards
+    /// @param txidList the list of BTC staking transaction id to claim rewards 
+    /// @return rewardSum amount of reward claimed
+    function claimBtcReward(bytes32[] calldata txidList) external  returns (uint256 rewardSum) {
+        uint256 len = txidList.length;
+        for (uint256 i = 0; i < len; i++) {
+            bytes32 txid = txidList[i];
+            BtcReceipt storage br = btcReceiptMap[txid];
+            require(br.value != 0, "btc tx not found");
+            address delegator = br.delegator;
+            require(delegator == msg.sender, "not the delegator of this btc receipt");
+
+            uint256 reward = _collectBtcReward(txid);
+            rewardSum += reward;
+            if (br.value == 0) {
+                emit btcPledgeExpired(txid, delegator);
+            }
+        }
+
+        if (rewardSum != 0) {
+            rewardMap[msg.sender] += rewardSum;
+            _distributeReward(msg.sender);
+        }
+        return rewardSum;
+    }
+
+    // HARDFORK V-1.0.12
+    /*********************** Move data ***************************/
+    /// move BTC data to BitcoinStake by transaction id
+    /// the reward will be calculated and saved in rewardMap and the record will be deleted
+    /// this method is called by BitcoinStake.moveData
+    /// @param txid the BTC stake transaction id
+    /// @return candidate the validator candidate address
+    /// @return delegator the delegator address
+    /// @return amount the staked BTC amount
+    /// @return round the round of stake
+    /// @return lockTime the CLTV locktime value
+    function moveBtcData(bytes32 txid) external onlyBtcStake returns (address candidate, address delegator, uint256 amount, uint256 round, uint256 lockTime) {
+        BtcReceipt storage br = btcReceiptMap[txid];
+        if (br.value == 0) {
+            return (address(0), address(0), 0, 0, 0);
+        }
+
+        // set return values, which will be used by BitcoinStake to restore staking record
+        candidate = br.agent;
+        delegator = br.delegator;
+        amount = br.value;
+        lockTime = br.endRound * SatoshiPlusHelper.ROUND_INTERVAL;
+
+        Agent storage agent = agentsMap[br.agent];
+        if (br.rewardIndex == agent.rewardSet.length) {
+            round = roundTag;
+        } else {
+            Reward storage reward = agent.rewardSet[br.rewardIndex];
+            if (reward.round == 0) {
+                round = roundTag;
+            } else {
+                round = roundTag - 1;
+            }
+        }
+
+        // calculate and record rewards
+        uint256 rewardAmount = _collectBtcReward(txid);
+        rewardMap[delegator] += rewardAmount;
+
+        // Clean round2expireInfoMap
+        BtcExpireInfo storage expireInfo = round2expireInfoMap[br.endRound];
+        uint256 length = expireInfo.agentAddrList.length;
+        for (uint256 j = length; j != 0; j--) {
+            if (expireInfo.agentAddrList[j - 1] == candidate) {
+                // agentsMap[candidate].totalBtc -= amount;
+                if (expireInfo.agent2valueMap[candidate] == amount) {
+                    delete expireInfo.agent2valueMap[candidate];
+                    delete expireInfo.agentExistMap[candidate];
+                    if (j != length) {
+                        expireInfo.agentAddrList[j - 1] = expireInfo.agentAddrList[length - 1];
+                    }
+                    expireInfo.agentAddrList.pop();
+                } else {
+                    expireInfo.agent2valueMap[candidate] -= amount;
+                }
+                break;
+            }
+        }
+        if (expireInfo.agentAddrList.length == 0) {
+            delete round2expireInfoMap[br.endRound];
+        }
+
+        // Clean btcReceiptMap
+        delete btcReceiptMap[txid];
+    }
+
+    /// calculate reward for a BTC stake transaction
+    /// @param txid the BTC transaction id
+    function _collectBtcReward(bytes32 txid) internal returns (uint256) {
+        uint256 curRound = roundTag;
+        BtcReceipt storage br = btcReceiptMap[txid];
+        uint256 reward = 0;
+        Agent storage a = agentsMap[br.agent];
+        uint256 rewardIndex = br.rewardIndex;
+        uint256 rewardLength = a.rewardSet.length;
+        while (rewardIndex < rewardLength) {
+            Reward storage r = a.rewardSet[rewardIndex];
+            uint256 rRound = r.round;
+            if (rRound == curRound || br.endRound <= rRound) {
+                break;
+            }
+            uint256 deposit = br.value * stateMap[rRound].btcFactor;
+            reward += _collectFromRoundReward(r, deposit);
+            if (r.coin == 0) {
+                delete a.rewardSet[rewardIndex];
+            }
+            rewardIndex += 1;
+        }
+
+        uint256 fee = br.fee;
+        uint256 feeReward;
+        if (fee != 0) {
+            if (fee <= reward) {
+                feeReward = fee;
+            } else {
+                feeReward = reward;
+            }
+
+            if (feeReward != 0) {
+                br.fee -= feeReward;
+                bool success = br.feeReceiver.send(feeReward);
+                if (success) {
+                    reward -= feeReward;
+                    emit transferredBtcFee(txid, br.feeReceiver, feeReward);
+                } else {
+                    emit failedTransferBtcFee(txid, br.feeReceiver, feeReward);
+                }
+            }
+        }
+
+        if (br.endRound <= (rewardIndex == rewardLength ? curRound : a.rewardSet[rewardIndex].round)) {
+            delete btcReceiptMap[txid];
+        } else {
+            br.rewardIndex = rewardIndex;
+        }
+        return reward;
     }
 
     /// @param targetAgent the new validator address to stake to
