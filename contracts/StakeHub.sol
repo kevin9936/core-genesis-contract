@@ -209,12 +209,8 @@ contract StakeHub is IStakeHub, System, IParamSubscriber {
   /// Claim reward for delegator
   /// @return rewards Amounts claimed
   function claimReward() external returns (uint256[] memory rewards) {
-    // if reward.changeRound + 1 < currentRound
-    // step 1 calculateReward till changeRound + 1
-    // step 2 calculateReward after changeRound + 1
     address delegator = msg.sender;
-    uint256 currentRound = ICandidateHub(CANDIDATE_HUB_ADDR).getRoundTag();
-    rewards = _calculateReward(delegator, currentRound - 1);
+    rewards = _calculateReward(delegator);
 
     Delegator storage d  = delegatorMap[delegator];
     for (uint256 i = 0; i < d.rewards.length; i++) {
@@ -236,8 +232,7 @@ contract StakeHub is IStakeHub, System, IParamSubscriber {
   /// @param delegator delegator address
   /// @return reward Amounts claimed
   function proxyClaimReward(address delegator) external onlyPledgeAgent returns (uint256 reward) {
-    uint256 currentRound = ICandidateHub(CANDIDATE_HUB_ADDR).getRoundTag();
-    uint256[] memory rewards = _calculateReward(delegator, currentRound - 1);
+    uint256[] memory rewards = _calculateReward(delegator);
 
     Delegator storage d  = delegatorMap[delegator];
     for (uint256 i = 0; i < d.rewards.length; i++) {
@@ -259,7 +254,7 @@ contract StakeHub is IStakeHub, System, IParamSubscriber {
     Delegator storage d = delegatorMap[delegator];
     uint256 currentRound = ICandidateHub(CANDIDATE_HUB_ADDR).getRoundTag();
     if ((d.changeRound + 1) != currentRound) {
-      uint256[] memory rewards = _calculateReward(delegator, currentRound - 1);
+      uint256[] memory rewards = _calculateReward(delegator);
       for (uint256 i = 0; i < rewards.length; i++) {
         if (d.rewards.length == i) {
           d.rewards.push(rewards[i]);
@@ -268,9 +263,6 @@ contract StakeHub is IStakeHub, System, IParamSubscriber {
         }
       }
     }
-    // TODO
-    // if reward.changeRound + 1 < currentRound
-    // claim reward till reward.changeRound + 1
     if (d.changeRound != currentRound) {
       d.changeRound = currentRound;
     }
@@ -279,17 +271,31 @@ contract StakeHub is IStakeHub, System, IParamSubscriber {
   /// Calculate reward for delegator
   /// @param delegator delegator address
   /// @return rewards Amounts claimed
-  function _calculateReward(address delegator, uint256 settleRound) internal returns (uint256[] memory rewards) {
+  function _calculateReward(address delegator) internal returns (uint256[] memory rewards) {
+    uint256 lastRound = ICandidateHub(CANDIDATE_HUB_ADDR).getRoundTag() - 1;
+    Delegator storage d = delegatorMap[delegator];
+
     uint256 assetSize = assets.length;
     rewards = new uint256[](assetSize);
+    int256 totalFloatReward;
     int256 floatReward;
     uint256 accStakedCoreAmount;
-    (rewards[0], floatReward, accStakedCoreAmount) = IAgent(assets[0].agent).claimReward(delegator, 0, settleRound);
+    if (d.changeRound < lastRound) {
+      (rewards[0], floatReward, accStakedCoreAmount) = IAgent(assets[0].agent).claimReward(delegator, 0, d.changeRound);
+      totalFloatReward += floatReward;
+      (rewards[2], floatReward,) = IAgent(assets[2].agent).claimReward(delegator, accStakedCoreAmount, d.changeRound);
+      totalFloatReward += floatReward;
+    }
+
+    uint256 tempReward;
+    (tempReward, floatReward, accStakedCoreAmount) = IAgent(assets[0].agent).claimReward(delegator, 0, lastRound);
+    totalFloatReward += floatReward;
+    rewards[0] += tempReward;
 
     uint256 totalReward = rewards[0];
-    int256 totalFloatReward = floatReward;
     for (uint256 i = 1; i < assetSize; ++i) {
-      (rewards[i], floatReward,) = IAgent(assets[i].agent).claimReward(delegator, accStakedCoreAmount, settleRound);
+      (tempReward, floatReward,) = IAgent(assets[i].agent).claimReward(delegator, accStakedCoreAmount, lastRound);
+      rewards[i] += tempReward;
       totalReward += rewards[i];
       totalFloatReward += floatReward;
     }
