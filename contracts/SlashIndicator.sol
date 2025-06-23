@@ -137,8 +137,8 @@ contract SlashIndicator is ISlashIndicator,System,IParamSubscriber{
     }
 
     // Basic check
-    require(evidence.voteA.srcNum+256 > block.number &&
-      evidence.voteB.srcNum+256 > block.number, "too old block involved");
+    require(evidence.voteA.srcNum+86400 > block.number &&
+      evidence.voteB.srcNum+86400 > block.number, "too old block involved");
     require(!(evidence.voteA.srcHash == evidence.voteB.srcHash &&
       evidence.voteA.tarHash == evidence.voteB.tarHash), "two identical votes");
     require(evidence.voteA.srcNum < evidence.voteA.tarNum &&
