@@ -25,8 +25,6 @@ contract ValidatorSet is IValidatorSet, System, IParamSubscriber {
 
   bytes public constant INIT_VALIDATORSET_BYTES = hex"{{initValidatorSetBytes}}";
 
-  uint256 public constant INIT_VOTE_REWARD_PERCENT = 10;
-
   /*********************** state of the contract **************************/
   uint256 public blockReward;
   uint256 public blockRewardIncentivePercent;
@@ -37,7 +35,7 @@ contract ValidatorSet is IValidatorSet, System, IParamSubscriber {
   // value is the index of the element in `currentValidatorSet`.
   mapping(address => uint256) public currentValidatorSetMap;
 
-  uint256 voteRewardPercent;
+  uint256 public voteRewardPercent;
 
   struct Validator {
     address operateAddress;
@@ -91,7 +89,6 @@ contract ValidatorSet is IValidatorSet, System, IParamSubscriber {
     }
     blockReward = BLOCK_REWARD;
     blockRewardIncentivePercent = BLOCK_REWARD_INCENTIVE_PERCENT;
-    voteRewardPercent = INIT_VOTE_REWARD_PERCENT;
     alreadyInit = true;
   }
 
@@ -159,10 +156,6 @@ contract ValidatorSet is IValidatorSet, System, IParamSubscriber {
       voteWeightSum += v.voteWeight;
     }
     ISystemReward(SYSTEM_REWARD_ADDR).receiveRewards{ value: incentiveSum }();
-
-    if (voteRewardPercent == 0) {
-      voteRewardPercent = INIT_VOTE_REWARD_PERCENT;
-    }
 
     uint256 vrPercent = voteWeightSum == 0 ? 0 : voteRewardPercent;
 
