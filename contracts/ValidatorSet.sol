@@ -89,7 +89,6 @@ contract ValidatorSet is IValidatorSet, System, IParamSubscriber {
     }
     blockReward = BLOCK_REWARD;
     blockRewardIncentivePercent = BLOCK_REWARD_INCENTIVE_PERCENT;
-    voteRewardPercent = INIT_VOTE_REWARD_PERCENT;
     alreadyInit = true;
   }
 
