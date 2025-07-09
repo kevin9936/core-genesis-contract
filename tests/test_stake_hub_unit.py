@@ -855,7 +855,6 @@ def test_stake_hup_add_round_reward(stake_hub, validator_set, candidate_hub, cor
         if test['status'] == 'success':
             tx = validator_set.addRoundRewardMock(test['validators'], test['reward_list'], test['round'],
                                                   {'from': accounts[0], 'value': value_sum})
-            print(tx.events['roundReward'])
             for i in range(len(test['expect_round_reward'])):
                 expect_event(tx, 'roundReward', test['expect_round_reward'][i], i)
         else:

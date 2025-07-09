@@ -139,7 +139,7 @@ def test_clean(slash_indicator, validator_set):
         for account, count in zip(slash_accounts, counts):
             assert slash_indicator.getSlashIndicator(account.address)[1] == max([count - decrease_value, 0])
 
-
+# submitFinalityViolationEvidence
 def test_old_block_involved_failed(slash_indicator, validator_set, set_candidate):
     signature = os.urandom(96).hex()
     chain.mine(86400 + chain.height)
@@ -153,6 +153,15 @@ def test_old_block_involved_failed(slash_indicator, validator_set, set_candidate
     vote_addr = random_vote_address()
     with brownie.reverts(f"too old block involved"):
         slash_indicator.submitFinalityViolationEvidence((vote_a, vote_b, vote_addr), {'from': accounts[0]})
+
+def test_vote_addrs_length_le_1(slash_indicator):
+    register_candidate(operator=accounts[0])
+    turn_round()
+    signature = os.urandom(96).hex()
+    vote_a = build_vote_data(100, random_btc_tx_id(), 150, random_btc_tx_id(), signature)
+    vote_b = build_vote_data(120, random_btc_tx_id(), 140, random_btc_tx_id(), signature)
+    vote_addr = random_vote_address()
+    slash_indicator.mockSubmitFinalityViolationEvidence((vote_a, vote_b, vote_addr), {'from': accounts[0]})
 
 
 def test_identical_votes_failed(slash_indicator, validator_set, set_candidate):
