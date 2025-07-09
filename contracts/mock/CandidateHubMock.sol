@@ -135,10 +135,19 @@ contract CandidateHubMock is CandidateHub {
     function getValidatorsMock(
         address[] memory candidateList,
         uint256[] memory scoreList,
-        uint256 count
+        uint256 count,
+        uint256 sortedCount
     ) public view returns (address[] memory validatorList) {
-        return getValidators(candidateList, scoreList, count);
+        return getValidators(candidateList, scoreList, count, sortedCount);
     }
+    function getAlternateCountMock(
+        uint256 maxAlternateCount,
+        uint256 count,
+        uint256 candidateSize
+    ) public view returns (uint256) {
+        return getAlternateCount(maxAlternateCount, count, candidateSize);
+    }
+
 
     function cleanMock() public {
         ISlashIndicator(SLASH_CONTRACT_ADDR).clean();
@@ -333,5 +342,11 @@ contract CandidateHubMock is CandidateHub {
         for (uint256 i = 0; i < candidateSize; i++) {
             changeStatus(candidateSet[i], statusList[i]);
         }
+    }
+    function setMaxAlternateCount(uint256 _maxAlternateCount) external {
+        maxAlternateCount = _maxAlternateCount;
+    }
+    function mockGetAlternateCount(uint256 maxAlternateCount, uint256 count, uint256 candidateSize) public pure returns (uint256) {
+        return getAlternateCount(maxAlternateCount, count, candidateSize);
     }
 }

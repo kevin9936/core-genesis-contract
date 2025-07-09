@@ -74,6 +74,9 @@ contract SlashIndicatorMock is SlashIndicator {
         // verifyBLSSignature(evidence.voteB, evidence.voteAddr), "verify signature failed");
 
         (address[] memory vals, bytes[] memory voteAddrs) = IValidatorSet(VALIDATOR_CONTRACT_ADDR).getValidatorsAndVoteAddresses();
+        if (voteAddrs.length <= 1) {
+            return;
+        }
         for (uint256 i; i < voteAddrs.length; ++i) {
             if (BytesLib.equal(voteAddrs[i], evidence.voteAddr)) {
                 ISystemReward(SYSTEM_REWARD_ADDR).claimRewards(payable(msg.sender), rewardForReportFinalityViolation);
@@ -82,5 +85,13 @@ contract SlashIndicatorMock is SlashIndicator {
             }
         }
     }
-
+    function setMisdemeanorThreshold(uint256 _misdemeanorThreshold) external {
+        misdemeanorThreshold = _misdemeanorThreshold;
+    }
+    function setFelonyThreshold(uint256 _felonyThreshold) external {
+        felonyThreshold = _felonyThreshold;
+    }
+    function mockSlashWithBlockCount(address validator, uint256 blockCount) external {
+        slashWithBlockCount(validator, blockCount);
+    }
 }
