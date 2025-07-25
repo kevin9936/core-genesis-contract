@@ -216,7 +216,6 @@ def set_last_round_tag(stake_round, time0=None):
     CandidateHubMock[0].setRoundTag(current_round)
     BitcoinStakeMock[0].setRoundTag(current_round)
     CoreAgentMock[0].setRoundTag(current_round)
-    BitcoinLSTStakeMock[0].setInitRound(current_round)
     return end_round0, current_round
 
 
@@ -303,42 +302,7 @@ def delegate_power_success(candidate, delegator, value=1, stake_round=0):
     BtcLightClientMock[0].setMiners(stake_round, candidate, [delegator] * value)
 
 
-def delegate_btc_lst_success(delegator, btc_amount, lock_script, percentage=5000, relay=None):
-    BitcoinAgentMock[0].setPercentage(percentage)
-    delegator_asset = BitcoinLSTToken[0].balanceOf(delegator)
-    btc_tx0 = build_btc_lst_tx(delegator, int(btc_amount), lock_script)
-    if relay is None:
-        relay = accounts[0]
-    tx = BitcoinLSTStakeMock[0].delegate(btc_tx0, 1, [], 0, lock_script, {"from": relay})
-    assert 'delegated' in tx.events
-    delegator_asset += btc_amount
-    assert BitcoinLSTToken[0].balanceOf(delegator) == delegator_asset
-    tx_id = get_transaction_txid(btc_tx0)
-    return tx_id
-
-
-def transfer_btc_lst_success(delegator, amount, to):
-    from_asset0 = BitcoinLSTToken[0].balanceOf(delegator)
-    to_asset = BitcoinLSTToken[0].balanceOf(to)
-    BitcoinLSTToken[0].transfer(to, amount, {"from": delegator})
-    from_asset = from_asset0 - amount
-    to_asset += amount
-    if delegator == to:
-        to_asset = from_asset0
-        from_asset = from_asset0
-    assert BitcoinLSTToken[0].balanceOf(delegator) == from_asset
-    assert BitcoinLSTToken[0].balanceOf(to) == to_asset
-
-
-def redeem_btc_lst_success(delegator, amount, pkscript):
-    UTXO_FEE = 100
-    tx = BitcoinLSTStakeMock[0].redeem(amount, pkscript, {"from": delegator})
-    assert tx.events['redeemed']['amount'] == amount - UTXO_FEE
-    return tx
-
-
 # mock delegate 
-# agent, delegator, btc_amount, lock_script
 def mock_delegate_btc_success(agent, delegator, btc_amount, lock_time=None, block_timestamp=0, output_index=0,
                               tx_id=None):
     if tx_id is None:
@@ -662,27 +626,11 @@ class StakeManager:
             rewards = []
         StakeHubMock[0].setDelegatorMap(account, change_round, rewards)
 
-    @staticmethod
-    def add_wallet(script):
-        update_system_contract_address(BitcoinLSTStakeMock[0], gov_hub=accounts[10])
-        BitcoinLSTStakeMock[0].updateParam('add', script, {'from': accounts[10]})
-        update_system_contract_address(BitcoinLSTStakeMock[0], gov_hub=GovHubMock[0])
-
-    @staticmethod
-    def remove_wallet(script):
-        update_system_contract_address(BitcoinLSTStakeMock[0], gov_hub=accounts[10])
-        BitcoinLSTStakeMock[0].updateParam('remove', script, {'from': accounts[10]})
-        update_system_contract_address(BitcoinLSTStakeMock[0], gov_hub=GovHubMock[0])
-
 
 class RoundRewardManager:
     @staticmethod
     def mock_core_reward_map(delegator, reward, acc_stake_amount):
         BitcoinAgentMock[0].setCoreRewardMap(delegator, reward, acc_stake_amount)
-
-    @staticmethod
-    def mock_btc_lst_reward_map(delegator, reward, delegate_amount):
-        BitcoinLSTStakeMock[0].setBtcLstRewardMap(delegator, reward, delegate_amount)
 
     @staticmethod
     def mock_btc_reward_map(delegator, reward, unclaimed_reward, delegate_amount):

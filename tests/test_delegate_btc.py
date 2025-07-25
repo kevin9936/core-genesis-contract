@@ -77,7 +77,7 @@ def test_claim_rewards_from_multiple_validators(btc_stake):
     assert tracker0.delta() == sum_reward - FEE * 12
 
 
-def test_transfer_btc_between_different_validators(btc_stake, core_agent, candidate_hub, set_candidate, btc_lst_stake):
+def test_transfer_btc_between_different_validators(btc_stake, core_agent, candidate_hub, set_candidate):
     operators, consensuses = set_candidate
     end_round, _ = set_last_round_tag(STAKE_ROUND)
     tx_id = delegate_btc_success(operators[0], accounts[0], BTC_VALUE, LOCK_SCRIPT, LOCK_SCRIPT)

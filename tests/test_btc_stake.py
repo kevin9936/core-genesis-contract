@@ -99,7 +99,7 @@ def test_initialize_from_pledge_agent_success(btc_stake):
         assert c[1] == realtime_amounts[index]
 
 
-def test_delegate_btc_with_lock_time_in_tx(btc_stake, set_candidate, stake_hub, btc_lst_stake, btc_agent):
+def test_delegate_btc_with_lock_time_in_tx(btc_stake, set_candidate, stake_hub, btc_agent):
     turn_round()
     operators, consensuses = set_candidate
     btc_amount = BTC_VALUE

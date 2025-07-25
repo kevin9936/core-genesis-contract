@@ -23,9 +23,7 @@ TOTAL_REWARD = 0
 # BTC delegation-related
 LOCK_TIME = 1736956800
 LOCK_SCRIPT = "0480db8767b17576a914574fdd26858c28ede5225a809f747c01fcc1f92a88ac"
-# BTCLST delegation-related
-BTCLST_LOCK_SCRIPT = "0xa914cdf3d02dd323c14bea0bed94962496c80c09334487"
-BTCLST_REDEEM_SCRIPT = "0xa914047b9ba09367c1b213b5ba2184fba3fababcdc0287"
+
 stake_manager = StakeManager()
 
 
@@ -38,9 +36,9 @@ def deposit_for_reward(validator_set, gov_hub, system_reward):
 
 @pytest.fixture(scope="module", autouse=True)
 def set_block_reward(validator_set, candidate_hub, btc_light_client, btc_stake, stake_hub, core_agent, pledge_agent,
-                     btc_lst_stake, gov_hub, hash_power_agent, btc_agent, system_reward):
+                     gov_hub, hash_power_agent, btc_agent, system_reward):
     global BLOCK_REWARD, FEE, COIN_REWARD, BTC_REWARD_NO_POWER, COIN_REWARD_NO_POWER, BTC_REWARD, TOTAL_REWARD, HASH_POWER_AGENT, BTC_AGENT, stake_manager
-    global BTC_STAKE, STAKE_HUB, CORE_AGENT, BTC_LIGHT_CLIENT, MIN_INIT_DELEGATE_VALUE, CANDIDATE_HUB, BTC_LST_STAKE
+    global BTC_STAKE, STAKE_HUB, CORE_AGENT, BTC_LIGHT_CLIENT, MIN_INIT_DELEGATE_VALUE, CANDIDATE_HUB
     FEE = FEE * 100
     block_reward = validator_set.blockReward()
     block_reward_incentive_percent = validator_set.blockRewardIncentivePercent()
@@ -67,9 +65,7 @@ def set_block_reward(validator_set, candidate_hub, btc_light_client, btc_stake, 
     btc_agent.setIsActive(True)
     btc_agent.setAssetWeight(1)
     system_reward.setOperator(stake_hub.address)
-    BTC_LST_STAKE = btc_lst_stake
     HASH_POWER_AGENT = hash_power_agent
-    btc_lst_stake.updateParam('add', BTCLST_LOCK_SCRIPT, {'from': gov_hub.address})
 
 
 @pytest.fixture(scope="module", autouse=True)
@@ -230,35 +226,6 @@ def test_btc_reward_discount_by_core_stake_amount(btc_stake, candidate_hub, btc_
         assert tx.events['rewardTo']['amount'] == (reward - TOTAL_REWARD)
     assert tracker.delta() == reward + core_reward
     assert STAKE_HUB.surplus() == unclaimed_reward
-
-
-@pytest.mark.parametrize("core_rate", [0, 4500, 8000, 11000, 12001, 17000])
-def test_btc_lst_reward_unaffected_by_core_amount(btc_stake, set_candidate, btc_lst_stake, core_rate):
-    stake_manager.set_is_stake_hub_active(True)
-    operators, consensuses = set_candidate
-    turn_round()
-    turn_round(consensuses, round_count=3)
-    delegate_btc_lst_success(accounts[0], BTC_VALUE, BTCLST_LOCK_SCRIPT)
-    turn_round(consensuses, round_count=2)
-    btc_reward = TOTAL_REWARD * 3
-    tracker = get_tracker(accounts[0])
-    stake_hub_claim_reward(accounts[0])
-    assert tracker.delta() == btc_reward // 2
-    assert STAKE_HUB.surplus() == btc_reward - btc_reward // 2
-
-
-@pytest.mark.parametrize("percentage", [0, 1000, 4500, 5000, 6000, 7000, 10000])
-def test_update_btc_lst_percentage_and_claim(btc_stake, set_candidate, btc_lst_stake, percentage):
-    stake_manager.set_is_stake_hub_active(True)
-    operators, consensuses = set_candidate
-    turn_round()
-    delegate_btc_lst_success(accounts[0], BTC_VALUE, BTCLST_LOCK_SCRIPT, percentage)
-    turn_round(consensuses, round_count=2)
-    btc_reward = TOTAL_REWARD * 3
-    tracker = get_tracker(accounts[0])
-    stake_hub_claim_reward(accounts[0])
-    assert tracker.delta() == btc_reward * percentage // Utils.DENOMINATOR
-    assert STAKE_HUB.surplus() == btc_reward - btc_reward * percentage // Utils.DENOMINATOR
 
 
 @pytest.mark.parametrize("core_rate", [0, 2001, 8000, 12000, 15000, 18000, 22001, 28000])
@@ -535,48 +502,6 @@ def test_turn_round_core_rewards_without_core_stake(btc_stake, stake_hub, set_ca
     assert __calc_unclaimed_reward(TOTAL_REWARD, discount) * 2 == unclaimed_reward
 
 
-@pytest.mark.parametrize("percentage", [400, 1000, 8800, 10000])
-def test_btc_lst_discount_by_percentage(btc_stake, set_candidate, btc_agent, percentage):
-    operators, consensuses = set_candidate
-    turn_round()
-    delegate_btc_lst_success(accounts[0], BTC_VALUE, BTCLST_LOCK_SCRIPT)
-    turn_round(consensuses, round_count=2)
-    update_system_contract_address(btc_agent, gov_hub=accounts[0])
-    hex_value = padding_left(Web3.to_hex(int(percentage)), 64)
-    btc_agent.updateParam('lstGradePercentage', hex_value, {'from': accounts[0]})
-    tracker = get_tracker(accounts[0])
-    stake_hub_claim_reward(accounts[0])
-    btc_reward = TOTAL_REWARD * 3
-    actual_reward = TOTAL_REWARD * 3 * percentage // Utils.DENOMINATOR
-    bonus = btc_reward - actual_reward
-    assert tracker.delta() == actual_reward
-    assert STAKE_HUB.surplus() == bonus
-    turn_round(consensuses)
-    stake_hub_claim_reward(accounts[0])
-    assert STAKE_HUB.surplus() == bonus * 2
-
-
-@pytest.mark.parametrize("percentage", [[12000, 8127], [20000, 40635]])
-def test_btc_lst_claim_extra_reward(btc_stake, set_candidate, btc_agent, percentage):
-    operators, consensuses = set_candidate
-    turn_round()
-    delegate_btc_lst_success(accounts[0], BTC_VALUE, BTCLST_LOCK_SCRIPT)
-    turn_round(consensuses, round_count=2)
-    update_system_contract_address(btc_agent, gov_hub=accounts[0])
-    hex_value = padding_left(Web3.to_hex(int(percentage[0])), 64)
-    btc_agent.updateParam('lstGradePercentage', hex_value, {'from': accounts[0]})
-    tracker = get_tracker(accounts[0])
-    tx = stake_hub_claim_reward(accounts[0])
-    assert tx.events['rewardTo']['amount'] == percentage[1]
-    actual_reward = TOTAL_REWARD * 3 * percentage[0] // Utils.DENOMINATOR
-    assert tracker.delta() == actual_reward
-    assert STAKE_HUB.surplus() == 0
-    turn_round(consensuses)
-    stake_hub_claim_reward(accounts[0])
-    assert tracker.delta() == actual_reward
-    assert STAKE_HUB.surplus() == 0
-
-
 def test_bonus_exclusive_to_btc_stake(btc_stake, btc_agent, set_candidate, stake_hub):
     stake_manager.set_is_stake_hub_active(True)
     stake_manager.set_lp_rates([[0, 20000]])
@@ -596,27 +521,12 @@ def test_bonus_exclusive_to_btc_stake(btc_stake, btc_agent, set_candidate, stake
     assert stake_hub.surplus() == 0
 
 
-def test_no_extra_bonus_for_btc_lst_state(btc_stake, btc_agent, set_candidate, stake_hub):
-    stake_manager.set_is_stake_hub_active(True)
-    stake_manager.set_lp_rates([[0, 20000]])
-    operators, consensuses = set_candidate
-    turn_round()
-    delegate_btc_lst_success(accounts[0], BTC_VALUE, BTCLST_LOCK_SCRIPT, percentage=Utils.DENOMINATOR)
-    turn_round(consensuses, round_count=2)
-    tracker0 = get_tracker(accounts[0])
-    stake_hub_claim_reward(accounts[:3])
-    assert tracker0.delta() == TOTAL_REWARD * 3
-    assert stake_hub.surplus() == 0
-
-
-def test_btc_staking_reward_depleted(btc_stake, set_candidate, btc_lst_stake, stake_hub):
+def test_btc_staking_reward_depleted(btc_stake, set_candidate, stake_hub):
     stake_manager.set_is_btc_stake_active(True)
     stake_manager.set_tlp_rates([[0, 0]])
     operators, consensuses = set_candidate
     turn_round()
     delegate_btc_success(operators[1], accounts[0], BTC_VALUE, LOCK_SCRIPT)
-    turn_round(consensuses, round_count=2)
-    delegate_btc_lst_success(accounts[0], BTC_VALUE, BTCLST_LOCK_SCRIPT, 0)
     turn_round(consensuses, round_count=2)
     tracker0 = get_tracker(accounts[0])
     stake_hub_claim_reward(accounts[0])
@@ -624,7 +534,7 @@ def test_btc_staking_reward_depleted(btc_stake, set_candidate, btc_lst_stake, st
     turn_round(consensuses)
 
 
-def test_btc_expired_excluded_from_stake(btc_stake, set_candidate, btc_lst_stake):
+def test_btc_expired_excluded_from_stake(btc_stake, set_candidate):
     delegate_amount = 10000
     btc_amount = 1
     stake_manager.set_lp_rates([[10000, 5000], [30000, 2000], [40000, 10000], [40001, 3000]])
@@ -646,7 +556,7 @@ def test_btc_expired_excluded_from_stake(btc_stake, set_candidate, btc_lst_stake
 
 
 @pytest.mark.parametrize("round", [0, 1, 2, 3])
-def test_acc_stake_amount_after_btc_transfer(btc_stake, set_candidate, btc_lst_stake, round):
+def test_acc_stake_amount_after_btc_transfer(btc_stake, set_candidate, round):
     delegate_amount = 10000
     btc_amount = 1
     stake_manager.set_lp_rates([[10000, 5000], [30000, 2000], [40000, 10000], [40001, 3000]])
@@ -675,7 +585,7 @@ def test_acc_stake_amount_after_btc_transfer(btc_stake, set_candidate, btc_lst_s
     [([0, 1000], [2500, 5000], [10000, 10000], [10001, 3000]), 1000000, 1, 200],
     [([0, 1000], [2500, 10000], [5000, 5000], [10001, 3000]), 10000000, 20, 1000]]
                          )
-def test_calc_stake_after_coin_unstake(btc_stake, stake_hub, set_candidate, btc_lst_stake, stake_amounts):
+def test_calc_stake_after_coin_unstake(btc_stake, stake_hub, set_candidate, stake_amounts):
     delegate_amount = stake_amounts[1]
     power_value = stake_amounts[2]
     btc_value = stake_amounts[3]
@@ -714,7 +624,7 @@ def test_calc_stake_after_coin_unstake(btc_stake, stake_hub, set_candidate, btc_
     {'coinAmount': 0, 'btcAmount': 10e8, 'duration': 1, 'expect_reward_pool': 1.764e18,
      'expect_btc_reward': 3.6e16},
 ])
-def test_dual_staking_reward_in_current_round(btc_stake, btc_agent, stake_hub, validator_set, btc_lst_stake,
+def test_dual_staking_reward_in_current_round(btc_stake, btc_agent, stake_hub, validator_set,
                                               set_candidate, tests, round_count):
     btc_agent.setAssetWeight(1e10)
     tx_fee = ONE_ETHER
@@ -763,7 +673,7 @@ def test_dual_staking_reward_in_current_round(btc_stake, btc_agent, stake_hub, v
     {'delegator': ['delegateBtc', 'transferBtc'], 'expect_claim_reward': 1.35e18, 'expect_btc_reward': 6.75e18},
     {'delegator': ['transferBtc', 'delegateBtc'], 'expect_claim_reward': 4.5e17, 'expect_btc_reward': 4.05e18},
 ])
-def test_dual_staking_reward_after_rounds(btc_stake, btc_agent, stake_hub, validator_set, btc_lst_stake,
+def test_dual_staking_reward_after_rounds(btc_stake, btc_agent, stake_hub, validator_set,
                                           set_candidate, tests):
     btc_agent.setAssetWeight(1e10)
     tx_fee = ONE_ETHER
@@ -797,7 +707,7 @@ def test_dual_staking_reward_after_rounds(btc_stake, btc_agent, stake_hub, valid
     turn_round(consensuses, tx_fee=tx_fee)
 
 
-def test_dual_staking_claim_success_after_btc_expiration(btc_stake, btc_agent, stake_hub, validator_set, btc_lst_stake,
+def test_dual_staking_claim_success_after_btc_expiration(btc_stake, btc_agent, stake_hub, validator_set,
                                                          set_candidate):
     btc_value = 100
     stake_manager.set_is_stake_hub_active(True)
@@ -842,7 +752,7 @@ def test_claim_reward_after_modify_asset_weight(btc_stake, btc_agent,
     {'rate': [[0, 5000], [2500, 10000], [10000, 1000], [10001, 3000]], 'coin': 10000, 'btc': 3,
      'expect_reward': 6772 + 6772},
 ])
-def test_cancel_immediately_after_transfer(btc_stake, stake_hub, set_candidate, btc_lst_stake, tests):
+def test_cancel_immediately_after_transfer(btc_stake, stake_hub, set_candidate, tests):
     delegate_amount = tests['coin']
     btc_value = tests['btc']
     rates = tests['rate']
@@ -870,7 +780,7 @@ def test_cancel_immediately_after_transfer(btc_stake, stake_hub, set_candidate, 
     ['transfer_btc', 13545, 13545 * 2 + 13545 // 2 * 2],
     ['claim', 13545 + 13545 // 2, 13545 * 2 + 13545 // 2 * 2]
 ])
-def test_dual_staking_without_duration_discount_success(btc_stake, stake_hub, core_agent, set_candidate, btc_lst_stake,
+def test_dual_staking_without_duration_discount_success(btc_stake, stake_hub, core_agent, set_candidate,
                                                         tests):
     stake_manager.set_lp_rates([[0, 1000], [2500, 2500], [5000, 5000], [10000, 20000]])
     stake_manager.set_is_stake_hub_active(True)
@@ -911,8 +821,7 @@ def test_dual_staking_without_duration_discount_success(btc_stake, stake_hub, co
     assert tracker0.delta() == tests[2]
 
 
-def test_staking_with_duration_discount_claim_reward_success(btc_stake, stake_hub, core_agent, set_candidate,
-                                                             btc_lst_stake):
+def test_staking_with_duration_discount_claim_reward_success(btc_stake, stake_hub, core_agent, set_candidate):
     stake_manager.set_lp_rates([[0, 1000], [2500, 2500], [5000, 5000], [10000, 20000]])
     stake_manager.set_is_stake_hub_active(True)
     stake_manager.set_tlp_rates([[0, 5000]])
@@ -949,7 +858,7 @@ def test_staking_with_duration_discount_claim_reward_success(btc_stake, stake_hu
     ['trb', 13545, 13545 * 2 + 13545 // 2 * 2],
     ['cl', 13545 + 13545 // 2, 13545 * 2 + 13545 // 2 * 2]
 ])
-def test_dual_staking_claim_then_operate_success(btc_stake, stake_hub, core_agent, set_candidate, btc_lst_stake, tests):
+def test_dual_staking_claim_then_operate_success(btc_stake, stake_hub, core_agent, set_candidate, tests):
     stake_manager.set_lp_rates([[0, 1000], [2500, 2500], [5000, 5000], [10000, 20000]])
     stake_manager.set_is_stake_hub_active(True)
     stake_manager.set_tlp_rates()
@@ -987,7 +896,7 @@ def test_dual_staking_claim_then_operate_success(btc_stake, stake_hub, core_agen
     assert tracker0.delta() == tests[2]
 
 
-def test_dual_staking_multiple_rounds_operations_success(btc_stake, stake_hub, core_agent, btc_lst_stake):
+def test_dual_staking_multiple_rounds_operations_success(btc_stake, stake_hub, core_agent):
     stake_manager.set_lp_rates([[0, 1000], [2500, 2500], [5000, 5000], [10000, 20000]])
     stake_manager.set_is_stake_hub_active(True)
     stake_manager.set_tlp_rates()
@@ -1020,7 +929,7 @@ def test_dual_staking_multiple_rounds_operations_success(btc_stake, stake_hub, c
 
 
 @pytest.mark.parametrize("tests", ['delegate', 'undelegate', 'transfer', 'delegate_btc', 'transfer_btc', 'claim'])
-def test_dual_staking_uneven_with_transfer_and_cancel_rewards(btc_stake, stake_hub, core_agent, btc_lst_stake, tests):
+def test_dual_staking_uneven_with_transfer_and_cancel_rewards(btc_stake, stake_hub, core_agent, tests):
     stake_manager.set_lp_rates([[0, 1000], [3750, 2500], [3751, 5000], [10000, 20000]])
     stake_manager.set_is_stake_hub_active(True)
     stake_manager.set_tlp_rates()
@@ -1065,7 +974,7 @@ def test_dual_staking_uneven_with_transfer_and_cancel_rewards(btc_stake, stake_h
     turn_round(consensuses)
 
 
-def test_calculate_reward_success(btc_stake, stake_hub, core_agent, btc_lst_stake):
+def test_calculate_reward_success(btc_stake, stake_hub, core_agent):
     stake_manager.set_lp_rates([[0, 1000], [3750, 2500], [3751, 5000], [10000, 20000]])
     stake_manager.set_is_stake_hub_active(True)
     stake_manager.set_tlp_rates()
@@ -1457,30 +1366,6 @@ def test_coin_staking_reward_settlement(set_candidate, pledge_agent, stake_hub):
     turn_round(consensuses)
     mock_delegate_coin_success(operators[0], accounts[0], delegate_amount)
     mock_delegate_coin_success(operators[0], accounts[1], delegate_amount)
-    turn_round(consensuses, round_count=3)
-    delegate_coin_success(operators[2], accounts[0], delegate_amount)
-    tracker = get_tracker(accounts[0])
-    stake_hub_claim_reward(accounts[0])
-    assert tracker.delta() * TOTAL_REWARD // 2 * 4
-    turn_round(consensuses, round_count=2)
-    stake_hub_claim_reward(accounts[0])
-    assert tracker.delta() * TOTAL_REWARD // 2 * 2
-
-
-def test_btclst_staking_reward_settlement(set_candidate, pledge_agent, stake_hub):
-    stake_manager.set_is_stake_hub_active(True)
-    stake_manager.set_tlp_rates()
-    operators, consensuses = set_candidate
-    turn_round()
-    delegate_amount = 500000
-    delegate_btc_lst_success(accounts[0], delegate_amount, BTCLST_LOCK_SCRIPT)
-    delegate_btc_lst_success(accounts[1], delegate_amount, BTCLST_LOCK_SCRIPT)
-    turn_round(consensuses)
-    delegate_btc_lst_success(accounts[0], delegate_amount, BTCLST_LOCK_SCRIPT)
-    delegate_btc_lst_success(accounts[1], delegate_amount, BTCLST_LOCK_SCRIPT)
-    turn_round(consensuses)
-    delegate_btc_lst_success(accounts[0], delegate_amount, BTCLST_LOCK_SCRIPT)
-    delegate_btc_lst_success(accounts[1], delegate_amount, BTCLST_LOCK_SCRIPT)
     turn_round(consensuses, round_count=3)
     delegate_coin_success(operators[2], accounts[0], delegate_amount)
     tracker = get_tracker(accounts[0])
@@ -1950,7 +1835,7 @@ def test_change_round_diff_with_power_stake(stake_hub, set_candidate):
     assert trackers[0].delta() == account_reward
 
 
-def test_change_round_diff_with_btcLst_stake(stake_hub, set_candidate):
+def test_upgrade_claim_reward_with_diff_change_round_btcLst(stake_hub, set_candidate):
     stake_manager.set_is_stake_hub_active(True)
     stake_manager.set_tlp_rates()
     stake_manager.set_lp_rates([[0, 10000]])
@@ -1958,7 +1843,6 @@ def test_change_round_diff_with_btcLst_stake(stake_hub, set_candidate):
     turn_round()
     delegate_amount = 500000
     btc_value = 100
-    btc_lst_value = 1000
     for account in accounts[:2]:
         for op in operators[:2]:
             mock_delegate_coin_success(op, account, delegate_amount)
@@ -1972,7 +1856,6 @@ def test_change_round_diff_with_btcLst_stake(stake_hub, set_candidate):
     delegate_power_success(operators[0], accounts[2])
     delegate_power_success(operators[1], accounts[2])
     turn_round(consensuses)
-    delegate_btc_lst_success(accounts[0], btc_lst_value, BTCLST_LOCK_SCRIPT)
     trackers = get_trackers(accounts[:3])
     account_reward = TOTAL_REWARD * 2 + TOTAL_REWARD // 2 + (TOTAL_REWARD // 6 * 2)
     turn_round(consensuses)
@@ -1992,7 +1875,7 @@ def test_change_round_diff_with_btcLst_stake(stake_hub, set_candidate):
     }, {
         "address": operators[2]
     }
-    ], TOTAL_REWARD, {accounts[0]: set_btc_lst_delegate(btc_lst_value)})
+    ], TOTAL_REWARD)
     assert trackers[0].delta() == account_rewards[accounts[0]] + account_reward
     turn_round(consensuses)
     tx = stake_hub_claim_reward(accounts[0])
@@ -2000,24 +1883,21 @@ def test_change_round_diff_with_btcLst_stake(stake_hub, set_candidate):
     assert tx.events['claimedCoinReward']['accStakedAmount'] == delegate_amount * 2
 
 
-def test_change_round_same_add_btcLst_stake(stake_hub, set_candidate):
+def test_upgrade_same_change_round_claim_reward(stake_hub, set_candidate):
     stake_manager.set_is_stake_hub_active(True)
     stake_manager.set_tlp_rates()
     operators, consensuses = set_candidate
     turn_round()
     delegate_amount = 500000
     btc_value = 100
-    btc_lst_value = 1000
     for account in accounts[:2]:
         delegate_coin_success(operators[0], account, delegate_amount)
     turn_round(consensuses, round_count=2)
-    tx = delegate_btc_success(operators[0], accounts[0], btc_value, LOCK_SCRIPT)
+    delegate_btc_success(operators[0], accounts[0], btc_value, LOCK_SCRIPT)
     assert stake_hub.getDelegatorMap(accounts[0])[1][0] == TOTAL_REWARD // 2
     delegate_btc_success(operators[0], accounts[1], btc_value, LOCK_SCRIPT)
     delegate_power_success(operators[0], accounts[2])
-    delegate_btc_lst_success(accounts[0], btc_lst_value, BTCLST_LOCK_SCRIPT)
     turn_round(consensuses)
-
     turn_round(consensuses)
     stake_manager.set_lp_rates([[4999, 1000], [5000, 10000], [5001, 1000]])
     _, _, account_rewards, _ = parse_delegation([{
@@ -2030,7 +1910,7 @@ def test_change_round_same_add_btcLst_stake(stake_hub, set_candidate):
     }, {
         "address": operators[2]
     }
-    ], TOTAL_REWARD, {accounts[0]: set_btc_lst_delegate(btc_lst_value)})
+    ], TOTAL_REWARD)
     tracker = get_tracker(accounts[0])
     stake_hub_claim_reward(accounts[0])
     assert tracker.delta() == account_rewards[accounts[0]] + TOTAL_REWARD // 2 * 2
@@ -2192,8 +2072,7 @@ def test_claim_reward_after_refund_surplus(stake_hub, system_reward, set_candida
     assert tracker.delta() == TOTAL_REWARD * 3
 
 
-def test_calculateReward_success(btc_stake, stake_hub, core_agent, set_candidate,
-                                 btc_lst_stake, ):
+def test_calculateReward_success(btc_stake, stake_hub, core_agent, set_candidate, ):
     stake_manager.set_lp_rates([[0, 1000], [2500, 2500], [5000, 5000], [5001, 20000]])
     stake_manager.set_is_stake_hub_active(True)
     stake_manager.set_tlp_rates()
@@ -2219,8 +2098,7 @@ def test_calculateReward_success(btc_stake, stake_hub, core_agent, set_candidate
     assert tracker0.delta() == TOTAL_REWARD + TOTAL_REWARD // 2
 
 
-def test_calculateReward_repeated(btc_stake, stake_hub, core_agent, set_candidate,
-                                  btc_lst_stake, ):
+def test_calculateReward_repeated(btc_stake, stake_hub, core_agent, set_candidate):
     stake_manager.set_lp_rates([[0, 1000], [2500, 2500], [5000, 5000], [5001, 20000]])
     stake_manager.set_is_stake_hub_active(True)
     stake_manager.set_tlp_rates()
@@ -2250,8 +2128,7 @@ def test_calculateReward_repeated(btc_stake, stake_hub, core_agent, set_candidat
     assert tracker0.delta() == TOTAL_REWARD + TOTAL_REWARD // 2
 
 
-def test_calculateReward_with_latest_stake(btc_stake, stake_hub, core_agent, set_candidate,
-                                           btc_lst_stake, ):
+def test_calculateReward_with_latest_stake(btc_stake, stake_hub, core_agent, set_candidate):
     stake_manager.set_lp_rates([[0, 1000], [2500, 2500], [5000, 5000], [5001, 20000]])
     stake_manager.set_is_stake_hub_active(True)
     stake_manager.set_tlp_rates()
@@ -2277,8 +2154,7 @@ def test_calculateReward_with_latest_stake(btc_stake, stake_hub, core_agent, set
 
 
 @pytest.mark.parametrize("onStakeChange", [True, False])
-def test_calculateReward_after_current_round_claim(btc_stake, stake_hub, core_agent, set_candidate,
-                                                   btc_lst_stake, onStakeChange):
+def test_calculateReward_after_current_round_claim(btc_stake, stake_hub, core_agent, set_candidate, onStakeChange):
     stake_manager.set_lp_rates([[0, 1000], [2500, 2500], [5000, 5000], [10000, 20000]])
     stake_manager.set_is_stake_hub_active(True)
     stake_manager.set_tlp_rates()
@@ -2311,8 +2187,7 @@ def test_calculateReward_after_current_round_claim(btc_stake, stake_hub, core_ag
 
 @pytest.mark.parametrize("round_count",
                          [[2, 13545 // 2 * 2, 1693], [3, 13545 + 6772, 6772 // 2], [4, 13545 * 2 - 1, 6772]])
-def test_calculateReward_with_expired_btc(btc_stake, stake_hub, core_agent, set_candidate,
-                                          btc_lst_stake, round_count):
+def test_calculateReward_with_expired_btc(btc_stake, stake_hub, core_agent, set_candidate, round_count):
     stake_manager.set_lp_rates([[0, 1000], [2500, 2500], [7500, 5000], [7501, 20000]])
     stake_manager.set_is_stake_hub_active(True)
     stake_manager.set_tlp_rates()
@@ -2385,13 +2260,11 @@ def test_calculateReward_with_all_stakes(btc_stake, btc_agent, stake_hub, core_a
     turn_round()
     delegate_amount = 500000
     btc_value = 100
-    btc_lst_value = 1000
     delegate_btc_success(operators[0], accounts[0], btc_value, LOCK_SCRIPT)
     delegate_btc_success(operators[0], accounts[1], btc_value, LOCK_SCRIPT)
     delegate_coin_success(operators[0], accounts[0], delegate_amount)
     delegate_coin_success(operators[0], accounts[1], delegate_amount)
     delegate_power_success(operators[0], accounts[2])
-    delegate_btc_lst_success(accounts[0], btc_lst_value, BTCLST_LOCK_SCRIPT)
     turn_round(consensuses, round_count=2)
     tracker0 = get_tracker(accounts[0])
     _, _, account_rewards, _ = parse_delegation([{
@@ -2403,7 +2276,7 @@ def test_calculateReward_with_all_stakes(btc_stake, btc_agent, stake_hub, core_a
         "address": operators[1]
     }, {
         "address": operators[2]
-    }], BLOCK_REWARD // 2, {accounts[0]: set_btc_lst_delegate(btc_lst_value)})
+    }], BLOCK_REWARD // 2)
     stake_hub_calculate_reward(accounts[0])
     stake_hub_calculate_reward(accounts[0])
     stake_hub_claim_reward(accounts[0])
