@@ -1523,6 +1523,7 @@ def test_exit_maintenance_turn_round_with_maintenance_slash(validator_set, candi
 
 def test_exit_maintenance_turn_round_slash_then_exit(validator_set, slash_indicator, candidate_hub,
                                                      set_candidate_maintenance):
+    accounts[99].transfer(candidate_hub.address, Web3.to_wei(1, 'ether'))
     operators, consensuses = set_candidate_maintenance
     turn_round()
     slash_indicator.slash(consensuses[0], {'from': accounts[0]})
@@ -1949,6 +1950,7 @@ def test_maintenance_with_less_alternate(validator_set, candidate_hub):
     turn_round(chain_get_validator_consensus())
     enter_maintenance(operators[3])
 
+
 def test_delegate_and_transfer_during_maintenance(validator_set, candidate_hub, set_candidate_maintenance):
     stake_manager = StakeManager()
     stake_manager.set_lp_rates()
@@ -1967,7 +1969,7 @@ def test_delegate_and_transfer_during_maintenance(validator_set, candidate_hub, 
     delegate_coin_success(operator, delegator, delegate_amount)
     txid = delegate_btc_success(operator, btc_delegator, btc_amount, LOCK_SCRIPT, relay=btc_delegator)
     transfer_coin_success(operator, operators[1], delegator, delegate_amount // 2)
-    transfer_btc_success(txid,operators[2],btc_delegator)
+    transfer_btc_success(txid, operators[2], btc_delegator)
     undelegate_coin_success(operator, delegator, delegate_amount // 4)
     delegate_coin_success(operator, delegator, delegate_amount // 10)
     txid2 = delegate_btc_success(operator, btc_delegator, btc_amount // 10, LOCK_SCRIPT, relay=btc_delegator)
@@ -1978,6 +1980,7 @@ def test_delegate_and_transfer_during_maintenance(validator_set, candidate_hub, 
     turn_round(chain_get_validator_consensus())
     stake_hub_claim_reward(delegator)
     turn_round(chain_get_validator_consensus())
+
 
 def test_validator_with_no_delegation_cannot_enter_maintenance(validator_set, candidate_hub, set_candidate_maintenance):
     operators, consensuses = set_candidate_maintenance

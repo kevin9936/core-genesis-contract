@@ -1,4 +1,5 @@
 import time
+import hashlib
 
 from tests.common import get_current_round, stake_hub_claim_reward
 from tests.utils import *
@@ -304,13 +305,13 @@ def delegate_power_success(candidate, delegator, value=1, stake_round=0):
 
 # mock delegate 
 def mock_delegate_btc_success(agent, delegator, btc_amount, lock_time=None, block_timestamp=0, output_index=0,
-                              tx_id=None):
+                              tx_id=None, channel_id=0):
     if tx_id is None:
         tx_id = random_btc_tx_id()
     if lock_time is None:
         lock_time = LOCK_TIME
     tx = BitcoinStakeMock[0].mockDelegateBtc(tx_id, btc_amount, agent, delegator, lock_time, block_timestamp,
-                                             output_index)
+                                             output_index, channel_id)
     assert 'mockDelegatedBtc' in tx.events
     return tx_id
 
@@ -433,7 +434,7 @@ class BtcScript:
             script_hash = f"{hex(Opcode.OP_HASH160)}14{public_key_hash}{hex(Opcode.OP_EQUAL)}"
             pay_address = '0x' + script_hash.replace('0x', '')
         elif lock_script_type == 'p2wsh':
-            redeem_script = sha256(bytes.fromhex(lock_script)).hexdigest()
+            redeem_script = hashlib.sha256(bytes.fromhex(lock_script)).hexdigest()
             script_hash = f"{op2hex(Opcode.OP_0)}{hex(Opcode.OP_DATA_32)}{redeem_script}"
             pay_address = '0x' + script_hash.replace('0x', '')
         return pay_address
@@ -467,12 +468,12 @@ class BtcScript:
             lock_script = '0x' + script_hash.replace('0x', '')
         elif lock_script_type == AddressType.P2WSH:  # 34 bytes
             public_key_hash = public_key_2pkhash(lock_public_key)
-            redeem_script = sha256(bytes.fromhex(public_key_hash.replace('0x', ''))).hexdigest()
+            redeem_script = hashlib.sha256(bytes.fromhex(public_key_hash.replace('0x', ''))).hexdigest()
             script_hash = f"{op2hex(Opcode.OP_0)}{hex(Opcode.OP_DATA_32)}{redeem_script}"
             lock_script = '0x' + script_hash.replace('0x', '')
         elif lock_script_type == AddressType.P2TAPROOT:  # 34 bytes
             public_key_hash = public_key_2pkhash(lock_public_key)
-            redeem_script = sha256(bytes.fromhex(public_key_hash.replace('0x', ''))).hexdigest()
+            redeem_script = hashlib.sha256(bytes.fromhex(public_key_hash.replace('0x', ''))).hexdigest()
             script_hash = f"{op2hex(Opcode.OP_1)}{hex(Opcode.OP_DATA_32)}{redeem_script}"
             lock_script = '0x' + script_hash.replace('0x', '')
         return lock_script
@@ -633,8 +634,13 @@ class RoundRewardManager:
         BitcoinAgentMock[0].setCoreRewardMap(delegator, reward, acc_stake_amount)
 
     @staticmethod
-    def mock_btc_reward_map(delegator, reward, unclaimed_reward, delegate_amount):
-        BitcoinStakeMock[0].setBtcRewardMap(delegator, reward, unclaimed_reward, delegate_amount)
+    def mock_btc_reward_map(candidate, roundTag, reward, unclaimed_reward, btc_amount=1):
+        BitcoinStakeMock[0].setAccruedRewardPerBTCMap(candidate, roundTag - 1,
+                                                      (reward + unclaimed_reward) * 1e8 // btc_amount)
+        if unclaimed_reward > 0:
+            BitcoinStakeMock[0].setIsActive(True)
+            BitcoinStakeMock[0].popTtlpRates()
+            BitcoinStakeMock[0].setTlpRates(0, reward / (reward + unclaimed_reward) * 10000)
 
     @staticmethod
     def mock_power_reward_map(delegator, reward, delegate_amount):
