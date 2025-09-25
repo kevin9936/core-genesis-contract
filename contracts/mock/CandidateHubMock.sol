@@ -168,12 +168,13 @@ contract CandidateHubMock is CandidateHub {
                 margin: msg.value,
                 status: status,
                 commissionLastChangeRound: roundTag,
-                commissionLastRoundValue: commissionThousandths,
-                voteAddr: voteAddr,
-                agent: address(0),
-                description: Description("", "", "", "")
+                commissionLastRoundValue: commissionThousandths
             })
         );
+        exMap[operateAddr] = CandidateEx({
+            voteAddr: voteAddr,
+            agent: address(0)
+        });
         uint256 index = candidateSet.length;
         operateMap[operateAddr] = index;
         consensusMap[consensusAddr] = index;
