@@ -8,7 +8,7 @@ from brownie.test import given, strategy
 from brownie.network.transaction import Status, TransactionReceipt
 from tests.delegate import delegate_btc_success, delegate_coin_success
 from .constant import Utils
-from .utils import random_address, expect_event, padding_left, update_system_contract_address
+from .utils import *
 from .common import *
 
 
@@ -161,9 +161,10 @@ def test_isCandidateByOperate_zeroAddress(candidate_hub, set_candidate):
     assert candidate_hub.isCandidateByOperate(zero_address) is False
 
 
-def test_only_validator_can_call(candidate_hub, set_candidate):
+def test_only_validator_can_call(candidate_hub, set_candidate, validator_set):
     operators, consensuses = set_candidate
-    with brownie.reverts("the msg sender must be validatorSet contract"):
+    error_msg = encode_args_with_signature("NotPermissionalCaller(address,address)", [validator_set.address,accounts[0].address])
+    with brownie.reverts(error_msg):
         candidate_hub.jailValidator(consensuses[0], 2, 1e5)
 
 
@@ -520,9 +521,10 @@ def test_registration_index_correct_after_success(candidate_hub, required_margin
 
 
 # updateParam
-def test_only_gov_can_call(candidate_hub, required_margin):
+def test_only_gov_can_call(candidate_hub, required_margin, gov_hub):
     value = padding_left(Web3.to_hex(candidate_hub.dues() + 10), 64)
-    with brownie.reverts("the msg sender must be governance contract"):
+    error_msg = encode_args_with_signature("NotPermissionalCaller(address,address)", [gov_hub.address,accounts[0].address])
+    with brownie.reverts(error_msg):
         candidate_hub.updateParam("requiredMargin", value)
 
 

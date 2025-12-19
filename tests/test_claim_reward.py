@@ -58,7 +58,7 @@ def set_block_reward(validator_set, candidate_hub, btc_stake, stake_hub, pledge_
     set_block_time_stamp(150, LOCK_TIME)
     tlp_rates_keys, tlp_rates_values, lp_rates_keys, lp_rates_values = Discount().get_init_discount()
     btc_agent.setAssetWeight(1)
-    btc_stake.setInitTlpRates(tlp_rates_keys, tlp_rates_values)
+    btc_agent.setInitTlpRates(tlp_rates_keys, tlp_rates_values)
     btc_agent.setInitLpRates(lp_rates_keys, lp_rates_values)
     btc_stake.setIsActive(True)
     btc_agent.setIsActive(True)

@@ -409,8 +409,9 @@ def test_vote_array_length_change_success(validator_set, set_candidate):
 
 
 # updateValidatorSet
-def test_update_failed_by_address_which_is_not_candidate():
-    with brownie.reverts("the msg sender must be candidate contract"):
+def test_update_failed_by_address_which_is_not_candidate(candidate_hub):
+    error = encode_args_with_signature("NotPermissionalCaller(address,address)", [candidate_hub.address,accounts[0].address])
+    with brownie.reverts(error):
         validator_set_instance.updateValidatorSet([random_address], [random_address], [random_address], [100], [],
                                                   validator_count)
 
@@ -800,8 +801,9 @@ def test_get_validators_and_vote_addresses_validator_count_zero(validator_set, c
         assert consensus in consensus_addrs
 
 
-def test_only_gov_can_govern(validator_set):
-    with brownie.reverts("the msg sender must be governance contract"):
+def test_only_gov_can_govern(validator_set, gov_hub):
+    error = encode_args_with_signature("NotPermissionalCaller(address,address)", [gov_hub.address,accounts[0].address])
+    with brownie.reverts(error):
         validator_set.updateParam('voteRewardPercent',
                                   '0x0000000000000000000000000000000000000000000000000000000000000014')
 
@@ -855,8 +857,9 @@ def test_update_param_success_with_key_blockRewardIncentivePercent():
     assert validator_set_instance.blockRewardIncentivePercent() == 20
 
 
-def test_distribute_reward_failed_by_address_which_is_not_candidate():
-    with brownie.reverts("the msg sender must be candidate contract"):
+def test_distribute_reward_failed_by_address_which_is_not_candidate(candidate_hub):
+    error = encode_args_with_signature("NotPermissionalCaller(address,address)", [candidate_hub.address,accounts[0].address])
+    with brownie.reverts(error):
         validator_set_instance.distributeReward(0)
     __contract_check(0, init_validator_incomes)
     __balance_check()
@@ -1329,8 +1332,9 @@ def test_vote_reward_percent_max(validator_set, set_candidate, deposit_for_rewar
     turn_round(consensuses)
 
 
-def test_misdemeanor_failed_with_address_which_is_not_slash():
-    with brownie.reverts("the msg sender must be slash contract"):
+def test_misdemeanor_failed_with_address_which_is_not_slash(slash_indicator):
+    error = encode_args_with_signature("NotPermissionalCaller(address,address)", [slash_indicator.address,accounts[0].address])
+    with brownie.reverts(error):
         validator_set_instance.misdemeanor(init_validators[0])
 
 
@@ -1397,8 +1401,9 @@ def test_misdemeanor_success():
     __balance_check(0 - deposit_value, deposit_value, 0, 0)
 
 
-def test_felony_failed_with_address_which_is_not_slash():
-    with brownie.reverts("the msg sender must be slash contract"):
+def test_felony_failed_with_address_which_is_not_slash(slash_indicator):
+    error = encode_args_with_signature("NotPermissionalCaller(address,address)", [slash_indicator.address,accounts[0].address])
+    with brownie.reverts(error):
         validator_set_instance.felony(init_validators[0], felony_round, felony_deposit)
 
 
@@ -1541,8 +1546,9 @@ def test_validator_contract_receive_ether(validator_set):
 
 
 # exitMaintenanceTurnRound
-def test_revert_when_not_candidate_exit_maintenance_turn_round(validator_set):
-    with brownie.reverts("the msg sender must be candidate contract"):
+def test_revert_when_not_candidate_exit_maintenance_turn_round(validator_set, candidate_hub):
+    error = encode_args_with_signature("NotPermissionalCaller(address,address)", [candidate_hub.address,accounts[0].address])
+    with brownie.reverts(error):
         validator_set.exitMaintenanceTurnRound()
 
 
@@ -2455,8 +2461,9 @@ def test_revert_when_invalid_index(validator_set):
 
 
 # enterMaintenance-slash
-def test_revert_when_not_slash_contract(validator_set):
-    with brownie.reverts("the msg sender must be slash contract"):
+def test_revert_when_not_slash_contract(validator_set, slash_indicator):
+    error = encode_args_with_signature("NotPermissionalCaller(address,address)", [slash_indicator.address,accounts[0].address])
+    with brownie.reverts(error):
         validator_set.enterMaintenance(init_validators[0])
 
 
@@ -2774,9 +2781,10 @@ def test_canceled_and_felony_validators_not_returned(validator_set, candidate_hu
 
 
 # update maintainSlashPercent 
-def test_revert_when_not_gov_update_maintain_slash_percent(validator_set):
+def test_revert_when_not_gov_update_maintain_slash_percent(validator_set, gov_hub):
     hex_value = padding_left(Web3.to_hex(50), 64)
-    with brownie.reverts("the msg sender must be governance contract"):
+    error = encode_args_with_signature("NotPermissionalCaller(address,address)", [gov_hub.address,accounts[0].address])
+    with brownie.reverts(error):
         validator_set.updateParam('maintainSlashPercent', hex_value)
 
 

@@ -20,14 +20,12 @@ FEE = 0
 # BTC delegation-related
 LOCK_TIME = 1736956800
 LOCK_SCRIPT = "0480db8767b17576a914574fdd26858c28ede5225a809f747c01fcc1f92a88ac"
-# BTCLST delegation-related
-BTCLST_LOCK_SCRIPT = "0xa914cdf3d02dd323c14bea0bed94962496c80c09334487"
-BTCLST_REDEEM_SCRIPT = "0xa914047b9ba09367c1b213b5ba2184fba3fababcdc0287"
 
 
 @pytest.fixture(scope="module", autouse=True)
-def deposit_for_reward(validator_set):
+def deposit_for_reward(validator_set,callPledgeAgent):
     accounts[99].transfer(validator_set.address, Web3.to_wei(100000, 'ether'))
+    accounts[99].transfer(callPledgeAgent.address, Web3.to_wei(100000, 'ether'))
 
 
 @pytest.fixture(scope="module", autouse=True)
@@ -37,7 +35,7 @@ def set_min_init_delegate_value(min_init_delegate_value):
 
 
 @pytest.fixture(scope="module", autouse=True)
-def set_block_reward(validator_set, pledge_agent, stake_hub, core_agent, btc_stake, gov_hub, system_reward):
+def set_block_reward(validator_set, pledge_agent, stake_hub, core_agent, btc_stake, gov_hub, system_reward,callPledgeAgent):
     global BLOCK_REWARD, TOTAL_REWARD
     global PLEDGE_AGENT, STAKE_HUB, BTC_STAKE, CORE_AGENT
     block_reward = validator_set.blockReward()
@@ -85,83 +83,83 @@ def test_reentry_stake_hub_claim(pledge_agent, stake_hub, set_candidate, validat
 
 
 @pytest.mark.parametrize("operate", ['delegate', 'undelegate', 'transfer'])
-def test_auto_issue_historical_rewards(pledge_agent, set_candidate, core_agent, operate):
+def test_auto_issue_historical_rewards(pledge_agent, set_candidate, operate,callPledgeAgent):
     operators, consensuses = set_candidate
     accounts[0].transfer(pledge_agent, ONE_ETHER)
     pledge_agent.setRewardMap(accounts[0], TOTAL_REWARD)
-    delegate_coin_success(operators[0], accounts[0], MIN_INIT_DELEGATE_VALUE)
+    delegate_coin_success(operators[0], callPledgeAgent, MIN_INIT_DELEGATE_VALUE)
     if operate == 'delegate':
-        tx = proxy_delegate_coin_success(operators[0], accounts[0], MIN_INIT_DELEGATE_VALUE)
+        tx = proxy_delegate_coin_success(operators[0], callPledgeAgent, MIN_INIT_DELEGATE_VALUE)
     elif operate == 'undelegate':
-        tx = proxy_undelegate_coin_success(operators[0], accounts[0], MIN_INIT_DELEGATE_VALUE)
+        tx = proxy_undelegate_coin_success(operators[0], callPledgeAgent, MIN_INIT_DELEGATE_VALUE)
     else:
-        tx = proxy_transfer_coin_success(operators[0], operators[1], accounts[0], MIN_INIT_DELEGATE_VALUE)
+        tx = proxy_transfer_coin_success(operators[0], operators[1], callPledgeAgent, MIN_INIT_DELEGATE_VALUE)
     assert 'claimedReward' not in tx.events
 
 
 
 
-def test_claim_reward_success(btc_agent, pledge_agent, set_candidate):
+def test_claim_reward_success(btc_agent, pledge_agent,callPledgeAgent, set_candidate):
     operators, consensuses = set_candidate
     turn_round()
-    delegate_btc_success(operators[0], accounts[0], BTC_VALUE, LOCK_SCRIPT)
+    delegate_btc_success(operators[0], callPledgeAgent, BTC_VALUE, LOCK_SCRIPT, relay=callPledgeAgent)
     turn_round(consensuses, round_count=2)
-    tracker = get_tracker(accounts[0])
+    tracker = get_tracker(callPledgeAgent)
     actual_reward = TOTAL_REWARD
-    pledge_agent.claimReward(operators)
+    pledge_agent.claimReward(operators,{'from':callPledgeAgent})
     assert tracker.delta() == actual_reward - FEE
 
 
-def test_claim_reward_validator_address_empty(btc_agent, pledge_agent, set_candidate):
+def test_claim_reward_validator_address_empty(btc_agent, pledge_agent,callPledgeAgent, set_candidate):
     operators, consensuses = set_candidate
     turn_round()
-    delegate_btc_success(operators[0], accounts[0], BTC_VALUE, LOCK_SCRIPT)
-    delegate_btc_success(operators[1], accounts[0], BTC_VALUE, LOCK_SCRIPT)
-    delegate_btc_success(operators[2], accounts[0], BTC_VALUE, LOCK_SCRIPT)
+    delegate_btc_success(operators[0], callPledgeAgent, BTC_VALUE, LOCK_SCRIPT, relay=callPledgeAgent)
+    delegate_btc_success(operators[1], callPledgeAgent, BTC_VALUE, LOCK_SCRIPT, relay=callPledgeAgent)
+    delegate_btc_success(operators[2], callPledgeAgent, BTC_VALUE, LOCK_SCRIPT, relay=callPledgeAgent)
     turn_round(consensuses, round_count=2)
-    tracker = get_tracker(accounts[0])
+    tracker = get_tracker(callPledgeAgent)
     actual_reward = TOTAL_REWARD * 3
-    pledge_agent.claimReward([])
+    pledge_agent.claimReward([],{'from':callPledgeAgent})
     assert tracker.delta() == actual_reward
 
 
-def test_claim_validator_reward_individually(btc_agent, pledge_agent, set_candidate):
+def test_claim_validator_reward_individually(btc_agent, pledge_agent,callPledgeAgent, set_candidate):
     accounts[0].transfer(pledge_agent, ONE_ETHER)
     operators, consensuses = set_candidate
-    pledge_agent.setRewardMap(accounts[0], TOTAL_REWARD // 2)
-    tracker = get_tracker(accounts[0])
-    stake_hub_claim_reward(accounts[0])
+    pledge_agent.setRewardMap(callPledgeAgent, TOTAL_REWARD // 2)
+    tracker = get_tracker(callPledgeAgent)
+    stake_hub_claim_reward(callPledgeAgent)
     assert tracker.delta() == 0
-    proxy_claim_reward_success(operators[:1], accounts[0])
+    proxy_claim_reward_success(operators[:1], callPledgeAgent)
     assert tracker.delta() == TOTAL_REWARD // 2
 
 # getDelegator
-def test_query_data_in_new_contract(pledge_agent, set_candidate):
+def test_query_data_in_new_contract(pledge_agent, set_candidate,callPledgeAgent):
     operators, consensuses = set_candidate
-    delegate_coin_success(operators[0], accounts[0], MIN_INIT_DELEGATE_VALUE * 3)
+    delegate_coin_success(operators[0], callPledgeAgent, MIN_INIT_DELEGATE_VALUE * 3)
     turn_round()
-    transfer_coin_success(operators[0], operators[1], accounts[0], MIN_INIT_DELEGATE_VALUE)
-    delegator0 = pledge_agent.getDelegator(operators[0], accounts[0])
+    transfer_coin_success(operators[0], operators[1], callPledgeAgent, MIN_INIT_DELEGATE_VALUE)
+    delegator0 = pledge_agent.getDelegator(operators[0], callPledgeAgent)
     assert delegator0 == [MIN_INIT_DELEGATE_VALUE * 2,
                           MIN_INIT_DELEGATE_VALUE * 2, get_current_round(), 0,
                           MIN_INIT_DELEGATE_VALUE, 0]
-    delegator1 = pledge_agent.getDelegator(operators[1], accounts[0])
+    delegator1 = pledge_agent.getDelegator(operators[1], callPledgeAgent)
     assert delegator1 == [0, MIN_INIT_DELEGATE_VALUE, get_current_round(), 0, 0, 0]
 
 
-def test_query_no_data_found(pledge_agent, set_candidate):
+def test_query_no_data_found(pledge_agent, set_candidate,callPledgeAgent):
     operators, consensuses = set_candidate
-    delegate_btc_success(operators[0], accounts[0], BTC_VALUE, LOCK_SCRIPT)
-    delegator0 = pledge_agent.getDelegator(operators[0], accounts[0])
+    delegate_btc_success(operators[0], callPledgeAgent, BTC_VALUE, LOCK_SCRIPT, relay=callPledgeAgent)
+    delegator0 = pledge_agent.getDelegator(operators[0], callPledgeAgent)
     assert sum(delegator0) == 0
 
 
 
 
-def test_query_info_after_reoffender_verifier(pledge_agent, slash_indicator, set_candidate):
+def test_query_info_after_reoffender_verifier(pledge_agent, slash_indicator, set_candidate,callPledgeAgent):
     operators, consensuses = set_candidate
     turn_round()
-    delegate_coin_success(operators[0], accounts[0], MIN_INIT_DELEGATE_VALUE * 3)
+    delegate_coin_success(operators[0], callPledgeAgent, MIN_INIT_DELEGATE_VALUE * 3)
     change_round = get_current_round()
     turn_round(consensuses)
     slash_threshold = slash_indicator.felonyThreshold()
@@ -171,37 +169,39 @@ def test_query_info_after_reoffender_verifier(pledge_agent, slash_indicator, set
         tx = slash_indicator.slash(consensuses[0])
     assert event_name in tx.events
     turn_round(consensuses)
-    delegator0 = pledge_agent.getDelegator(operators[0], accounts[0])
+    delegator0 = pledge_agent.getDelegator(operators[0], callPledgeAgent)
     assert delegator0 == [0, MIN_INIT_DELEGATE_VALUE * 3, change_round, 0, 0, 0]
-    undelegate_coin_success(operators[0], accounts[0], MIN_INIT_DELEGATE_VALUE * 2)
-    delegator0 = pledge_agent.getDelegator(operators[0], accounts[0])
+    undelegate_coin_success(operators[0], callPledgeAgent, MIN_INIT_DELEGATE_VALUE * 2)
+    delegator0 = pledge_agent.getDelegator(operators[0], callPledgeAgent)
     assert delegator0 == [MIN_INIT_DELEGATE_VALUE, MIN_INIT_DELEGATE_VALUE, get_current_round(), 0, 0, 0]
 
 
 @pytest.mark.parametrize("tests", ['delegate', 'undelgate', 'transfer'])
-def test_proxy_staking_success(stake_hub, pledge_agent, core_agent, set_candidate, tests):
+def test_proxy_staking_success(stake_hub, pledge_agent, core_agent, set_candidate,callPledgeAgent, tests):
     delegate_amount = 1000
     operators, consensuses = set_candidate
-    delegate_coin_success(operators[0], accounts[1], delegate_amount)
+    delegate_coin_success(operators[0], callPledgeAgent, delegate_amount)
     turn_round(consensuses, round_count=1)
     if tests == 'delegate':
-        tx = proxy_delegate_coin_success(operators[0], accounts[1], delegate_amount)
+        tx = proxy_delegate_coin_success(operators[0], callPledgeAgent, delegate_amount)
         assert 'delegatedCoin' in tx.events
     elif tests == 'undelgate':
-        tx = proxy_undelegate_coin_success(operators[0], accounts[1], 0)
+        tx = proxy_undelegate_coin_success(operators[0], callPledgeAgent, 0)
         assert 'undelegatedCoin' in tx.events
     elif tests == 'transfer':
-        tx = proxy_transfer_coin_success(operators[0], operators[1], accounts[1], delegate_amount)
+        tx = proxy_transfer_coin_success(operators[0], operators[1], callPledgeAgent, delegate_amount)
         assert 'transferredCoin' in tx.events
 
 
 @pytest.mark.parametrize("round_count", [0, 1, 2, 3])
 @pytest.mark.parametrize("part", [True, False])
-def test_proxy_unstaking_success(stake_hub, pledge_agent, core_agent, set_candidate, part, round_count):
+def test_proxy_unstaking_success(stake_hub, pledge_agent, core_agent, set_candidate,callPledgeAgent, part, round_count):
+    callPledgeAgent1 = accounts[0].deploy(callPledgeAgentAccount1)
+    accounts[0].transfer(callPledgeAgent1, ONE_ETHER)
     delegate_amount = 1000
     operators, consensuses = set_candidate
-    proxy_delegate_coin_success(operators[0], accounts[0], delegate_amount)
-    proxy_delegate_coin_success(operators[0], accounts[1], delegate_amount)
+    proxy_delegate_coin_success(operators[0], callPledgeAgent, delegate_amount)
+    proxy_delegate_coin_success(operators[0], callPledgeAgent1, delegate_amount)
     turn_round()
     if part:
         undelegate_amount = delegate_amount // 2
@@ -213,11 +213,11 @@ def test_proxy_unstaking_success(stake_hub, pledge_agent, core_agent, set_candid
         actual_reward = 0
         undelegate_value = delegate_amount
         round_reward = 0
-    tracker = get_tracker(accounts[0])
-    tx = proxy_undelegate_coin_success(operators[0], accounts[0], undelegate_amount)
+    tracker = get_tracker(callPledgeAgent)
+    tx = proxy_undelegate_coin_success(operators[0], callPledgeAgent, undelegate_amount)
     assert 'undelegatedCoin' in tx.events
     turn_round(consensuses, round_count=round_count)
-    proxy_claim_reward_success(operators, accounts[0])
+    proxy_claim_reward_success(operators, callPledgeAgent)
     actual_reward = actual_reward + round_reward + undelegate_value
     if round_count == 0:
         actual_reward = undelegate_value
@@ -226,11 +226,13 @@ def test_proxy_unstaking_success(stake_hub, pledge_agent, core_agent, set_candid
 
 @pytest.mark.parametrize("round_count", [0, 1, 2, 3])
 @pytest.mark.parametrize("part", [True, False])
-def test_proxy_unstaking_after_multiple_rounds(stake_hub, pledge_agent, core_agent, set_candidate, part, round_count):
+def test_proxy_unstaking_after_multiple_rounds(stake_hub, pledge_agent,callPledgeAgent, core_agent, set_candidate, part, round_count):
+    callPledgeAgent1 = accounts[0].deploy(callPledgeAgentAccount1)
+    accounts[0].transfer(callPledgeAgent1, ONE_ETHER)
     delegate_amount = 1000
     operators, consensuses = set_candidate
-    proxy_delegate_coin_success(operators[0], accounts[0], delegate_amount)
-    proxy_delegate_coin_success(operators[0], accounts[1], delegate_amount)
+    proxy_delegate_coin_success(operators[0], callPledgeAgent, delegate_amount)
+    proxy_delegate_coin_success(operators[0], callPledgeAgent1, delegate_amount)
     turn_round()
     turn_round(consensuses, round_count=round_count)
     accrued_reward = 6772500
@@ -244,11 +246,11 @@ def test_proxy_unstaking_after_multiple_rounds(stake_hub, pledge_agent, core_age
         actual_reward = 0
         undelegate_value = delegate_amount
         round_reward = delegate_amount * round_count * accrued_reward // Utils.CORE_STAKE_DECIMAL
-    tracker = get_tracker(accounts[0])
-    proxy_undelegate_coin_success(operators[0], accounts[0], undelegate_amount)
-    proxy_claim_reward_success(operators, accounts[0])
+    tracker = get_tracker(callPledgeAgent)
+    proxy_undelegate_coin_success(operators[0], callPledgeAgent, undelegate_amount)
+    proxy_claim_reward_success(operators, callPledgeAgent)
     turn_round(consensuses)
-    proxy_claim_reward_success(operators, accounts[0])
+    proxy_claim_reward_success(operators, callPledgeAgent)
     actual_reward = actual_reward + round_reward + undelegate_value
     if round_count == 0:
         actual_reward = undelegate_value
@@ -259,11 +261,13 @@ def test_proxy_unstaking_after_multiple_rounds(stake_hub, pledge_agent, core_age
 
 @pytest.mark.parametrize("round_count", [0, 1, 2, 3])
 @pytest.mark.parametrize("part", [True, False])
-def test_proxy_transfer_success(stake_hub, pledge_agent, core_agent, set_candidate, part, round_count):
+def test_proxy_transfer_success(stake_hub,callPledgeAgent, pledge_agent, core_agent, set_candidate, part, round_count):
+    callPledgeAgent1 = accounts[0].deploy(callPledgeAgentAccount1)
+    accounts[0].transfer(callPledgeAgent1, ONE_ETHER)
     delegate_amount = 1000
     operators, consensuses = set_candidate
-    proxy_delegate_coin_success(operators[0], accounts[0], delegate_amount)
-    proxy_delegate_coin_success(operators[0], accounts[1], delegate_amount)
+    proxy_delegate_coin_success(operators[0], callPledgeAgent, delegate_amount)
+    proxy_delegate_coin_success(operators[0], callPledgeAgent1, delegate_amount)
     turn_round()
     if part:
         transfer_amount = delegate_amount // 2
@@ -275,11 +279,11 @@ def test_proxy_transfer_success(stake_hub, pledge_agent, core_agent, set_candida
         actual_reward = TOTAL_REWARD // 2
         round_reward = TOTAL_REWARD * (round_count - 1)
         old_candidate_reward = 0
-    tracker = get_tracker(accounts[0])
-    tx = proxy_transfer_coin_success(operators[0], operators[1], accounts[0], transfer_amount)
+    tracker = get_tracker(callPledgeAgent)
+    tx = proxy_transfer_coin_success(operators[0], operators[1], callPledgeAgent, transfer_amount)
     assert 'transferredCoin' in tx.events
     turn_round(consensuses, round_count=round_count)
-    proxy_claim_reward_success(operators, accounts[0])
+    proxy_claim_reward_success(operators, callPledgeAgent)
     actual_reward = actual_reward + round_reward + old_candidate_reward
     if round_count == 0:
         actual_reward = 0
@@ -288,11 +292,13 @@ def test_proxy_transfer_success(stake_hub, pledge_agent, core_agent, set_candida
 
 @pytest.mark.parametrize("round_count", [0, 1, 2, 3])
 @pytest.mark.parametrize("part", [True, False])
-def test_proxy_transfer_after_multiple_rounds(stake_hub, pledge_agent, core_agent, set_candidate, part, round_count):
+def test_proxy_transfer_after_multiple_rounds(stake_hub,callPledgeAgent, pledge_agent, core_agent, set_candidate, part, round_count):
+    callPledgeAgent1 = accounts[0].deploy(callPledgeAgentAccount1)
+    accounts[0].transfer(callPledgeAgent1, ONE_ETHER)
     delegate_amount = 1000
     operators, consensuses = set_candidate
-    proxy_delegate_coin_success(operators[0], accounts[0], delegate_amount)
-    proxy_delegate_coin_success(operators[0], accounts[1], delegate_amount)
+    proxy_delegate_coin_success(operators[0], callPledgeAgent, delegate_amount)
+    proxy_delegate_coin_success(operators[0], callPledgeAgent1, delegate_amount)
     turn_round()
     turn_round(consensuses, round_count=round_count)
     accrued_reward = 6772500
@@ -302,11 +308,11 @@ def test_proxy_transfer_after_multiple_rounds(stake_hub, pledge_agent, core_agen
         transfer_amount = delegate_amount // 2
     else:
         transfer_amount = delegate_amount
-    tracker = get_tracker(accounts[0])
-    proxy_transfer_coin_success(operators[0], operators[1], accounts[0], transfer_amount)
-    proxy_claim_reward_success(operators, accounts[0])
+    tracker = get_tracker(callPledgeAgent)
+    proxy_transfer_coin_success(operators[0], operators[1], callPledgeAgent, transfer_amount)
+    proxy_claim_reward_success(operators, callPledgeAgent)
     turn_round(consensuses)
-    proxy_claim_reward_success(operators, accounts[0])
+    proxy_claim_reward_success(operators, callPledgeAgent)
     actual_reward = actual_reward + round_reward
     if round_count == 0:
         actual_reward = TOTAL_REWARD // 2
@@ -314,16 +320,18 @@ def test_proxy_transfer_after_multiple_rounds(stake_hub, pledge_agent, core_agen
 
 
 @pytest.mark.parametrize("round_count", [0, 1, 2, 3])
-def test_proxy_delegate_success(stake_hub, pledge_agent, core_agent, set_candidate, round_count):
+def test_proxy_delegate_success(stake_hub,callPledgeAgent, pledge_agent, core_agent, set_candidate, round_count):
+    callPledgeAgent1 = accounts[0].deploy(callPledgeAgentAccount1)
+    accounts[0].transfer(callPledgeAgent1, ONE_ETHER)
     delegate_amount = 1000
     operators, consensuses = set_candidate
-    proxy_delegate_coin_success(operators[0], accounts[0], delegate_amount)
-    proxy_delegate_coin_success(operators[0], accounts[1], delegate_amount)
+    proxy_delegate_coin_success(operators[0], callPledgeAgent, delegate_amount)
+    proxy_delegate_coin_success(operators[0], callPledgeAgent1, delegate_amount)
     turn_round()
-    tracker = get_tracker(accounts[0])
-    proxy_delegate_coin_success(operators[0], accounts[0], delegate_amount)
+    tracker = get_tracker(callPledgeAgent)
+    proxy_delegate_coin_success(operators[0], callPledgeAgent, delegate_amount)
     turn_round(consensuses, round_count=round_count)
-    stake_hub_claim_reward(accounts[0])
+    stake_hub_claim_reward(callPledgeAgent)
     actual_reward = TOTAL_REWARD // 2
     actual_reward += TOTAL_REWARD * 2 // 3 * (round_count - 1)
     if round_count == 0:
@@ -332,22 +340,24 @@ def test_proxy_delegate_success(stake_hub, pledge_agent, core_agent, set_candida
 
 
 @pytest.mark.parametrize("round_count", [0, 1, 2, 3])
-def test_proxy_delegate_after_multiple_rounds(stake_hub, pledge_agent, core_agent, set_candidate, round_count):
+def test_proxy_delegate_after_multiple_rounds(stake_hub,callPledgeAgent, pledge_agent, core_agent, set_candidate, round_count):
+    callPledgeAgent1 = accounts[0].deploy(callPledgeAgentAccount1)
+    accounts[0].transfer(callPledgeAgent1, ONE_ETHER)
     delegate_amount = 1000
     operators, consensuses = set_candidate
-    proxy_delegate_coin_success(operators[0], accounts[0], delegate_amount)
-    proxy_delegate_coin_success(operators[0], accounts[1], delegate_amount)
+    proxy_delegate_coin_success(operators[0], callPledgeAgent, delegate_amount)
+    proxy_delegate_coin_success(operators[0], callPledgeAgent1, delegate_amount)
     turn_round()
     turn_round(consensuses, round_count=round_count)
     accrued_reward = 6772500
     actual_reward = TOTAL_REWARD // 2
     round_reward = delegate_amount * round_count * accrued_reward // Utils.CORE_STAKE_DECIMAL
-    tracker = get_tracker(accounts[0])
-    proxy_delegate_coin_success(operators[0], accounts[0], delegate_amount)
-    proxy_claim_reward_success(operators, accounts[0])
+    tracker = get_tracker(callPledgeAgent)
+    proxy_delegate_coin_success(operators[0], callPledgeAgent, delegate_amount)
+    proxy_claim_reward_success(operators, callPledgeAgent)
     turn_round(consensuses, round_count=2)
     actual_reward += TOTAL_REWARD * 2 // 3
-    proxy_claim_reward_success(operators, accounts[0])
+    proxy_claim_reward_success(operators, callPledgeAgent)
     actual_reward = actual_reward + round_reward - delegate_amount
     if round_count == 0:
         actual_reward = TOTAL_REWARD // 2 + TOTAL_REWARD * 2 // 3 - delegate_amount
@@ -356,56 +366,60 @@ def test_proxy_delegate_after_multiple_rounds(stake_hub, pledge_agent, core_agen
 
 @pytest.mark.parametrize("round_count", [0, 1, 2])
 @pytest.mark.parametrize("tests", ['undelgate', 'transfer'])
-def test_proxy_delegate_current_round_cancel_and_transfer_allowed(stake_hub, core_agent, set_candidate, tests,
+def test_proxy_delegate_current_round_cancel_and_transfer_allowed(stake_hub,callPledgeAgent, core_agent, set_candidate, tests,
                                                                   round_count):
+    callPledgeAgent1 = accounts[0].deploy(callPledgeAgentAccount1)
+    accounts[0].transfer(callPledgeAgent1, ONE_ETHER)
     delegate_amount = 1000
     operators, consensuses = set_candidate
-    proxy_delegate_coin_success(operators[0], accounts[0], delegate_amount)
-    proxy_delegate_coin_success(operators[0], accounts[1], delegate_amount)
+    proxy_delegate_coin_success(operators[0], callPledgeAgent, delegate_amount)
+    proxy_delegate_coin_success(operators[0], callPledgeAgent1, delegate_amount)
     if tests == 'undelgate':
-        proxy_undelegate_coin_success(operators[0], accounts[0], delegate_amount)
+        proxy_undelegate_coin_success(operators[0], callPledgeAgent, delegate_amount)
     elif tests == 'transfer':
-        proxy_transfer_coin_success(operators[0], operators[1], accounts[0], delegate_amount)
+        proxy_transfer_coin_success(operators[0], operators[1], callPledgeAgent, delegate_amount)
     turn_round()
-    proxy_delegate_coin_success(operators[0], accounts[0], delegate_amount)
+    proxy_delegate_coin_success(operators[0], callPledgeAgent, delegate_amount)
     turn_round(consensuses, round_count=round_count)
     if tests == 'undelgate':
-        proxy_undelegate_coin_success(operators[0], accounts[0], delegate_amount // 2)
+        proxy_undelegate_coin_success(operators[0], callPledgeAgent, delegate_amount // 2)
     elif tests == 'transfer':
-        proxy_transfer_coin_success(operators[0], operators[1], accounts[0], delegate_amount // 2)
+        proxy_transfer_coin_success(operators[0], operators[1], callPledgeAgent, delegate_amount // 2)
 
 
 @pytest.mark.parametrize("round_count", [0, 1, 2])
 @pytest.mark.parametrize("tests", ['undelgate', 'transfer'])
-def test_current_round_transfer_can_cancel_and_transfer(stake_hub, core_agent, set_candidate, tests, round_count):
+def test_current_round_transfer_can_cancel_and_transfer(stake_hub,callPledgeAgent, core_agent, set_candidate, tests, round_count):
+    callPledgeAgent1 = accounts[0].deploy(callPledgeAgentAccount1)
+    accounts[0].transfer(callPledgeAgent1, ONE_ETHER)
     delegate_amount = 1000
     operators, consensuses = set_candidate
-    proxy_delegate_coin_success(operators[0], accounts[0], delegate_amount)
-    proxy_delegate_coin_success(operators[0], accounts[1], delegate_amount)
+    proxy_delegate_coin_success(operators[0], callPledgeAgent, delegate_amount)
+    proxy_delegate_coin_success(operators[0], callPledgeAgent1, delegate_amount)
     turn_round()
-    proxy_transfer_coin_success(operators[0], operators[1], accounts[0], delegate_amount)
+    proxy_transfer_coin_success(operators[0], operators[1], callPledgeAgent, delegate_amount)
     turn_round(consensuses, round_count=round_count)
     if tests == 'undelgate':
-        proxy_undelegate_coin_success(operators[1], accounts[0], delegate_amount)
+        proxy_undelegate_coin_success(operators[1], callPledgeAgent, delegate_amount)
     elif tests == 'transfer':
-        proxy_transfer_coin_success(operators[1], operators[2], accounts[0], delegate_amount)
+        proxy_transfer_coin_success(operators[1], operators[2], callPledgeAgent, delegate_amount)
 
 
 @pytest.mark.parametrize("round_count", [0, 1, 2])
 @pytest.mark.parametrize("tests", ['delegate', 'transfer'])
-def test_proxy_undelegate_cancel_all(stake_hub, core_agent, set_candidate, tests, round_count):
+def test_proxy_undelegate_cancel_all(stake_hub,callPledgeAgent, core_agent, set_candidate, tests, round_count):
     delegate_amount = 1000
     operators, consensuses = set_candidate
-    proxy_delegate_coin_success(operators[0], accounts[0], delegate_amount)
-    delegate_coin_success(operators[1], accounts[0], delegate_amount)
+    proxy_delegate_coin_success(operators[0], callPledgeAgent, delegate_amount)
+    delegate_coin_success(operators[1], callPledgeAgent, delegate_amount)
     turn_round()
     if tests == 'delegate':
-        delegate_coin_success(operators[1], accounts[0], delegate_amount)
+        delegate_coin_success(operators[1], callPledgeAgent, delegate_amount)
     else:
-        proxy_transfer_coin_success(operators[0], operators[1], accounts[0], delegate_amount)
+        proxy_transfer_coin_success(operators[0], operators[1], callPledgeAgent, delegate_amount)
     turn_round(consensuses, round_count=round_count)
-    tracker = get_tracker(accounts[0])
-    proxy_undelegate_coin_success(operators[1], accounts[0], 0)
+    tracker = get_tracker(callPledgeAgent)
+    proxy_undelegate_coin_success(operators[1], callPledgeAgent, 0)
     actual_amount = delegate_amount * 2
     assert tracker.delta() == actual_amount
     turn_round(consensuses)
@@ -413,35 +427,35 @@ def test_proxy_undelegate_cancel_all(stake_hub, core_agent, set_candidate, tests
 
 @pytest.mark.parametrize("round_count", [0, 1, 2])
 @pytest.mark.parametrize("tests", ['delegate', 'transfer'])
-def test_proxy_transfer_cancel_all(stake_hub, core_agent, set_candidate, tests, round_count):
+def test_proxy_transfer_cancel_all(stake_hub,callPledgeAgent, core_agent, set_candidate, tests, round_count):
     delegate_amount = 1000
     operators, consensuses = set_candidate
-    proxy_delegate_coin_success(operators[0], accounts[0], delegate_amount)
-    delegate_coin_success(operators[1], accounts[0], delegate_amount)
+    proxy_delegate_coin_success(operators[0], callPledgeAgent, delegate_amount)
+    delegate_coin_success(operators[1], callPledgeAgent, delegate_amount)
     turn_round()
     if tests == 'delegate':
-        delegate_coin_success(operators[1], accounts[0], delegate_amount)
+        delegate_coin_success(operators[1], callPledgeAgent, delegate_amount)
     else:
-        proxy_transfer_coin_success(operators[0], operators[1], accounts[0], delegate_amount)
+        proxy_transfer_coin_success(operators[0], operators[1], callPledgeAgent, delegate_amount)
     turn_round(consensuses, round_count=round_count)
-    tx = proxy_transfer_coin_success(operators[1], operators[2], accounts[0], 0)
+    tx = proxy_transfer_coin_success(operators[1], operators[2], callPledgeAgent, 0)
     actual_amount = delegate_amount * 2
     assert tx.events['transferredCoin']['amount'] == actual_amount
     assert tx.events['transferredCoin']['realtimeAmount'] == actual_amount
     turn_round(consensuses)
 
 
-def test_cancel_after_all_already_cancelled(stake_hub, core_agent, set_candidate):
+def test_cancel_after_all_already_cancelled(stake_hub,callPledgeAgent, core_agent, set_candidate):
     delegate_amount = 1000
     operators, consensuses = set_candidate
-    proxy_delegate_coin_success(operators[0], accounts[0], delegate_amount)
-    delegate_coin_success(operators[1], accounts[0], delegate_amount)
+    proxy_delegate_coin_success(operators[0], callPledgeAgent, delegate_amount)
+    delegate_coin_success(operators[1], callPledgeAgent, delegate_amount)
     turn_round()
-    proxy_undelegate_coin_success(operators[1], accounts[0], 0)
+    proxy_undelegate_coin_success(operators[1], callPledgeAgent, 0)
     turn_round(consensuses, round_count=2)
     with brownie.reverts("Undelegate zero coin"):
-        proxy_undelegate_coin_success(operators[1], accounts[0], 0)
-    __check_delegate_info(operators[1], accounts[0], {
+        proxy_undelegate_coin_success(operators[1], callPledgeAgent, 0)
+    __check_delegate_info(operators[1], callPledgeAgent, {
         'stakedAmount': 0,
         'realtimeAmount': 0,
         'changeRound': 0,
@@ -449,52 +463,61 @@ def test_cancel_after_all_already_cancelled(stake_hub, core_agent, set_candidate
     })
 
 
-def test_cancel_stake_with_zero_amount(stake_hub, core_agent, set_candidate):
+def test_cancel_stake_with_zero_amount(stake_hub,callPledgeAgent, core_agent, set_candidate):
+    callPledgeAgent1 = accounts[0].deploy(callPledgeAgentAccount1)
+    accounts[0].transfer(callPledgeAgent1, ONE_ETHER)
     delegate_amount = 10000
     operators, consensuses = set_candidate
-    proxy_delegate_coin_success(operators[0], accounts[0], delegate_amount)
-    delegate_coin_success(operators[0], accounts[1], delegate_amount)
+    proxy_delegate_coin_success(operators[0], callPledgeAgent, delegate_amount)
+    delegate_coin_success(operators[0], callPledgeAgent1, delegate_amount)
     turn_round()
-    proxy_delegate_coin_success(operators[0], accounts[0], delegate_amount)
-    proxy_transfer_coin_success(operators[0], operators[2], accounts[0], 0)
+    proxy_delegate_coin_success(operators[0], callPledgeAgent, delegate_amount)
+    proxy_transfer_coin_success(operators[0], operators[2], callPledgeAgent, 0)
     with brownie.reverts("Undelegate zero coin"):
-        undelegate_coin_success(operators[0], accounts[0], 0)
+        undelegate_coin_success(operators[0], callPledgeAgent, 0)
     turn_round(consensuses)
-    tracker = get_tracker(accounts[0])
-    stake_hub_claim_reward(accounts[0])
+    tracker = get_tracker(callPledgeAgent)
+    stake_hub_claim_reward(callPledgeAgent)
     assert tracker.delta() == TOTAL_REWARD // 2
     turn_round(consensuses)
 
 
-def test_claim_reward_with_both_proxy_and_regular_staking(stake_hub, btc_stake, core_agent, set_candidate):
+def test_claim_reward_with_both_proxy_and_regular_staking(stake_hub,callPledgeAgent, btc_stake, core_agent, set_candidate):
+    callPledgeAgent0 = callPledgeAgent
+    callPledgeAgent1 = accounts[0].deploy(callPledgeAgentAccount1)
+    accounts[0].transfer(callPledgeAgent1, ONE_ETHER)
+    callPledgeAgent2 = accounts[0].deploy(callPledgeAgentAccount2)
+    accounts[0].transfer(callPledgeAgent2, ONE_ETHER)
+    callPledgeAgent3 = accounts[0].deploy(callPledgeAgentAccount3)
+    accounts[0].transfer(callPledgeAgent3, ONE_ETHER)
     delegate_amount = 10000
     btc_amount = 1000
     power_value = 5
     operators, consensuses = set_candidate
     turn_round()
-    proxy_delegate_coin_success(operators[0], accounts[0], delegate_amount)
-    delegate_coin_success(operators[0], accounts[1], delegate_amount)
-    delegate_btc_success(operators[0], accounts[0], btc_amount, LOCK_SCRIPT)
-    tx_id = delegate_btc_success(operators[0], accounts[1], btc_amount, LOCK_SCRIPT, relay=accounts[1])
-    delegate_power_success(operators[0], accounts[3], power_value)
+    proxy_delegate_coin_success(operators[0], callPledgeAgent0, delegate_amount)
+    delegate_coin_success(operators[0], callPledgeAgent1, delegate_amount)
+    delegate_btc_success(operators[0], callPledgeAgent0, btc_amount, LOCK_SCRIPT, relay=callPledgeAgent0)
+    tx_id = delegate_btc_success(operators[0], callPledgeAgent1, btc_amount, LOCK_SCRIPT, relay=callPledgeAgent1)
+    delegate_power_success(operators[0], callPledgeAgent3, power_value)
     turn_round()
-    proxy_delegate_coin_success(operators[0], accounts[0], delegate_amount)
-    proxy_undelegate_coin_success(operators[0], accounts[0], 0)
-    transfer_btc_success(tx_id, operators[2], accounts[1])
-    proxy_transfer_coin_success(operators[0], operators[2], accounts[1], 0)
+    proxy_delegate_coin_success(operators[0], callPledgeAgent0, delegate_amount)
+    proxy_undelegate_coin_success(operators[0], callPledgeAgent0, 0)
+    transfer_btc_success(tx_id, operators[2], callPledgeAgent1)
+    proxy_transfer_coin_success(operators[0], operators[2], callPledgeAgent1, 0)
     turn_round(consensuses)
-    trackers = get_trackers(accounts[:4])
-    stake_hub_claim_reward(accounts[0])
-    proxy_claim_reward_success(operators, accounts[1])
-    stake_hub_claim_reward(accounts[2])
-    proxy_claim_reward_success(operators, accounts[3])
+    trackers = get_trackers([callPledgeAgent0, callPledgeAgent1, callPledgeAgent2,callPledgeAgent3])
+    stake_hub_claim_reward(callPledgeAgent0)
+    proxy_claim_reward_success(operators, callPledgeAgent1)
+    stake_hub_claim_reward(callPledgeAgent2)
+    proxy_claim_reward_success(operators, callPledgeAgent3)
     _, _, account_rewards, _ = parse_delegation([{
         "address": operators[0],
-        "power": [set_delegate(accounts[3], power_value)],
-        "coin": [set_delegate(accounts[0], delegate_amount, delegate_amount),
-                 set_delegate(accounts[1], delegate_amount)],
-        "btc": [set_delegate(accounts[0], btc_amount),
-                set_delegate(accounts[1], btc_amount, btc_amount)]
+        "power": [set_delegate(callPledgeAgent3.address, power_value)],
+        "coin": [set_delegate(callPledgeAgent0, delegate_amount, delegate_amount),
+                 set_delegate(callPledgeAgent1.address, delegate_amount)],
+        "btc": [set_delegate(callPledgeAgent0.address, btc_amount),
+                set_delegate(callPledgeAgent1.address, btc_amount, btc_amount)]
     }, {
         "address": operators[1]
     }, {
@@ -521,8 +544,11 @@ def test_claim_reward_with_both_proxy_and_regular_staking(stake_hub, btc_stake, 
     {'transfer': 500, 'undelagate': 2, 'amount': 1200, 'expect_reward': 6772 + 13545 * 800 // 2000},
     {'transfer': 500, 'undelagate': 2, 'amount': 1500, 'expect_reward': 6772 + 13545 * 500 // 2000},
 ])
-def test_cancel_stake_after_transfer_with_validator(pledge_agent, validator_set, set_candidate, tests,
+def test_cancel_stake_after_transfer_with_validator(pledge_agent, callPledgeAgent, validator_set, set_candidate, tests,
                                                     inter_round_cancel):
+    callPledgeAgent0 = callPledgeAgent
+    callPledgeAgent1 = accounts[0].deploy(callPledgeAgentAccount1)
+    accounts[0].transfer(callPledgeAgent1, ONE_ETHER)
     delegate_amount = MIN_INIT_DELEGATE_VALUE * 10
     undelegate_amount = tests['amount']
     transfer_amount = tests['transfer']
@@ -530,18 +556,18 @@ def test_cancel_stake_after_transfer_with_validator(pledge_agent, validator_set,
     agent_index = tests['undelagate']
     operators, consensuses = set_candidate
     for op in operators:
-        proxy_delegate_coin_success(op, accounts[0], delegate_amount)
-        proxy_delegate_coin_success(op, accounts[1], delegate_amount)
+        proxy_delegate_coin_success(op, callPledgeAgent0, delegate_amount)
+        proxy_delegate_coin_success(op, callPledgeAgent1, delegate_amount)
     turn_round()
-    tracker0 = get_tracker(accounts[0])
+    tracker0 = get_tracker(callPledgeAgent0)
     if inter_round_cancel:
         turn_round(consensuses)
-        stake_hub_claim_reward(accounts[0])
+        stake_hub_claim_reward(callPledgeAgent0)
         expect_reward += TOTAL_REWARD // 2 * 3
-    proxy_transfer_coin_success(operators[0], operators[2], accounts[0], transfer_amount)
-    tx = proxy_undelegate_coin_success(operators[agent_index], accounts[0], undelegate_amount)
+    proxy_transfer_coin_success(operators[0], operators[2], callPledgeAgent0, transfer_amount)
+    tx = proxy_undelegate_coin_success(operators[agent_index], callPledgeAgent0, undelegate_amount)
     turn_round(consensuses)
-    stake_hub_claim_reward(accounts[0])
+    stake_hub_claim_reward(callPledgeAgent0)
     assert tracker0.delta() == expect_reward + undelegate_amount
 
 
@@ -561,7 +587,10 @@ def test_cancel_stake_after_transfer_with_validator(pledge_agent, validator_set,
     {'transfer': 3000, 'undelagate': [0, 1, 2], 'amount': [0, 2000, 0], 'expect_reward': 0},
     {'transfer': 3000, 'undelagate': [0, 1, 2], 'amount': [0, 0, 0], 'expect_reward': 0}
 ])
-def test_cancel_stake_from_validators_after_multiple_additions(core_agent, validator_set, set_candidate, tests, old):
+def test_cancel_stake_from_validators_after_multiple_additions(core_agent, callPledgeAgent, validator_set, set_candidate, tests, old):
+    callPledgeAgent0 = callPledgeAgent
+    callPledgeAgent1 = accounts[0].deploy(callPledgeAgentAccount1)
+    accounts[0].transfer(callPledgeAgent1, ONE_ETHER)
     delegate_amount = MIN_INIT_DELEGATE_VALUE * 10
     undelegate_amount = tests['amount']
     transfer_amount = tests['transfer']
@@ -572,25 +601,25 @@ def test_cancel_stake_from_validators_after_multiple_additions(core_agent, valid
         delegate_value = delegate_amount
         if index == 0:
             delegate_value = delegate_amount * 3
-        proxy_delegate_coin_success(op, accounts[0], delegate_value)
-        proxy_delegate_coin_success(op, accounts[1], delegate_value)
+        proxy_delegate_coin_success(op, callPledgeAgent0, delegate_value)
+        proxy_delegate_coin_success(op, callPledgeAgent1, delegate_value)
     turn_round()
     for index, op in enumerate(operators):
         delegate_value = delegate_amount
-        proxy_delegate_coin_success(op, accounts[0], delegate_value)
+        proxy_delegate_coin_success(op, callPledgeAgent0, delegate_value)
         if old:
-            delegate_coin_success(op, accounts[1], delegate_value)
+            delegate_coin_success(op, callPledgeAgent1, delegate_value)
         else:
-            proxy_delegate_coin_success(op, accounts[1], delegate_value)
+            proxy_delegate_coin_success(op, callPledgeAgent1, delegate_value)
     if old:
-        proxy_transfer_coin_success(operators[0], operators[2], accounts[0], transfer_amount)
+        proxy_transfer_coin_success(operators[0], operators[2], callPledgeAgent0, transfer_amount)
     else:
-        transfer_coin_success(operators[0], operators[2], accounts[0], transfer_amount)
+        transfer_coin_success(operators[0], operators[2], callPledgeAgent0, transfer_amount)
     for index, a in enumerate(agent_index):
-        proxy_undelegate_coin_success(operators[a], accounts[0], undelegate_amount[index])
+        proxy_undelegate_coin_success(operators[a], callPledgeAgent0, undelegate_amount[index])
     turn_round(consensuses)
-    tracker0 = get_tracker(accounts[0])
-    proxy_claim_reward_success(operators, accounts[0])
+    tracker0 = get_tracker(callPledgeAgent0)
+    proxy_claim_reward_success(operators, callPledgeAgent0)
     assert tracker0.delta() == expect_reward
 
 
@@ -603,21 +632,24 @@ def test_cancel_stake_from_validators_after_multiple_additions(core_agent, valid
     {'transfer': 500, 'candidate': 2, 'amount': 250, 'expect_reward': 13545 * 750 // 2000,
      'tow_round_reward': 13545 + 13545 * 750 // 2000 + 13545 * 500 // 1500}
 ])
-def test_claim_reward_after_cancel_coin_transfer(core_agent, validator_set, set_candidate, tests, round_count):
+def test_claim_reward_after_cancel_coin_transfer(core_agent,callPledgeAgent, validator_set, set_candidate, tests, round_count):
+    callPledgeAgent0 = callPledgeAgent
+    callPledgeAgent1 = accounts[0].deploy(callPledgeAgentAccount1)
+    accounts[0].transfer(callPledgeAgent1, ONE_ETHER)
     delegate_amount = MIN_INIT_DELEGATE_VALUE * 10
     undelegate_amount = tests['amount']
     transfer_amount = tests['transfer']
     expect_reward = tests['expect_reward']
     agent_index = tests['candidate']
     operators, consensuses = set_candidate
-    proxy_delegate_coin_success(operators[0], accounts[0], delegate_amount)
-    proxy_delegate_coin_success(operators[0], accounts[1], delegate_amount)
+    proxy_delegate_coin_success(operators[0], callPledgeAgent0, delegate_amount)
+    proxy_delegate_coin_success(operators[0], callPledgeAgent1, delegate_amount)
     turn_round()
-    proxy_transfer_coin_success(operators[0], operators[2], accounts[0], transfer_amount)
-    tracker0 = get_tracker(accounts[0])
-    proxy_undelegate_coin_success(operators[agent_index], accounts[0], undelegate_amount)
+    proxy_transfer_coin_success(operators[0], operators[2], callPledgeAgent0, transfer_amount)
+    tracker0 = get_tracker(callPledgeAgent0)
+    proxy_undelegate_coin_success(operators[agent_index], callPledgeAgent0, undelegate_amount)
     turn_round(consensuses, round_count=round_count)
-    proxy_claim_reward_success(operators, accounts[0])
+    proxy_claim_reward_success(operators, callPledgeAgent0)
     if round_count == 0:
         expect_reward = 0
     elif round_count > 1:
@@ -625,49 +657,55 @@ def test_claim_reward_after_cancel_coin_transfer(core_agent, validator_set, set_
     assert tracker0.delta() == expect_reward + undelegate_amount
 
 
-def test_claim_rewards_after_cancel_all_in_two_rounds(core_agent, validator_set, set_candidate):
+def test_claim_rewards_after_cancel_all_in_two_rounds(core_agent, callPledgeAgent, validator_set, set_candidate):
+    callPledgeAgent0 = callPledgeAgent
+    callPledgeAgent1 = accounts[0].deploy(callPledgeAgentAccount1)
+    accounts[0].transfer(callPledgeAgent1, ONE_ETHER)
     delegate_amount = MIN_INIT_DELEGATE_VALUE * 10
     operators, consensuses = set_candidate
-    proxy_delegate_coin_success(operators[0], accounts[0], delegate_amount)
-    proxy_delegate_coin_success(operators[0], accounts[1], delegate_amount)
+    proxy_delegate_coin_success(operators[0], callPledgeAgent0, delegate_amount)
+    proxy_delegate_coin_success(operators[0], callPledgeAgent1, delegate_amount)
     turn_round()
-    proxy_transfer_coin_success(operators[0], operators[2], accounts[0], delegate_amount // 2)
-    proxy_undelegate_coin_success(operators[0], accounts[0], 0)
-    proxy_undelegate_coin_success(operators[2], accounts[0], 0)
-    tracker0 = get_tracker(accounts[0])
+    proxy_transfer_coin_success(operators[0], operators[2], callPledgeAgent0, delegate_amount // 2)
+    proxy_undelegate_coin_success(operators[0], callPledgeAgent0, 0)
+    proxy_undelegate_coin_success(operators[2], callPledgeAgent0, 0)
+    tracker0 = get_tracker(callPledgeAgent0)
     turn_round(consensuses, round_count=2)
-    proxy_claim_reward_success(operators, accounts[0])
+    proxy_claim_reward_success(operators, callPledgeAgent0)
     assert tracker0.delta() == 0
     turn_round(consensuses, round_count=2)
-    proxy_claim_reward_success(operators, accounts[0])
+    proxy_claim_reward_success(operators, callPledgeAgent0)
     assert tracker0.delta() == 0
 
 
 @pytest.mark.parametrize("tests", ['transfer', 'undelegate'])
-def test_cancel_and_transfer_after_adding_stake(core_agent, validator_set, set_candidate, tests):
+def test_cancel_and_transfer_after_adding_stake(core_agent, callPledgeAgent, validator_set, set_candidate, tests):
+    callPledgeAgent0 = callPledgeAgent
+    callPledgeAgent1 = accounts[0].deploy(callPledgeAgentAccount1)
+    accounts[0].transfer(callPledgeAgent1, ONE_ETHER)
     delegate_amount = MIN_INIT_DELEGATE_VALUE * 10
     operators, consensuses = set_candidate
-    proxy_delegate_coin_success(operators[0], accounts[0], delegate_amount)
-    proxy_delegate_coin_success(operators[0], accounts[1], delegate_amount)
+    proxy_delegate_coin_success(operators[0], callPledgeAgent0, delegate_amount)
+    proxy_delegate_coin_success(operators[0], callPledgeAgent1, delegate_amount)
     turn_round()
-    proxy_delegate_coin_success(operators[0], accounts[0], delegate_amount)
-    proxy_delegate_coin_success(operators[1], accounts[0], delegate_amount)
+    proxy_delegate_coin_success(operators[0], callPledgeAgent0, delegate_amount)
+    proxy_delegate_coin_success(operators[1], callPledgeAgent0, delegate_amount)
     if tests == 'transfer':
-        proxy_transfer_coin_success(operators[0], operators[1], accounts[0], 0)
-        __check_delegate_info(operators[0], accounts[0], {
+        proxy_transfer_coin_success(operators[0], operators[1], callPledgeAgent0, 0)
+        __check_delegate_info(operators[0], callPledgeAgent0, {
             'stakedAmount': 0,
             'realtimeAmount': 0,
             'changeRound': get_current_round(),
             'transferredAmount': delegate_amount,
         })
-        __check_delegate_info(operators[1], accounts[0], {
+        __check_delegate_info(operators[1], callPledgeAgent0, {
             'stakedAmount': 0,
             'realtimeAmount': delegate_amount * 3,
         })
         expect_reward = TOTAL_REWARD // 2
     else:
-        proxy_undelegate_coin_success(operators[0], accounts[0], 0)
-        __check_delegate_info(operators[0], accounts[0], {
+        proxy_undelegate_coin_success(operators[0], callPledgeAgent0, 0)
+        __check_delegate_info(operators[0], callPledgeAgent0, {
             'stakedAmount': 0,
             'realtimeAmount': 0,
             'changeRound': 0,
@@ -675,35 +713,38 @@ def test_cancel_and_transfer_after_adding_stake(core_agent, validator_set, set_c
         })
         expect_reward = 0
     turn_round(consensuses)
-    tracker = get_tracker(accounts[0])
-    proxy_claim_reward_success(operators, accounts[0])
+    tracker = get_tracker(callPledgeAgent0)
+    proxy_claim_reward_success(operators, callPledgeAgent0)
     assert tracker.delta() == expect_reward
 
 
 @pytest.mark.parametrize("tests", ['transfer', 'undelegate'])
-def test_cancel_all_after_transfer(core_agent, validator_set, set_candidate, tests):
+def test_cancel_all_after_transfer(core_agent, validator_set, set_candidate,callPledgeAgent, tests):
+    callPledgeAgent0 = callPledgeAgent
+    callPledgeAgent1 = accounts[0].deploy(callPledgeAgentAccount1)
+    accounts[0].transfer(callPledgeAgent1, ONE_ETHER)
     delegate_amount = MIN_INIT_DELEGATE_VALUE * 10
     operators, consensuses = set_candidate
-    proxy_delegate_coin_success(operators[0], accounts[0], delegate_amount)
-    proxy_delegate_coin_success(operators[1], accounts[0], delegate_amount)
+    proxy_delegate_coin_success(operators[0], callPledgeAgent0, delegate_amount)
+    proxy_delegate_coin_success(operators[1], callPledgeAgent0, delegate_amount)
     turn_round()
-    proxy_transfer_coin_success(operators[1], operators[0], accounts[0], 0)
+    proxy_transfer_coin_success(operators[1], operators[0], callPledgeAgent0, 0)
     if tests == 'transfer':
-        proxy_transfer_coin_success(operators[0], operators[2], accounts[0], 0)
-        __check_delegate_info(operators[0], accounts[0], {
+        proxy_transfer_coin_success(operators[0], operators[2], callPledgeAgent0, 0)
+        __check_delegate_info(operators[0], callPledgeAgent0, {
             'stakedAmount': 0,
             'realtimeAmount': 0,
             'changeRound': get_current_round(),
             'transferredAmount': delegate_amount,
         })
-        __check_delegate_info(operators[2], accounts[0], {
+        __check_delegate_info(operators[2], callPledgeAgent0, {
             'stakedAmount': 0,
             'realtimeAmount': delegate_amount * 2,
         })
         expect_reward = TOTAL_REWARD * 2
     else:
-        proxy_undelegate_coin_success(operators[0], accounts[0], 0)
-        __check_delegate_info(operators[0], accounts[0], {
+        proxy_undelegate_coin_success(operators[0], callPledgeAgent0, 0)
+        __check_delegate_info(operators[0], callPledgeAgent0, {
             'stakedAmount': 0,
             'realtimeAmount': 0,
             'changeRound': 0,
@@ -711,8 +752,8 @@ def test_cancel_all_after_transfer(core_agent, validator_set, set_candidate, tes
         })
         expect_reward = 0
     turn_round(consensuses)
-    tracker = get_tracker(accounts[0])
-    proxy_claim_reward_success(operators, accounts[0])
+    tracker = get_tracker(callPledgeAgent0)
+    proxy_claim_reward_success(operators, callPledgeAgent0)
     assert tracker.delta() == expect_reward
 
 

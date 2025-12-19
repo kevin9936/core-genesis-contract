@@ -3,7 +3,7 @@ import pytest
 from web3 import Web3
 from brownie import accounts
 from .common import turn_round, register_candidate, get_current_round
-from .delegate import delegate_power_success
+from .delegate import *
 from .utils import update_system_contract_address, expect_event
 
 MIN_INIT_DELEGATE_VALUE = 0
@@ -70,7 +70,7 @@ def test_distribute_reward_success(hash_power_agent):
             BTC_LIGHT_CLIENT.setMiners(1, v, [accounts[index]] * staked_amounts[index] + [accounts[5]] * 2)
     turn_round()
     update_system_contract_address(hash_power_agent, stake_hub=accounts[0])
-    hash_power_agent.distributeReward(validators, reward_list, round_tag + 1)
+    hash_power_agent.distributeReward(validators, reward_list, round_tag + 1,Utils.DENOMINATOR)
     for index, v in enumerate(validators):
         reward = reward_list[index] // sum_stake_amounts[index] * staked_amounts[index]
         __check_reward_power(accounts[index], {
@@ -88,7 +88,7 @@ def test_distribute_reward_with_new_validator(hash_power_agent):
         delegate_power_success(v, accounts[index], staked_amounts[index])
     turn_round()
     update_system_contract_address(hash_power_agent, stake_hub=accounts[0])
-    hash_power_agent.distributeReward(validators, reward_list, round_tag + 1)
+    hash_power_agent.distributeReward(validators, reward_list, round_tag + 1,Utils.DENOMINATOR)
     for index, v in enumerate(validators):
         reward = reward_list[index] // staked_amounts[index] * staked_amounts[index]
         if index == 0:
@@ -103,20 +103,21 @@ def test_distribute_reward_with_zero_amount(hash_power_agent, candidate_hub):
     rewards = [0, 0, 0]
     round_tag = get_current_round()
     update_system_contract_address(hash_power_agent, stake_hub=accounts[0])
-    hash_power_agent.distributeReward(validators, rewards, round_tag)
+    hash_power_agent.distributeReward(validators, rewards, round_tag,Utils.DENOMINATOR)
     reward = 0
     for index, v in enumerate(validators):
         __check_reward_power(v, {
             'reward': reward,
-            'accStakedAmount': 0
+            'stakeWeight': 0
         })
 
 
-def test_distribute_reward_only_stake_hub_can_call(hash_power_agent):
+def test_distribute_reward_only_stake_hub_can_call(hash_power_agent, stake_hub):
     validators = accounts[:3]
     reward_list = [1000, 20000, 30000]
-    with brownie.reverts("the msg sender must be stake hub contract"):
-        hash_power_agent.distributeReward(validators, reward_list, 0)
+    error = encode_args_with_signature("NotPermissionalCaller(address,address)", [stake_hub.address,accounts[0].address])
+    with brownie.reverts(error):
+        hash_power_agent.distributeReward(validators, reward_list, 0,Utils.DENOMINATOR)
 
 
 def test_get_power_stake_amounts_success(hash_power_agent, set_candidate):
@@ -130,7 +131,8 @@ def test_get_power_stake_amounts_success(hash_power_agent, set_candidate):
         else:
             BTC_LIGHT_CLIENT.setMiners(round_tag - 6, v, [accounts[index]] * staked_amounts[index] + [accounts[5]] * 2)
     turn_round()
-    power_amounts = hash_power_agent.getStakeAmounts(operators, round_tag + 1)
+    update_system_contract_address(hash_power_agent, stake_hub=accounts[0])
+    power_amounts = hash_power_agent.getStakeAmounts(operators, round_tag + 1).return_value
     assert power_amounts[0] == sum_stake_amounts
     assert power_amounts[1] == sum(sum_stake_amounts)
 
@@ -144,13 +146,12 @@ def test_power_valid_for_one_round(btc_stake, set_candidate, hash_power_agent, r
     tx = turn_round(consensuses)
     turn_round(consensuses, round_count=round_count)
     update_system_contract_address(hash_power_agent, stake_hub=accounts[0])
-    reward_sum, unclaimed = hash_power_agent.claimReward(accounts[0], 0, get_current_round() - 1, False).return_value
+    reward_sum = hash_power_agent.claimReward(accounts[0],[]).return_value
     total_reward = 13545
     assert reward_sum == total_reward
 
 
-@pytest.mark.parametrize("claim", [True, False])
-def test_power_claim_reward_success(hash_power_agent, claim):
+def test_power_claim_reward_success(hash_power_agent):
     validators = accounts[:3]
     staked_amounts = [6, 12, 15]
     sum_stake_amounts = [6, 14, 17]
@@ -163,7 +164,7 @@ def test_power_claim_reward_success(hash_power_agent, claim):
             BTC_LIGHT_CLIENT.setMiners(1, v, [accounts[index]] * staked_amounts[index] + [accounts[5]] * 2)
     turn_round()
     update_system_contract_address(hash_power_agent, stake_hub=accounts[0])
-    tx = hash_power_agent.distributeReward(validators, reward_list, round_tag + 1)
+    tx = hash_power_agent.distributeReward(validators, reward_list, round_tag + 1,Utils.DENOMINATOR)
     expect_event(tx, 'validatorAvgReward', {
         'validator': accounts[0],
         'avgReward': reward_list[0] // sum_stake_amounts[0],
@@ -177,30 +178,26 @@ def test_power_claim_reward_success(hash_power_agent, claim):
         'avgReward': reward_list[2] // sum_stake_amounts[2],
     }, idx=2)
     for index, v in enumerate(validators):
-        tx = hash_power_agent.claimReward(accounts[index], 0, get_current_round() - 1, claim)
-        reward_sum, unclaimed = tx.return_value
+        tx = hash_power_agent.claimReward(accounts[index],[])
+        reward_sum = tx.return_value
         reward = reward_list[index] // sum_stake_amounts[index] * staked_amounts[index]
-        if claim:
-            event_name = 'claimedHashReward'
-        else:
-            event_name = 'storedHashReward'
-        expect_event(tx, event_name, {
+        expect_event(tx, 'claimedHashReward', {
             'delegator': accounts[index],
             'amount': reward,
         })
         assert reward_sum == reward
-        assert unclaimed == 0
 
 
 def test_claim_power_no_reward_success(hash_power_agent):
     update_system_contract_address(hash_power_agent, stake_hub=accounts[0])
-    reward_sum, unclaimed = hash_power_agent.claimReward(accounts[0], 0, get_current_round() - 1, False).return_value
+    reward_sum = hash_power_agent.claimReward(accounts[0], []).return_value
     assert reward_sum == 0
 
 
-def test_only_stake_hub_can_call_claim_reward(hash_power_agent):
-    with brownie.reverts("the msg sender must be stake hub contract"):
-        hash_power_agent.claimReward(accounts[0], 0, get_current_round() - 1, True)
+def test_only_stake_hub_can_call_claim_reward(hash_power_agent, stake_hub):
+    error = encode_args_with_signature("NotPermissionalCaller(address,address)", [stake_hub.address,accounts[0].address])
+    with brownie.reverts(error):
+        hash_power_agent.claimReward(accounts[0], [])
 
 
 def test_update_param_callable_only_after_init(hash_power_agent):
@@ -209,8 +206,9 @@ def test_update_param_callable_only_after_init(hash_power_agent):
         hash_power_agent.updateParam('requiredCoinDeposit', '0x00')
 
 
-def test_only_gov_can_call_update_param(hash_power_agent):
-    with brownie.reverts("the msg sender must be governance contract"):
+def test_only_gov_can_call_update_param(hash_power_agent, gov_hub):
+    error = encode_args_with_signature("NotPermissionalCaller(address,address)", [gov_hub.address,accounts[0].address])
+    with brownie.reverts(error):
         hash_power_agent.updateParam('requiredCoinDeposit', '0x00')
 
 

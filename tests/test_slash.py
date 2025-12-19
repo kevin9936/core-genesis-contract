@@ -444,9 +444,10 @@ def test_submit_finality_violation_evidence_then_slash(slash_indicator, validato
     assert 'validatorMisdemeanor' in tx.events
 
 
-def test_only_gov_can_call(slash_indicator):
+def test_only_gov_can_call(slash_indicator, gov_hub):
     value = padding_left(Web3.to_hex(1000), 64)
-    with brownie.reverts(f"the msg sender must be governance contract"):
+    error_msg = encode_args_with_signature("NotPermissionalCaller(address,address)", [gov_hub.address,accounts[0].address])
+    with brownie.reverts(error_msg):
         slash_indicator.updateParam('misdemeanorThreshold', value)
 
 

@@ -523,12 +523,12 @@ class StakeManager:
 
     @staticmethod
     def set_tlp_rates(rates=None):
-        BitcoinStakeMock[0].popTtlpRates()
+        BitcoinAgentMock[0].popTtlpRates()
         if rates:
             for r in rates:
                 tl = r[0]
                 tp = r[1]
-                BitcoinStakeMock[0].setTlpRates(tl, tp)
+                BitcoinAgentMock[0].setTlpRates(tl, tp)
 
     @staticmethod
     def set_is_stake_hub_active(value=False):
@@ -555,9 +555,9 @@ class RoundRewardManager:
         BitcoinStakeMock[0].setAccruedRewardPerBTCMap(candidate, roundTag - 1,
                                                       (reward + unclaimed_reward) * 1e8 // btc_amount)
         if unclaimed_reward > 0:
-            BitcoinStakeMock[0].setIsActive(True)
-            BitcoinStakeMock[0].popTtlpRates()
-            BitcoinStakeMock[0].setTlpRates(0, reward / (reward + unclaimed_reward) * 10000)
+            BitcoinAgentMock[0].setIsActive(True)
+            BitcoinAgentMock[0].popTtlpRates()
+            BitcoinAgentMock[0].setTlpRates(0, reward / (reward + unclaimed_reward) * 10000)
 
     @staticmethod
     def mock_power_reward_map(delegator, reward, delegate_amount):

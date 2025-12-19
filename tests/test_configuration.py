@@ -39,11 +39,12 @@ def set_event(rewards, event_name, gas, is_bytes=True):
     return event
 
 
-def test_only_gov_can_call(configuration, core_agent):
+def test_only_gov_can_call(configuration, core_agent, gov_hub):
     update_system_contract_address(configuration, gov_hub=accounts[1])
     grades = [ZERO_ADDRESS, [[ZERO_ADDRESS, 0], random_btc_tx_id(), 1000], 1000]
     grades_encode = rlp.encode(grades)
-    with brownie.reverts("the msg sender must be governance contract"):
+    error_msg = encode_args_with_signature("NotPermissionalCaller(address,address)", [accounts[1].address,accounts[0].address])
+    with brownie.reverts(error_msg):
         configuration.updateParam('addConfig', grades_encode)
 
 

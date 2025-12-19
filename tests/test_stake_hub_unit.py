@@ -89,11 +89,13 @@ def test_validators_and_rewards_length_mismatch_revert(validator_set):
                                          {'from': accounts[0], 'value': value_sum})
 
 
-def test_only_validator_can_call_add_round_reward(stake_hub):
+def test_only_validator_can_call_add_round_reward(stake_hub, validator_set):
     validators = [accounts[1], accounts[2]]
     reward_list = [1000, 1000]
     value_sum = sum(reward_list)
-    with brownie.reverts('the msg sender must be validatorSet contract'):
+    error_msg = encode_args_with_signature('NotPermissionalCaller(address,address)',
+                                           [validator_set.address, accounts[0]])
+    with brownie.reverts(f"{error_msg}"):
         stake_hub.addRoundReward(validators, reward_list, 100,
                                  {'from': accounts[0], 'value': value_sum})
 
@@ -109,7 +111,7 @@ def test_add_round_reward_success(validator_set, core_agent, btc_light_client, b
     for validator in validators:
         core_agent.setCandidateMapAmount(validator, core_value, core_value, 0)
         btc_light_client.setMiners(round_tag - 7, validator, [accounts[0]] * power_value)
-        btc_stake.setCandidateMap(validator, btc_value, btc_value, [])
+        btc_stake.setCandidateMap(validator, btc_value, btc_value, [], 0)
     candidate_hub.getScoreMock(validators, round_tag)
     tx = validator_set.addRoundRewardMock(validators, reward_list, round_tag,
                                           {'from': accounts[0], 'value': value_sum})
@@ -163,7 +165,7 @@ def test_reward_without_stake(validator_set, core_agent, btc_light_client, btc_s
     for validator in validators:
         core_agent.setCandidateMapAmount(validator, core_value, core_value, 0)
         btc_light_client.setMiners(round_tag - 7, validator, [accounts[0]] * power_value)
-        btc_stake.setCandidateMap(validator, btc_value, btc_value, [])
+        btc_stake.setCandidateMap(validator, btc_value, btc_value, [], 0)
     candidate_hub.getScoreMock(validators, round_tag)
     tx = validator_set.addRoundRewardMock(validators, reward_list, round_tag,
                                           {'from': accounts[0], 'value': value_sum})
@@ -171,10 +173,12 @@ def test_reward_without_stake(validator_set, core_agent, btc_light_client, btc_s
         assert round_reward['amount'] == [0, 0]
 
 
-def test_only_candidate_can_call(validator_set, stake_hub):
+def test_only_candidate_can_call(validator_set, stake_hub, candidate_hub):
     round_tag = 100
     validators = [accounts[1], accounts[2]]
-    with brownie.reverts('the msg sender must be candidate contract'):
+    error_msg = encode_args_with_signature('NotPermissionalCaller(address,address)',
+                                           [candidate_hub.address, accounts[0]])
+    with brownie.reverts(f"{error_msg}"):
         stake_hub.getHybridScore(validators, round_tag)
 
 
@@ -200,7 +204,7 @@ def test_get_hybrid_score_success(core_agent, btc_light_client, btc_stake, candi
     for validator in validators[:1]:
         core_agent.setCandidateMapAmount(validator, core_value, core_value, 0)
         btc_light_client.setMiners(round_tag - 7, validator, [accounts[0]] * power_value)
-        btc_stake.setCandidateMap(validator, btc_value, btc_value, [])
+        btc_stake.setCandidateMap(validator, btc_value, btc_value, [], 0)
     tx = candidate_hub.getScoreMock(validators, round_tag)
     scores = tx.return_value
     hard_cap = [6000, 2000, 4000]
@@ -252,7 +256,7 @@ def test_two_rounds_score_calculation_success(core_agent, btc_light_client, btc_
     candidate_hub.getScoreMock(validators, round_tag)
     candidate_scores = stake_hub.getCandidateScoresMap(validators[0])
     assert candidate_scores[-1] == 0
-    btc_stake.setCandidateMap(validators[0], btc_value, btc_value, [])
+    btc_stake.setCandidateMap(validators[0], btc_value, btc_value, [], 0)
     candidate_hub.getScoreMock(validators, round_tag)
     candidate_scores = stake_hub.getCandidateScoresMap(validators[0])
     assert candidate_scores[0] == sum(candidate_scores[1:4])
@@ -269,7 +273,7 @@ def test_validators_score_calculation_success(core_agent, btc_light_client, btc_
     for validator in validators:
         core_agent.setCandidateMapAmount(validator, core_value, core_value, 0)
         btc_light_client.setMiners(round_tag - 7, validator, [accounts[0]] * power_value)
-        btc_stake.setCandidateMap(validators[0], btc_value, btc_value, [])
+        btc_stake.setCandidateMap(validators[0], btc_value, btc_value, [], 0)
     tx = candidate_hub.getScoreMock(validators, round_tag)
     scores = tx.return_value
     actual_scores = []
@@ -279,8 +283,10 @@ def test_validators_score_calculation_success(core_agent, btc_light_client, btc_
     assert scores == actual_scores
 
 
-def test_only_candidate_can_call_set_new_round(stake_hub):
-    with brownie.reverts("the msg sender must be candidate contract"):
+def test_only_candidate_can_call_set_new_round(stake_hub, candidate_hub):
+    error_msg = encode_args_with_signature('NotPermissionalCaller(address,address)',
+                                           [candidate_hub.address, accounts[0]])
+    with brownie.reverts(f"{error_msg}"):
         stake_hub.setNewRound(accounts[:2], 100)
 
 
@@ -473,7 +479,7 @@ def test_claim_reward_staked_core_amount_different(stake_hub, btc_agent, core_ag
     stake_manager.set_is_stake_hub_active(True)
     tracker = get_tracker(accounts[0])
     tx = stake_hub.claimReward()
-    expect_event(tx, 'claimedRewardBtcTx', {
+    expect_event(tx, 'storedRewardBtcTx', {
         'dualStakingRate': Utils.DENOMINATOR // 2
     })
     assert tracker.delta() == (TOTAL_REWARD - 1) + TOTAL_REWARD // 2
@@ -525,10 +531,11 @@ def test_claim_reward_staked_core_amount_equal(stake_hub, btc_agent, core_agent,
         coin_reward = TOTAL_REWARD // 2
     turn_round(consensuses)
     tx = stake_hub.claimReward()
-    expect_event(tx, 'claimedRewardBtcTx', {
+    print("tx.return_value", tx.events)
+    expect_event(tx, 'storedRewardBtcTx', {
         'dualStakingRate': dualStakingRate0
     }, idx=0)
-    expect_event(tx, 'claimedRewardBtcTx', {
+    expect_event(tx, 'storedRewardBtcTx', {
         'dualStakingRate': dualStakingRate1
     }, idx=1)
     expect_event(tx, 'claimedReward', {
@@ -570,15 +577,16 @@ def test_claim_reward_change_round_less_than_last(stake_hub, btc_agent, core_age
     })
 
 
-def test_claim_reward_with_stored_historical_rewards(stake_hub, btc_agent, set_candidate):
+def test_claim_reward_with_stored_historical_rewards(stake_hub, btc_agent, core_agent, btc_stake, set_candidate):
     operators, consensuses = set_candidate
 
     delegate_coin_success(operators[1], accounts[0], MIN_INIT_DELEGATE_VALUE * 2)
-    delegate_btc_success(operators[0], accounts[0], 1, LOCK_SCRIPT)
+    tx_id = delegate_btc_success(operators[0], accounts[0], 1, LOCK_SCRIPT)
     turn_round()
     turn_round(consensuses)
     stake_hub.calculateReward(accounts[0])
-    assert stake_hub.getDelegator(accounts[0])[1] == [TOTAL_REWARD, 0, TOTAL_REWARD]
+    assert core_agent.delegatorMap(accounts[0]) == [MIN_INIT_DELEGATE_VALUE * 2, 0, TOTAL_REWARD]
+    assert btc_stake.receiptMap(tx_id)['reward'] == TOTAL_REWARD
     turn_round(consensuses)
     tx = stake_hub.claimReward()
     expect_event(tx, 'claimedReward', {
@@ -644,21 +652,22 @@ def test_proxy_claim_reward_success(stake_hub, btc_agent, pledge_agent, set_cand
 def test_calculate_reward_success(stake_hub, btc_agent, core_agent, btc_stake, hash_power_agent,
                                   set_candidate):
     operators, consensuses = set_candidate
-    delegate_btc_success(operators[0], accounts[0], 1, LOCK_SCRIPT)
+    tx_id = delegate_btc_success(operators[0], accounts[0], 1, LOCK_SCRIPT)
     turn_round()
     turn_round(consensuses)
     accounts[3].transfer(stake_hub, Web3.to_wei(1, 'ether'))
     reward = 10000
     btc_reward = 6000
-    actual_rewards = [reward, reward, btc_reward]
     core_agent.setCoreRewardMap(accounts[0], reward, 0)
-    hash_power_agent.setPowerRewardMap(accounts[0], reward, 0)
+    hash_power_agent.setPowerRewardMap(accounts[0], reward, get_current_round(), 10000)
     round_reward_manager.mock_btc_reward_map(operators[0], get_current_round(), reward, 0)
     btc_agent.setIsActive(True)
     stake_manager.set_lp_rates([[0, btc_reward]])
     stake_hub.setOperators(accounts[3], True)
     rewards = stake_hub.calculateRewardMock(accounts[0]).return_value
-    assert rewards == actual_rewards
+    assert core_agent.delegatorMap(accounts[0]) == [0, 0, reward]
+    assert hash_power_agent.rewardMap(accounts[0]) == [reward, get_current_round(), 10000]
+    assert btc_stake.receiptMap(tx_id)['reward'] == btc_reward
     assert stake_hub.surplus() == reward - btc_reward
 
 
@@ -698,9 +707,9 @@ def test_calculate_reward_success(stake_hub, btc_agent, core_agent, btc_stake, h
     {'btc_reward': 10000, 'duration_unclaimed': 10000, 'btc_percentage': 15000, 'surplus': 2000, 'expect_reward': 15000,
      'expect_surplus': 7000}
 ])
-def test_calculate_reward_update_surplus(stake_hub, btc_agent, tests, set_candidate):
+def test_calculate_reward_update_surplus(stake_hub, btc_agent, btc_stake, tests, set_candidate):
     operators, consensuses = set_candidate
-    delegate_btc_success(operators[0], accounts[0], 1, LOCK_SCRIPT)
+    tx_id = delegate_btc_success(operators[0], accounts[0], 1, LOCK_SCRIPT)
     turn_round()
     turn_round(consensuses)
     stake_hub.setSurplus(tests['surplus'])
@@ -716,10 +725,9 @@ def test_calculate_reward_update_surplus(stake_hub, btc_agent, tests, set_candid
     tx = stake_hub.calculateRewardMock(accounts[0])
     if tests.get('claim_rewards'):
         assert tx.events['rewardTo']['amount'] == tests['claim_rewards']
-    reward = tx.return_value
     assert actual_reward == tests['expect_reward']
     assert stake_hub.surplus() == tests['expect_surplus']
-    assert reward == [0, 0, actual_reward]
+    assert btc_stake.receiptMap(tx_id)['reward'] == actual_btc_reward
 
 
 @pytest.mark.parametrize("lp_rates", [
@@ -737,7 +745,7 @@ def test_claim_rewards_multiple_grades(stake_hub, core_agent, validator_set, btc
     accounts[3].transfer(validator_set.address, Web3.to_wei(10000, 'ether'))
     operators, consensuses = set_candidate
     delegate_coin_success(operators[1], accounts[0], 10000e18)
-    delegate_btc_success(operators[0], accounts[0], 1e8, LOCK_SCRIPT)
+    tx_id = delegate_btc_success(operators[0], accounts[0], 1e8, LOCK_SCRIPT)
     turn_round()
     turn_round(consensuses)
     accounts[3].transfer(stake_hub, Web3.to_wei(1, 'ether'))
@@ -745,13 +753,15 @@ def test_claim_rewards_multiple_grades(stake_hub, core_agent, validator_set, btc
     actual_rewards = [reward, reward, reward // 2]
     round_reward_manager.mock_btc_reward_map(operators[0], get_current_round(), reward, 0, 1e8)
     core_agent.setCoreRewardMap(accounts[0], reward, 1000000)
-    hash_power_agent.setPowerRewardMap(accounts[0], reward, 10)
+    hash_power_agent.setPowerRewardMap(accounts[0], reward, 10, 10000)
     btc_agent.setIsActive(True)
     for lp in lp_rates:
         btc_agent.setLpRates(lp[0], lp[1])
     tx = stake_hub.calculateRewardMock(accounts[0])
     rewards = tx.return_value
-    assert rewards == actual_rewards
+    assert core_agent.delegatorMap(accounts[0]) == [10000e18, 0, reward]
+    assert hash_power_agent.rewardMap(accounts[0]) == [reward, 10, 10000]
+    assert btc_stake.receiptMap(tx_id)['reward'] == reward // 2
 
 
 def test_get_assets_success(stake_hub, core_agent, hash_power_agent, btc_agent):
@@ -760,7 +770,7 @@ def test_get_assets_success(stake_hub, core_agent, hash_power_agent, btc_agent):
                       ['BTC', btc_agent.address, 4000]]
 
 
-def test_get_delegator_success(stake_hub, set_candidate):
+def test_get_delegator_success(stake_hub, core_agent, btc_stake, set_candidate):
     stake_manager.set_lp_rates([[0, 1000], [2500, 2500], [5000, 5000], [10000, 20000]])
     stake_manager.set_is_stake_hub_active(True)
     stake_manager.set_tlp_rates()
@@ -771,10 +781,9 @@ def test_get_delegator_success(stake_hub, set_candidate):
     delegate_coin_success(operators[0], accounts[0], delegate_amount)
     turn_round(consensuses, round_count=2)
     lock_script = '0480db8767b17576a914574fdd26858c28ede5225a809f747c01fcc1f92a88ac'
-    delegate_btc_success(operators[1], accounts[0], btc_value, lock_script)
-
-    delegator_map = stake_hub.getDelegator(accounts[0])
-    assert delegator_map == [get_current_round(), [BLOCK_REWARD // 2, 0, 0]]
+    tx_id = delegate_btc_success(operators[1], accounts[0], btc_value, lock_script)
+    assert core_agent.delegatorMap(accounts[0]) == [500000, 0, BLOCK_REWARD // 2]
+    assert btc_stake.receiptMap(tx_id)['reward'] == 0
 
 
 def test_onStakeChange_success(stake_hub, set_candidate):
@@ -829,23 +838,20 @@ def test_calculateReward_invalid_after_operation(stake_hub, set_candidate, onSta
 
 
 # calculateReward
-def test_calculate_reward_only_btc_stakes(stake_hub, btc_agent, core_agent, set_candidate):
+def test_calculate_reward_only_btc_stakes(stake_hub, btc_stake, btc_agent, core_agent, set_candidate):
     operators, consensuses = set_candidate
     delegator = accounts[0]
-    delegate_btc_success(operators[0], delegator, 100, LOCK_SCRIPT)
+    tx_id = delegate_btc_success(operators[0], delegator, 100, LOCK_SCRIPT)
     turn_round()
     turn_round(consensuses)
     btc_agent.setIsActive(True)
     stake_manager.set_lp_rates([[0, 5000], [5000, 8000], [10000, 15000]])
     stake_manager.set_is_stake_hub_active(True)
     tx = stake_hub.calculateReward(delegator, {'from': accounts[1]})
-    delegator_info = stake_hub.getDelegator(delegator)
-    assert delegator_info[0] == get_current_round()
-    assert len(delegator_info[1]) == 3
-    assert delegator_info[1][2] == TOTAL_REWARD // 2
+    assert btc_stake.receiptMap(tx_id)['reward'] == TOTAL_REWARD // 2
 
 
-def test_calculate_reward_only_core_stakes(stake_hub, btc_agent, core_agent, set_candidate):
+def test_calculate_reward_only_core_stakes(stake_hub, core_agent, btc_agent, set_candidate):
     operators, consensuses = set_candidate
     delegator = accounts[0]
     delegate_coin_success(operators[0], delegator, 10000)
@@ -853,20 +859,17 @@ def test_calculate_reward_only_core_stakes(stake_hub, btc_agent, core_agent, set
     turn_round(consensuses, round_count=2)
     stake_manager.set_is_stake_hub_active(True)
     tx = stake_hub.calculateReward(delegator, {'from': accounts[1]})
-    delegator_info = stake_hub.getDelegator(delegator)
-    assert delegator_info[0] == get_current_round()
-    assert len(delegator_info[1]) == 3
-    assert delegator_info[1][0] == TOTAL_REWARD * 2
+    assert core_agent.delegatorMap(delegator) == [10000, 0, TOTAL_REWARD * 2]
 
 
-def test_calculate_reward_multiple_btc_and_core_stakes(stake_hub, btc_agent, core_agent, set_candidate):
+def test_calculate_reward_multiple_btc_and_core_stakes(stake_hub, btc_stake, btc_agent, core_agent, set_candidate):
     operators, consensuses = set_candidate
     delegator = accounts[0]
     delegate_coin_success(operators[2], delegator, 500000)
     delegate_coin_success(operators[2], delegator, 1000000)
     turn_round()
-    delegate_btc_success(operators[0], delegator, 100, LOCK_SCRIPT)
-    delegate_btc_success(operators[1], delegator, 100, LOCK_SCRIPT)
+    tx_id0 = delegate_btc_success(operators[0], delegator, 100, LOCK_SCRIPT)
+    tx_id1 = delegate_btc_success(operators[1], delegator, 100, LOCK_SCRIPT)
     turn_round()
     delegate_coin_success(operators[2], delegator, 800000)
     turn_round(consensuses)
@@ -878,24 +881,22 @@ def test_calculate_reward_multiple_btc_and_core_stakes(stake_hub, btc_agent, cor
     tx = stake_hub.calculateReward(delegator, {'from': accounts[1]})
     assert tx.events['storedRewardBtcTx'][0]['dualStakingRate'] == Utils.DENOMINATOR * 2
     assert tx.events['storedRewardBtcTx'][1]['dualStakingRate'] == 3000
-
     assert tx.events['storedRewardBtcTx'][2]['dualStakingRate'] == Utils.DENOMINATOR * 2
     assert tx.events['storedRewardBtcTx'][3]['dualStakingRate'] == Utils.DENOMINATOR
-    delegator_info = stake_hub.getDelegator(delegator)
-    assert delegator_info[1][0] == TOTAL_REWARD * 2 - 1
-    assert delegator_info[1][2] == TOTAL_REWARD * 2 + TOTAL_REWARD * 3000 // Utils.DENOMINATOR + TOTAL_REWARD * 3
+    assert core_agent.delegatorMap(delegator) == [2300000, 0, TOTAL_REWARD * 2 - 1]
+    assert btc_stake.receiptMap(tx_id0)['reward'] + btc_stake.receiptMap(tx_id1)[
+        'reward'] == TOTAL_REWARD * 2 + TOTAL_REWARD * 3000 // Utils.DENOMINATOR + TOTAL_REWARD * 3
     tracker0 = get_tracker(delegator)
     stake_hub_claim_reward(delegator)
-    assert tracker0.delta() == sum(delegator_info[1])
-    delegator_info = stake_hub.getDelegator(delegator)
-    assert sum(delegator_info[1]) == 0
+    assert tracker0.delta() == TOTAL_REWARD * 2 + TOTAL_REWARD * 3000 // Utils.DENOMINATOR + TOTAL_REWARD * 3 + (
+            TOTAL_REWARD * 2 - 1)
 
 
-def test_calculate_reward_various_stake_combinations(stake_hub, btc_agent, core_agent, set_candidate):
+def test_calculate_reward_various_stake_combinations(stake_hub, btc_stake, btc_agent, core_agent, set_candidate):
     operators, consensuses = set_candidate
     delegator = accounts[0]
-    delegate_btc_success(operators[0], delegator, 200, LOCK_SCRIPT)
-    delegate_btc_success(operators[1], delegator, 100, LOCK_SCRIPT)
+    tx_id0 = delegate_btc_success(operators[0], delegator, 200, LOCK_SCRIPT)
+    tx_id1 = delegate_btc_success(operators[1], delegator, 100, LOCK_SCRIPT)
 
     delegate_coin_success(operators[2], delegator, 1000000)
     delegate_coin_success(operators[2], delegator, 500000)
@@ -906,22 +907,21 @@ def test_calculate_reward_various_stake_combinations(stake_hub, btc_agent, core_
     stake_manager.set_is_stake_hub_active(True)
     stake_hub.calculateReward(delegator, {'from': accounts[1]})
     stake_manager.set_lp_rates([[0, 30000]])
-    delegator_info = stake_hub.getDelegator(delegator)
-    assert delegator_info[1][0] == TOTAL_REWARD - 1
-    assert delegator_info[1][2] == TOTAL_REWARD * 2 + TOTAL_REWARD // 2
+    assert core_agent.delegatorMap(delegator) == [2300000, 0, TOTAL_REWARD - 1]
+    assert btc_stake.receiptMap(tx_id1)['reward'] ==TOTAL_REWARD * 2
+    assert btc_stake.receiptMap(tx_id0)['reward'] ==TOTAL_REWARD // 2
     tracker0 = get_tracker(delegator)
     stake_hub_claim_reward(delegator)
-    assert tracker0.delta() == sum(delegator_info[1])
-    delegator_info = stake_hub.getDelegator(delegator)
-    assert sum(delegator_info[1]) == 0
+    assert tracker0.delta() == TOTAL_REWARD * 2 + TOTAL_REWARD // 2 + (TOTAL_REWARD - 1)
     turn_round(consensuses)
     stake_hub_claim_reward(delegator)
     assert tracker0.delta() == TOTAL_REWARD - 1 + TOTAL_REWARD * 6
 
 
-def test_only_govhub_can_call(stake_hub):
+def test_only_govhub_can_call(stake_hub, gov_hub):
     grades_encode = rlp.encode([])
-    with brownie.reverts("the msg sender must be governance contract"):
+    error = encode_args_with_signature("NotPermissionalCaller(address,address)", [gov_hub.address,accounts[0].address])
+    with brownie.reverts(error):
         stake_hub.updateParam('grades', grades_encode)
 
 
@@ -1123,7 +1123,7 @@ def test_stake_hup_add_round_reward(stake_hub, validator_set, candidate_hub, cor
                 btc_light_client.setMiners(test['round'] - 7, v1, v2)
         if 'add_btc' in test:
             for validator, v1, v2, arr in test['add_btc']:
-                btc_stake.setCandidateMap(validator, v1, v2, arr)
+                btc_stake.setCandidateMap(validator, v1, v2, arr,0)
         if 'unclaimed_reward' in test:
             stake_hub.setSurplus(test['unclaimed_reward'])
         tx = candidate_hub.getScoreMock(test['validators'], test['round'])
@@ -1170,7 +1170,7 @@ def test_stake_hup_get_hybrid_score(stake_hub, validator_set, candidate_hub, cor
                 btc_light_client.setMiners(test['round'] - 7, v1, v2)
         if 'add_btc' in test:
             for validator, v1, v2, arr in test['add_btc']:
-                btc_stake.setCandidateMap(validator, v1, v2, arr)
+                btc_stake.setCandidateMap(validator, v1, v2, arr,0)
         if test['status'] == 'success':
             tx = candidate_hub.getScoreMock(test['validators'], test['round'])
             for validator, expect_score in zip(test['validators'], test['expect_scores']):
@@ -1188,11 +1188,13 @@ def test_stake_hub_calculate_reward(stake_hub, btc_agent, candidate_hub, core_ag
     operators, consensuses = set_candidate
     turn_round()
     delegate_coin_success(operators[1], accounts[1], test['add_core'])
-    delegate_btc_success(operators[0], accounts[1], test['add_btc'], LOCK_SCRIPT, relay=accounts[1])
+    tx_id = delegate_btc_success(operators[0], accounts[1], test['add_btc'], LOCK_SCRIPT, relay=accounts[1])
     turn_round(consensuses, round_count=2)
     graders_keys = [1000, 4000, 5000, 10000]
     graders_values = [5000, 7000, 8000, 10000]
     if test.get('is_active'):
         btc_agent.setIsActive(True)
         btc_agent.setInitLpRates(graders_keys, graders_values)
-    assert stake_hub.calculateRewardMock(accounts[1]).return_value == (test['expect_rewards'])
+    stake_hub.calculateRewardMock(accounts[1])
+    assert core_agent.delegatorMap(accounts[1]) == [test['add_core'], 0, test['expect_rewards'][0]]
+    assert btc_stake.receiptMap(tx_id)['reward'] == test['expect_rewards'][2]

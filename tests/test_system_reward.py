@@ -20,7 +20,7 @@ foundation_tracker = None
 
 
 @pytest.fixture(scope="module", autouse=True)
-def set_up(system_reward, burn, foundation):
+def set_up(system_reward, burn, foundation, gov_hub):
     update_system_contract_address(system_reward, gov_hub=accounts[0])
     global account_tracker
     global system_reward_tracker
@@ -436,13 +436,12 @@ def test_revert_when_whitelist_address_receives_funds(system_reward, stake_hub):
     accounts[0].transfer(system_reward.address, incentive_balance_cap)
     turn_round()
     burn_reward = 10000000
-    btc_lst_stake = delegateBtcLstProxy.deploy(accounts[1], stake_hub.address, accounts[2],
-                                               {'from': accounts[0]})
-    __add_whitelist(btc_lst_stake, Utils.DENOMINATOR // 4)
+    btc_stake = accounts[0].deploy(refuseAccount)
+    __add_whitelist(btc_stake, Utils.DENOMINATOR // 4)
     __add_whitelist(accounts[2], Utils.DENOMINATOR // 4)
     __add_whitelist(stake_hub, Utils.DENOMINATOR // 2)
     tx = system_reward.receiveRewards({'value': burn_reward})
-    assert tx.events['whitelistTransferFailed'] == [btc_lst_stake.address, burn_reward // 4]
+    assert tx.events['whitelistTransferFailed'] == [btc_stake.address, burn_reward // 4]
     actual_reward = [[accounts[2], burn_reward // 4], [stake_hub, burn_reward // 2]]
     for index, t in enumerate(tx.events['whitelistTransferSuccess']):
         assert t['member'] == actual_reward[index][0]
@@ -614,15 +613,17 @@ def test_update_whitelist_with_zero_percentage(system_reward):
         __modify_whitelist(accounts[2], percentage * 2, 0)
 
 
-def test_only_gov_can_manage_whitelist(system_reward):
+def test_only_gov_can_manage_whitelist(system_reward,gov_hub):
     percentage = 1000
     white_list0 = [to_bytes(hexstr=accounts[0].address), percentage]
     white_list_encode = rlp.encode(white_list0)
-    with brownie.reverts(f"the msg sender must be governance contract"):
+    update_system_contract_address(system_reward, gov_hub=gov_hub)
+    error_msg = encode_args_with_signature("NotPermissionalCaller(address,address)", [gov_hub.address,accounts[1].address])
+    with brownie.reverts(error_msg):
         system_reward.updateParam("addWhiteList", white_list_encode, {'from': accounts[1]})
-    with brownie.reverts(f"the msg sender must be governance contract"):
+    with brownie.reverts(error_msg):
         system_reward.updateParam("removeWhiteList", white_list_encode, {'from': accounts[1]})
-    with brownie.reverts(f"the msg sender must be governance contract"):
+    with brownie.reverts(error_msg):
         system_reward.updateParam("modifyWhiteList", white_list_encode, {'from': accounts[1]})
 
 

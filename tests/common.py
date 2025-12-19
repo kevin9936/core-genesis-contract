@@ -47,19 +47,22 @@ def chain_get_validator_consensus():
     return consensus
 
 
-def turn_round(miners: list = None, tx_fee=100, round_count=1, weights=None):
+def turn_round(miners: list = None, tx_fee=100, round_count=1, weights=None,stake_weights=None):
     if miners is None:
         miners = []
     if weights is None:
         weights = [10] * len(miners)
     tx = None
-
+    if stake_weights is None:
+        stake_weights = 10000
     for _ in range(round_count):
         for miner in miners:
             ValidatorSetMock[0].deposit(miner, {"value": tx_fee, "from": accounts[99]})
         ValidatorSetMock[0].vote(miners, weights, {"from": accounts[99]})
+        StakeHubMock[0].setStakeWeight(stake_weights)
         tx = CandidateHubMock[0].turnRound()
         chain.sleep(1)
+        print('turn_round>>>>>>>>>>>>>>>>>>>>>>>>',tx.events)
     return tx
 
 
@@ -103,9 +106,11 @@ def stake_hub_claim_reward(account):
     if isinstance(account, list):
         for i in account:
             tx = StakeHubMock[0].claimReward({'from': i})
+            print('stake_hub_claim_reward>>>>>>>>>>>>>>>>>>>>>>>>',tx.events)
 
     else:
         tx = StakeHubMock[0].claimReward({'from': account})
+        print('stake_hub_claim_reward>>>>>>>>>>>>>>>>>>>>>>>>',tx.events)
     return tx
 
 

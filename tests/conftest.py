@@ -174,8 +174,8 @@ def channel(accounts):
 
 # test contract
 @pytest.fixture(scope="module")
-def test_lib_memory(accounts):
-    c = accounts[0].deploy(TestLibMemory)
+def callPledgeAgent(accounts):
+    c = accounts[0].deploy(callPledgeAgentAccount0)
     return c
 
 

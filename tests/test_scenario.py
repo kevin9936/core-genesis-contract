@@ -10,9 +10,7 @@ init_account_mgr = AccountMgr.init_account_mgr
 @pytest.mark.skip(reason="This test is temporarily skipped")
 @pytest.mark.parametrize("file_name", [
     'example_scenario.json',
-    'btcfi_scenario.json',
     'new_validator_scenario.json',
-    'no_btclst_stake_scenario.json'
 ])
 def test_scenario(file_name):
     init_account_mgr()

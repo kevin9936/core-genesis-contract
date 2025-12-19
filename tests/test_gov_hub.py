@@ -30,7 +30,8 @@ def test_receive_money_with_zero_value(gov_hub):
 
 
 def test_update_param_failed_with_address_which_is_not_gov(gov_hub):
-    with brownie.reverts("the msg sender must be governance contract"):
+    error_msg = encode_args_with_signature('NotPermissionalCaller(address,address)', [gov_hub.address, accounts[0]])
+    with brownie.reverts(f"{error_msg}"):
         gov_hub.updateParam("proposalMaxOperations",
                             "0x0000000000000000000000000000000000000000000000000000000000000001")
 
@@ -103,7 +104,8 @@ def test_get_member_success(gov_hub):
 
 
 def test_remove_member_failed_with_address_which_is_not_gov(gov_hub):
-    with brownie.reverts("the msg sender must be governance contract"):
+    error_msg = encode_args_with_signature('NotPermissionalCaller(address,address)', [gov_hub.address, accounts[0]])
+    with brownie.reverts(f"{error_msg}"):
         gov_hub.removeMember(origin_members[0])
 
 
@@ -128,7 +130,8 @@ def test_remove_member_success(gov_hub):
 
 
 def test_add_member_failed_with_address_which_is_not_gov(gov_hub):
-    with brownie.reverts("the msg sender must be governance contract"):
+    error_msg = encode_args_with_signature('NotPermissionalCaller(address,address)', [gov_hub.address, accounts[0]])
+    with brownie.reverts(f"{error_msg}"):
         gov_hub.addMember(accounts[2])
 
 
@@ -785,7 +788,8 @@ def test_get_executed_proposal_state(gov_hub):
 
 def test_only_gov_can_execute(gov_hub):
     value = padding_left(Web3.to_hex(100), 64)
-    with brownie.reverts(f"the msg sender must be governance contract"):
+    error_msg = encode_args_with_signature('NotPermissionalCaller(address,address)', [gov_hub.address, accounts[0]])
+    with brownie.reverts(f"{error_msg}"):
         gov_hub.updateParam("proposalMaxOperations", value)
 
 

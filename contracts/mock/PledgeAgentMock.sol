@@ -3,6 +3,7 @@ pragma solidity 0.8.4;
 
 import "../PledgeAgent.sol";
 import "../interface/ICandidateHub.sol";
+import "../lib/Memory.sol";
 
 contract PledgeAgentMock is PledgeAgent {
     int256 public constant CLAIM_ROUND_LIMIT = 500;
@@ -12,6 +13,7 @@ contract PledgeAgentMock is PledgeAgent {
     uint256 public constant CHAINID = 1116;
     uint256 public constant BTC_UNIT_CONVERSION = 1e10;
     uint256 public constant INIT_DELEGATE_BTC_GAS_PRICE = 1e12;
+    uint256 public clearDeprecatedMembers;
     
     function developmentInit() external {
         requiredCoinDeposit = requiredCoinDeposit / 1e16;
@@ -48,4 +50,23 @@ contract PledgeAgentMock is PledgeAgent {
         roundTag = value;
     }
 
+   function updateParam(string calldata key, bytes calldata value) external  onlyInit onlyCaller(GOV_HUB_ADDR) {
+    if (value.length != 32) {
+      revert MismatchParamLength(key);
+    }
+    if (Memory.compareStrings(key, "clearDeprecatedMembers")) {
+      requiredCoinDeposit = 0;
+      powerFactor = 0;
+      btcFactor = 0;
+      minBtcLockRound = 0;
+      btcConfirmBlock = 0;
+      minBtcValue = 0;
+      delegateBtcGasPrice = 0;
+    } else {
+      revert UnsupportedGovParam(key);
+    }
+    emit paramChange(key, value);
+
+
+}
 }

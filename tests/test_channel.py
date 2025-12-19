@@ -1038,7 +1038,7 @@ def test_undelegate_coin_integration_with_core_agent(channel, core_agent, _type,
         undelegate_amount = delegate_amount + delegate_amount // 2
         core_agent.undelegateCoin(operator, undelegate_amount, {'from': delegator})
         delegator_info = core_agent.delegatorMap(delegator)
-        _amount, _channel_amount = delegator_info
+        _amount, _channel_amount, _reward = delegator_info
         assert _amount == total_amount - undelegate_amount
         assert _channel_amount == total_channel_amount - undelegate_amount
 
@@ -1052,7 +1052,7 @@ def test_undelegate_coin_integration_with_core_agent(channel, core_agent, _type,
     elif _type == "all":
         core_agent.undelegateCoin(operator, 0, {'from': delegator})
         delegator_info = core_agent.delegatorMap(delegator)
-        _amount, _channel_amount = delegator_info
+        _amount, _channel_amount, _reward = delegator_info
         assert _amount == 0
         assert _channel_amount == 0
 
@@ -1064,7 +1064,7 @@ def test_undelegate_coin_integration_with_core_agent(channel, core_agent, _type,
         undelegate_amount = total_channel_amount + delegate_amount // 2
         core_agent.undelegateCoin(operator, undelegate_amount, {'from': delegator})
         delegator_info = core_agent.delegatorMap(delegator)
-        _amount, _channel_amount = delegator_info
+        _amount, _channel_amount, _reward = delegator_info
         assert _amount == total_amount - undelegate_amount
         assert _channel_amount == 0
 

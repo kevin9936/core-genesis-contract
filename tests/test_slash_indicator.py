@@ -185,12 +185,12 @@ def test_ecrecovery_faild(slash_indicator, candidate_hub):
 
 
 # exitMaintenanceSlash
-def test_revert_when_caller_is_not_validator_contract(slash_indicator, set_candidate_maintenance):
+def test_revert_when_caller_is_not_validator_contract(slash_indicator, set_candidate_maintenance, validator_set):
     operators, consensuses = set_candidate_maintenance
     validator = consensuses[0]
     block_count = 5
-
-    with brownie.reverts("the msg sender must be validatorSet contract"):
+    error_msg = encode_args_with_signature("NotPermissionalCaller(address,address)", [validator_set.address,operators[0].address])
+    with brownie.reverts(error_msg):
         slash_indicator.exitMaintenanceSlash(validator, block_count, {'from': operators[0]})
 
 

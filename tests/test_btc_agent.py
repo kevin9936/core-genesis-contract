@@ -76,9 +76,9 @@ def test_distribute_reward_success(btc_agent, btc_stake, lst_btc_amount):
     update_system_contract_address(btc_agent, stake_hub=accounts[0])
     for c in candidates:
         btc_agent.setCandidateMap(c, lst_btc_amount, btc_amount)
-        btc_stake.setCandidateMap(c, btc_amount, btc_amount, [round_tag - 1])
+        btc_stake.setCandidateMap(c, btc_amount, btc_amount, [round_tag - 1],0)
         btc_stake.setAccruedRewardPerBTCMap(c, round_tag - 1, history_reward)
-    btc_agent.distributeReward(candidates, rewards, 0)
+    btc_agent.distributeReward(candidates, rewards, 0,Utils.DENOMINATOR)
     for index, c in enumerate(candidates):
         reward = rewards[index]
         assert btc_stake.accruedRewardPerBTCMap(c,
@@ -90,14 +90,15 @@ def test_validators_and_reward_list_length_mismatch_failed(btc_agent):
     rewards = [10000, 20000]
     update_system_contract_address(btc_agent, stake_hub=accounts[0])
     with brownie.reverts():
-        btc_agent.distributeReward(candidates, rewards, 0)
+        btc_agent.distributeReward(candidates, rewards, 0,0)
 
 
-def test_only_stake_hub_can_call_distribute_reward(btc_agent):
+def test_only_stake_hub_can_call_distribute_reward(btc_agent, stake_hub):
     candidates = accounts[:3]
     rewards = [10000, 20000, 30000]
-    with brownie.reverts("the msg sender must be stake hub contract"):
-        btc_agent.distributeReward(candidates, rewards, 0)
+    error_msg = encode_args_with_signature("NotPermissionalCaller(address,address)", [stake_hub.address,accounts[0].address])
+    with brownie.reverts(error_msg):
+        btc_agent.distributeReward(candidates, rewards, 0,0)
 
 
 def test_reward_not_zero_with_zero_staked_tokens(btc_agent, btc_stake):
@@ -109,7 +110,7 @@ def test_reward_not_zero_with_zero_staked_tokens(btc_agent, btc_stake):
     round_tag += 2
     btc_stake.setRoundTag(round_tag)
     update_system_contract_address(btc_agent, stake_hub=accounts[0])
-    btc_agent.distributeReward(candidates, rewards, 0)
+    btc_agent.distributeReward(candidates, rewards, 0,0)
     assert btc_stake.accruedRewardPerBTCMap(
         candidates[0], get_current_round()) == 0
 
@@ -120,7 +121,7 @@ def test_reward_zero_with_staked_tokens(btc_agent, btc_stake):
     round_tag = get_current_round() + 2
     btc_stake.setRoundTag(round_tag)
     update_system_contract_address(btc_agent, stake_hub=accounts[0])
-    btc_agent.distributeReward(candidates, rewards, 0)
+    btc_agent.distributeReward(candidates, rewards, 0,0)
     for index, c in enumerate(candidates):
         assert btc_stake.accruedRewardPerBTCMap(c, round_tag) == 0
 
@@ -135,9 +136,9 @@ def test_reward_zero_with_nonzero_stake(btc_agent, btc_stake):
     update_system_contract_address(btc_agent, stake_hub=accounts[0])
     for c in candidates:
         btc_agent.setCandidateMap(c, 0, btc_amount)
-        btc_stake.setCandidateMap(c, btc_amount, btc_amount, [round_tag - 1])
+        btc_stake.setCandidateMap(c, btc_amount, btc_amount, [round_tag - 1],0)
         btc_stake.setAccruedRewardPerBTCMap(c, round_tag - 1, 100)
-    btc_agent.distributeReward(candidates, rewards, 0)
+    btc_agent.distributeReward(candidates, rewards, 0,0)
     for index, c in enumerate(candidates):
         assert btc_stake.accruedRewardPerBTCMap(c, round_tag) == 0
 
@@ -149,7 +150,7 @@ def test_get_stake_amounts_success(btc_agent, btc_stake, set_candidate):
     update_system_contract_address(btc_agent, stake_hub=accounts[0])
     btc_agent.getStakeAmounts(operators, 0)
     for o in operators:
-        btc_stake.setCandidateMap(o, btc_amount, btc_amount, [])
+        btc_stake.setCandidateMap(o, btc_amount, btc_amount, [],0)
     amounts, total_amount = btc_agent.getStakeAmounts(
         operators, 0).return_value
     assert amounts == [btc_amount, btc_amount, btc_amount]
@@ -173,10 +174,11 @@ def test_query_address_zero(btc_agent, btc_stake, set_candidate):
     assert sum(amounts) == total_amount == 0
 
 
-def test_only_stake_hub_can_call(btc_agent, btc_stake, set_candidate):
+def test_only_stake_hub_can_call(btc_agent, btc_stake, set_candidate, stake_hub):
     operators, consensuses = set_candidate
     turn_round()
-    with brownie.reverts("the msg sender must be stake hub contract"):
+    error_msg = encode_args_with_signature("NotPermissionalCaller(address,address)", [stake_hub.address,accounts[0].address])
+    with brownie.reverts(error_msg):
         btc_agent.getStakeAmounts(operators, 0)
 
 
@@ -188,22 +190,24 @@ def test_set_new_round_success(btc_agent, btc_stake, set_candidate):
     turn_round()
     round_tag += 1
     for o in operators:
-        btc_stake.setCandidateMap(o, 0, btc_amount, [])
+        btc_stake.setCandidateMap(o, 0, btc_amount, [],0)
     update_system_contract_address(btc_agent, stake_hub=accounts[0])
     btc_agent.setNewRound(operators, get_current_round())
     for op in operators:
-        assert btc_stake.candidateMap(op) == [btc_amount, btc_amount]
+        assert btc_stake.candidateMap(op) == [btc_amount, btc_amount,0]
     assert btc_stake.roundTag() == round_tag
 
 
-def test_only_stake_hub_can_call_set_new_round(btc_agent, btc_stake, set_candidate):
-    with brownie.reverts("the msg sender must be stake hub contract"):
+def test_only_stake_hub_can_call_set_new_round(btc_agent, btc_stake, set_candidate, stake_hub):
+    error_msg = encode_args_with_signature("NotPermissionalCaller(address,address)", [stake_hub.address,accounts[0].address])
+    with brownie.reverts(error_msg):
         btc_agent.setNewRound(accounts[:3], get_current_round())
 
 
-def test_only_stake_hub_can_call_claim_reward(btc_agent):
-    with brownie.reverts("the msg sender must be stake hub contract"):
-        btc_agent.claimReward(constants.ADDRESS_ZERO, 1000, 1, False)
+def test_only_stake_hub_can_call_claim_reward(btc_agent, stake_hub):
+    error_msg = encode_args_with_signature("NotPermissionalCaller(address,address)", [stake_hub.address,accounts[0].address])
+    with brownie.reverts(error_msg):
+        btc_agent.liquidationReward(False, constants.ADDRESS_ZERO, 1000, 1)
 
 
 def test_get_grades(btc_agent, btc_stake):
@@ -308,8 +312,9 @@ def test_update_param_failed(btc_agent):
         btc_agent.updateParam('error key', constants.ADDRESS_ZERO)
 
 
-def test_only_gov_can_call_update_param(btc_agent):
-    with brownie.reverts("the msg sender must be governance contract"):
+def test_only_gov_can_call_update_param(btc_agent, gov_hub):
+    error_msg = encode_args_with_signature("NotPermissionalCaller(address,address)", [gov_hub.address,accounts[0].address])
+    with brownie.reverts(error_msg):
         btc_agent.updateParam('error key', '0x00')
 
 
@@ -448,3 +453,31 @@ def test_update_param_grade_active_length_failed(btc_agent):
     hex_value = padding_left(Web3.to_hex(0), 64)
     with brownie.reverts(f"MismatchParamLength: gradeActive"):
         btc_agent.updateParam('gradeActive', hex_value)
+
+
+# applyDualStaking
+def test_apply_dual_staking_mock_basic(btc_stake, btc_agent):
+    btc_agent.setAssetWeight(10 ** 10)
+    btc_agent.setIsActive(True)
+    btc_agent.popLpRates()
+    btc_agent.setLpRates(0, 1000)
+    btc_agent.setLpRates(3000, 5000)
+    btc_agent.setLpRates(8000, 10000)
+    btc_agent.setLpRates(15000, 15000)
+
+    bct_amount = 1 * Utils.BTC_DECIMAL
+
+    core_amount_low = 2999e18
+    remaining, ds_rate = btc_agent.applyDualStakingMock(core_amount_low, bct_amount)
+    assert ds_rate == 1000
+    assert remaining == core_amount_low
+
+    core_amount_eq = 3000e18
+    remaining, ds_rate = btc_agent.applyDualStakingMock(core_amount_eq, bct_amount)
+    assert ds_rate == 5000
+    assert remaining == 0
+
+    core_amount_eq = 18000e18
+    remaining, ds_rate = btc_agent.applyDualStakingMock(core_amount_eq, bct_amount * 2)
+    assert ds_rate == 10000
+    assert remaining == 2000e18

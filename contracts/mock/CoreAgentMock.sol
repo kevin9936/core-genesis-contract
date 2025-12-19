@@ -64,10 +64,10 @@ contract CoreAgentMock is CoreAgent {
         return rewardAmountM;
     }
     //  for unit test
-    function collectCoinRewardMock(address agent, address delegator) external returns (uint256 reward, uint256 stakedAmount1, uint256 stakedAmount2) {
+    function collectCoinRewardMock(address agent, address delegator) external returns (uint256 reward, uint256 stakedAmount1, uint256 stakedAmount2,bool ret) {
         Candidate storage a = candidateMap[agent];
         CoinDelegator storage d = a.cDelegatorMap[delegator];
-        (reward, stakedAmount1, stakedAmount2) = _collectRewardFromCandidate(agent, d);
+        (reward, stakedAmount1, stakedAmount2, ret) = _calculateCandidateReward(agent, d);
     }
     function deductTransferredAmountMock(address delegator, uint256 amount) external {
         _deductTransferredAmount(delegator, amount);
