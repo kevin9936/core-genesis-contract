@@ -67,6 +67,7 @@ contract CoreAgent is ICoreAgent, System, IParamSubscriber {
     uint256 amount;
     uint256 channelAmount;
     uint256 reward; // stored reward of delegator
+    uint256 channelReward;
     bytes32[] stakeIds;
     mapping(bytes32 => StakeTx) stakeTxMap;
     mapping(bytes32 => TransferRecord) transferRecordMap;
@@ -301,6 +302,7 @@ contract CoreAgent is ICoreAgent, System, IParamSubscriber {
   function liquidationReward(bool isStakeWeight, address delegator, uint256 changeRound) external override onlyStakeHub returns (uint256 stakedAmount1, uint256 stakedAmount2) {
     Delegator storage d = delegatorMap[delegator];
     uint256 reward;
+    uint256 rewardSum;
     uint256 size;
     uint256 s1;
     uint256 s2;
@@ -337,6 +339,7 @@ contract CoreAgent is ICoreAgent, System, IParamSubscriber {
           stakeTx.skipReward = false;
         }
         stakeTx.reward += reward;
+        rewardSum += reward;
       } else {
         candidate = d.candidates[i - 1];
         CoinDelegator storage cd = candidateMap[candidate].cDelegatorMap[delegator];
@@ -355,6 +358,7 @@ contract CoreAgent is ICoreAgent, System, IParamSubscriber {
           }
         }
         d.reward += reward;
+        rewardSum += reward;
         if (reward != 0) {
           emit storedReward(candidate, delegator, bytes32(0), reward);
         }
@@ -362,6 +366,11 @@ contract CoreAgent is ICoreAgent, System, IParamSubscriber {
 
       stakedAmount1 += s1;
       stakedAmount2 += s2;
+    }
+
+    if (rewardSum != 0) {
+      uint256 channelReward = rewardSum - IChannel(CHANNEL_ADDR).payCommissions(delegator, stakedAmount2, rewardSum);
+      d.channelReward += channelReward;
     }
 
     // handle historical reward
@@ -378,7 +387,6 @@ contract CoreAgent is ICoreAgent, System, IParamSubscriber {
   /// @return reward Amount claimed
   function claimReward(address delegator, bytes32[] memory txIds) override external onlyStakeHub returns (uint256 reward) {
     Delegator storage d = delegatorMap[delegator];
-    uint256 amount = d.amount;
 
     // claim reward and reset delegator reward
     reward = d.reward;
@@ -401,7 +409,6 @@ contract CoreAgent is ICoreAgent, System, IParamSubscriber {
         // claim reward and reset stake tx
         if (stx.reward != 0) {
           reward += stx.reward;
-          amount += stx.amount;
           stx.reward = 0;
         }
         if (stx.stakeRound != roundTag) {
@@ -411,7 +418,8 @@ contract CoreAgent is ICoreAgent, System, IParamSubscriber {
     }
 
     if (reward != 0) {
-      reward = IChannel(CHANNEL_ADDR).payCommissions(delegator, amount, reward);
+      reward -= d.channelReward;
+      d.channelReward = 0;
       emit claimedCoinReward(delegator, txIds, reward);
     }
   }
