@@ -417,7 +417,7 @@ contract BitcoinStake is IBitcoinStake, System, IParamSubscriber, ReentrancyGuar
   /// Disable stake weight.
   /// @param delegator the delegator address
   function disableStakeWeight(address delegator) external override onlyStakeHub {
-    // TODO: implement
+    // No need to implement
   }
 
   /*********************** External methods **************************/
