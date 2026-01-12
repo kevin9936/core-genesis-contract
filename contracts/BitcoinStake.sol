@@ -402,7 +402,7 @@ contract BitcoinStake is IBitcoinStake, System, IParamSubscriber, ReentrancyGuar
 
   /// Enable stake weight.
   /// @param delegator the delegator address
-  function enableStakeWeight(address delegator) external override onlyStakeHub {
+  function enableStakeWeight(address delegator) external override onlyBitcoinAgent {
     bytes32[] storage txids = delegatorMap[delegator].txids;
     uint256 size = txids.length;
     bytes32 txid;
@@ -416,7 +416,7 @@ contract BitcoinStake is IBitcoinStake, System, IParamSubscriber, ReentrancyGuar
 
   /// Disable stake weight.
   /// @param delegator the delegator address
-  function disableStakeWeight(address delegator) external override onlyStakeHub {
+  function disableStakeWeight(address delegator) external override onlyBitcoinAgent {
     // No need to implement
   }
 

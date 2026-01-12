@@ -67,6 +67,13 @@ contract System {
     _;
   }
 
+  modifier onlyBitcoinAgent() {
+    if (msg.sender != BTC_AGENT_ADDR) {
+      revert NotPermissionalCaller(BTC_AGENT_ADDR, msg.sender);
+    }
+    _;
+  }
+
   modifier onlyCaller(address expected) {
     if (msg.sender != expected) {
       revert NotPermissionalCaller(expected, msg.sender);
