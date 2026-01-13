@@ -61,7 +61,7 @@ def set_rewards(reward, delegate_amount, unclaimed_reward=0):
 def test_btc_agent_init_once_only(btc_agent):
     with brownie.reverts("the contract already init"):
         btc_agent.init()
-
+# distributeReward
 @pytest.mark.parametrize('lst_btc_amount', [0, 4000])
 def test_distribute_reward_success(btc_agent, btc_stake, lst_btc_amount):
     history_reward = 200
@@ -455,7 +455,7 @@ def test_update_param_grade_active_length_failed(btc_agent):
         btc_agent.updateParam('gradeActive', hex_value)
 
 
-# applyDualStaking
+# _applyDualStaking
 def test_apply_dual_staking_mock_basic(btc_stake, btc_agent):
     btc_agent.setAssetWeight(10 ** 10)
     btc_agent.setIsActive(True)
@@ -481,3 +481,251 @@ def test_apply_dual_staking_mock_basic(btc_stake, btc_agent):
     remaining, ds_rate = btc_agent.applyDualStakingMock(core_amount_eq, bct_amount * 2)
     assert ds_rate == 10000
     assert remaining == 2000e18
+
+
+# liquidationReward
+def test_liquidation_reward_success(btc_stake, btc_agent, set_candidate, stake_hub):
+    operators, consensuses = set_candidate
+    tx_id = delegate_btc_success(operators[0], accounts[0], 1e8, LOCK_SCRIPT)
+    turn_round()
+    turn_round(consensuses)
+    tx = btc_agent.liquidationReward(False, accounts[0], 1e18, get_current_round() - 1, {'from': stake_hub.address})
+    btc_stake.receiptMap(tx_id)['reward'] == TOTAL_REWARD
+
+# claimReward
+def test_claim_reward_success(btc_stake, btc_agent, set_candidate, stake_hub):
+    operators, consensuses = set_candidate
+    tx_id = delegate_btc_success(operators[0], accounts[0], 1e8, LOCK_SCRIPT)
+    turn_round()
+    turn_round(consensuses)
+    btc_agent.liquidationReward(False, accounts[0], 1e18, get_current_round() - 1, {'from': stake_hub.address})
+    tx = btc_agent.claimReward(accounts[0], [tx_id], {'from': stake_hub.address})
+    assert tx.return_value == TOTAL_REWARD
+
+# enableStakeWeight
+
+def test_enable_stake_weight_success(btc_stake, btc_agent, set_candidate, stake_hub):
+    operators, consensuses = set_candidate
+    tx_id = delegate_btc_success(operators[0], accounts[0], 1e8, LOCK_SCRIPT)
+    turn_round()
+    turn_round(consensuses)
+    btc_agent.enableStakeWeight(accounts[0], {'from': stake_hub.address})
+    assert btc_stake.receiptMap(tx_id)['stakeRound'] == get_current_round()
+    assert btc_stake.receiptMap(tx_id)['skipReward'] == False
+
+
+
+# disableStakeWeight
+def test_disable_stake_weight_success(btc_stake, btc_agent, stake_hub):
+    btc_agent.disableStakeWeight(accounts[0], {'from': stake_hub.address})
+
+# calculateFloatReward
+def test_calculate_float_reward_with_zero_init_reward(btc_agent):
+    lock_time = LOCK_TIME
+    block_timestamp = LOCK_TIME - 100 * Utils.ROUND_INTERVAL
+    amount = 1 * Utils.BTC_DECIMAL
+    init_reward = 0
+    core_amount = 1000e18
+
+    reward, float_reward, remaining_core_amount, ld_percentage, ds_percentage = btc_agent.calculateFloatReward(
+        lock_time, block_timestamp, amount, init_reward, core_amount
+    )
+
+    assert reward == 0
+    assert float_reward == 0
+    assert remaining_core_amount == core_amount
+    assert ld_percentage == 0
+    assert ds_percentage == 0
+
+
+def test_calculate_float_reward_without_grades(btc_agent):
+    btc_agent.popTtlpRates()
+    btc_agent.popLpRates()
+    btc_agent.setIsActive(False)
+
+    lock_time = LOCK_TIME
+    block_timestamp = LOCK_TIME - 100 * Utils.ROUND_INTERVAL
+    amount = 1 * Utils.BTC_DECIMAL
+    init_reward = 10000e18
+    core_amount = 5000e18
+
+    reward, float_reward, remaining_core_amount, ld_percentage, ds_percentage = btc_agent.calculateFloatReward(
+        lock_time, block_timestamp, amount, init_reward, core_amount
+    )
+
+    assert reward == init_reward
+    assert float_reward == 0
+    assert remaining_core_amount == core_amount
+    assert ld_percentage == 0
+    assert ds_percentage == Utils.DENOMINATOR
+
+
+@pytest.mark.parametrize("round_duration", [[100, 5000], [300, 8000], [500, 10000]])
+def test_calculate_float_reward_match_lock_length_grade(btc_agent, round_duration):
+    btc_agent.popTtlpRates()
+    btc_agent.popLpRates()
+    btc_agent.setIsActive(False)
+    btc_agent.setTlpRates(0, 5000)
+    btc_agent.setTlpRates(200 * Utils.ROUND_INTERVAL, 8000)
+    btc_agent.setTlpRates(400 * Utils.ROUND_INTERVAL, 10000)
+
+    lock_time = LOCK_TIME
+    block_timestamp = LOCK_TIME - round_duration[0] * Utils.ROUND_INTERVAL
+    amount = 1 * Utils.BTC_DECIMAL
+    init_reward = 100e18
+    core_amount = 0
+
+    reward, float_reward, remaining_core_amount, ld_percentage, ds_percentage = btc_agent.calculateFloatReward(
+        lock_time, block_timestamp, amount, init_reward, core_amount
+    )
+
+    expected_ld_reward = init_reward * round_duration[1] // Utils.DENOMINATOR
+    expected_float_after_ld = int(expected_ld_reward) - int(init_reward)
+    expected_reward = expected_ld_reward * Utils.DENOMINATOR // Utils.DENOMINATOR
+    expected_total_float = expected_float_after_ld + (int(expected_reward) - int(expected_ld_reward))
+    assert reward == expected_reward
+    assert float_reward == expected_total_float
+    assert ld_percentage == round_duration[1]
+    assert ds_percentage == Utils.DENOMINATOR
+
+@pytest.mark.parametrize("core_amount", [[1000e18, 5000, 1000e18], [3000e18, 10000, 0], [4000e18, 10000, 1000e18], [9000e18, 20000, 1000e18]])
+def test_calculate_float_reward_with_dual_staking_grades(btc_agent,core_amount):
+    btc_agent.setAssetWeight(1e10)
+    btc_agent.popTtlpRates()
+    btc_agent.popLpRates()
+    btc_agent.setIsActive(True)
+    btc_agent.setLpRates(0, 5000)
+    btc_agent.setLpRates(3000, 10000)
+    btc_agent.setLpRates(8000, 20000)
+    lock_time = LOCK_TIME
+    block_timestamp = LOCK_TIME - 100 * Utils.ROUND_INTERVAL
+    amount = 1 * Utils.BTC_DECIMAL
+    init_reward = 10000e18
+    reward, float_reward, remaining_core_amount, ld_percentage, ds_percentage = btc_agent.calculateFloatReward(
+        lock_time, block_timestamp, amount, init_reward, core_amount[0]
+    )
+    expected_reward = init_reward * core_amount[1] // Utils.DENOMINATOR
+    assert reward == expected_reward
+    assert ld_percentage == 0
+    assert ds_percentage == core_amount[1]
+    assert remaining_core_amount == core_amount[2]
+
+
+def test_calculate_float_reward_with_both_grades_negative_float(btc_agent):
+    btc_agent.setAssetWeight(1e10)
+    btc_agent.popTtlpRates()
+    btc_agent.popLpRates()
+    btc_agent.setIsActive(True)
+    btc_agent.setTlpRates(0, 5000)
+    btc_agent.setTlpRates(200 * Utils.ROUND_INTERVAL, 10000)
+    btc_agent.setLpRates(0, 5000)
+    btc_agent.setLpRates(5000, 10000)
+    btc_agent.setLpRates(10000, 30000)
+
+    lock_time = LOCK_TIME
+    block_timestamp = LOCK_TIME - 100 * Utils.ROUND_INTERVAL
+    amount = 1 * Utils.BTC_DECIMAL
+    init_reward = 10000e18
+    core_amount = 10000e18
+
+    reward, float_reward, remaining_core_amount, ld_percentage, ds_percentage = btc_agent.calculateFloatReward(
+        lock_time, block_timestamp, amount, init_reward, core_amount
+    )
+    ld_reward = init_reward * 5000 // Utils.DENOMINATOR
+    float_after_ld = int(ld_reward) - int(init_reward)  
+    ds_reward = ld_reward * 30000 // Utils.DENOMINATOR
+    float_after_ds = int(ds_reward) - int(ld_reward)  
+    expected_total_float = float_after_ld + float_after_ds  
+    assert reward == ds_reward
+    assert float_reward == expected_total_float
+    assert ld_percentage == 5000
+    assert ds_percentage == 30000
+    assert remaining_core_amount == 0
+
+
+# updateParam-lockLengthGrades
+@pytest.mark.parametrize("lock_length_grades", [
+    [[0, 1], [1000, 2000]],
+    [[0, 1200], [2000, 2000], [3000, 4000]],
+    [[0, 1000], [2000, 2000], [3000, 4000], [3500, 9000], [4000, 10000]],
+    [[0, 1000], [1, 2000], [2, 4000], [30, 9000], [40, 10000]]
+])
+def test_update_param_lock_length_grades_success(btc_agent, lock_length_grades):
+    update_system_contract_address(btc_agent, gov_hub=accounts[0])
+    lock_length_grades_encode = rlp.encode(lock_length_grades)
+    btc_agent.updateParam('lockLengthGrades', lock_length_grades_encode)
+    for i in range(btc_agent.getTlpGradesLength()):
+        lock_length_grades_value = btc_agent.lockLengthGrades(i)
+        lock_length_grades[i][0] = lock_length_grades[i][0] * Utils.ROUND_INTERVAL
+        assert lock_length_grades_value == lock_length_grades[i]
+
+
+@pytest.mark.parametrize("lock_length_grades", [
+    [[0, 1], [4001, 2000]],
+    [[0, 1000], [4002, 2000], [2, 4000], [30, 9000], [40, 10000]],
+    [[0, 1000], [1, 2000], [2, 4000], [4001, 9000], [40, 10000]],
+    [[5000, 1000], [1, 2000], [2, 4000], [4001, 9000], [40, 10000]],
+])
+def test_revert_on_exceeding_max_lock_duration(btc_agent, lock_length_grades):
+    update_system_contract_address(btc_agent, gov_hub=accounts[0])
+    lock_length_grades_encode = rlp.encode(lock_length_grades)
+    indices = [index for index, item in enumerate(lock_length_grades) if item[0] > 4000][0]
+    percentage = 0
+    if indices > 0:
+        indices -= 1
+        percentage = lock_length_grades[indices][1]
+    with brownie.reverts(f"OutOfBounds: lockDuration, {percentage}, 0, 4000"):
+        btc_agent.updateParam('lockLengthGrades', lock_length_grades_encode)
+
+
+@pytest.mark.parametrize("lock_length_grades", [
+    [[0, 1], [1, 10001]],
+    [[1, 10002], [1, 2000], [2, 4000], [4000, 9000], [40, 10002]],
+    [[1000, 1000], [1, 2000], [2, 10001], [4000, 9000], [40, 1000]],
+])
+def test_percentage_over_100_percent_reverts(btc_agent, lock_length_grades):
+    update_system_contract_address(btc_agent, gov_hub=accounts[0])
+    lock_length_grades_encode = rlp.encode(lock_length_grades)
+    percentage = [item[1] for item in lock_length_grades if item[1] > 10000][0]
+    with brownie.reverts(f"OutOfBounds: percentage, {percentage}, 1, 10000"):
+        btc_agent.updateParam('lockLengthGrades', lock_length_grades_encode)
+
+
+@pytest.mark.parametrize("lock_length_grades", [
+    [[1, 1], [0, 10000]],
+    [[40, 1000], [3000, 2000], [2, 4000], [4000, 9000], [40, 10000]],
+    [[3000, 1000], [1, 2000], [2, 10000], [4000, 9000], [40, 1000]],
+    [[1, 1000], [1, 2000], [2, 3000], [3, 9000], [4, 10000]],
+])
+def test_lock_duration_sorting_error_reverts(btc_agent, lock_length_grades):
+    update_system_contract_address(btc_agent, gov_hub=accounts[0])
+    lock_length_grades_encode = rlp.encode(lock_length_grades)
+    with brownie.reverts(f"lockDuration disorder"):
+        btc_agent.updateParam('lockLengthGrades', lock_length_grades_encode)
+
+
+@pytest.mark.parametrize("lock_length_grades", [
+    [[0, 10000], [1, 1000]],
+    [[40, 10000], [50, 2000], [60, 4000], [70, 9000], [80, 2000]],
+    [[300, 1000], [400, 2000], [500, 10000], [600, 9000], [4000, 1000]],
+    [[0, 1000], [1, 3000], [2, 3000], [3, 9000], [4, 10000]],
+])
+def test_percentage_sorting_error_reverts(btc_agent, lock_length_grades):
+    update_system_contract_address(btc_agent, gov_hub=accounts[0])
+    lock_length_grades_encode = rlp.encode(lock_length_grades)
+    with brownie.reverts("percentage disorder"):
+        btc_agent.updateParam('lockLengthGrades', lock_length_grades_encode)
+
+
+def test_lock_duration_not_starting_from_zero_reverts(btc_agent):
+    update_system_contract_address(btc_agent, gov_hub=accounts[0])
+    lock_length_grades_encode = rlp.encode([[1, 1000], [2, 2000]])
+    with brownie.reverts("lowest lockDuration must be zero"):
+        btc_agent.updateParam('lockLengthGrades', lock_length_grades_encode)
+
+
+def test_lock_length_grades_length_zero(btc_agent):
+    update_system_contract_address(btc_agent, gov_hub=accounts[0])
+    lock_length_grades_encode = rlp.encode([])
+    btc_agent.updateParam('lockLengthGrades', lock_length_grades_encode)
+    assert btc_agent.getTlpGradesLength() == 0

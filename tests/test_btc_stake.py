@@ -75,7 +75,7 @@ def delegate_btc_valid_tx():
 def test_btc_stake_init_can_only_run_once(btc_stake):
     with brownie.reverts("the contract already init"):
         btc_stake.init()
-
+# delegate
 def test_delegate_btc_with_lock_time_in_tx(btc_stake, set_candidate, stake_hub, btc_agent):
     turn_round()
     operators, consensuses = set_candidate
@@ -100,6 +100,9 @@ def test_delegate_btc_with_lock_time_in_tx(btc_stake, set_candidate, stake_hub, 
     assert btc_stake.receiptMap(tx_id)['candidate'] == operators[0]
     assert btc_stake.receiptMap(tx_id)['delegator'] == accounts[0]
     assert btc_stake.receiptMap(tx_id)['round'] == get_current_round() - 1
+    assert btc_stake.receiptMap(tx_id)['stakeRound'] == get_current_round() -1
+    assert btc_stake.receiptMap(tx_id)['skipReward'] == False
+    assert btc_stake.receiptMap(tx_id)['expired'] == False
     turn_round(consensuses)
     tracker0 = get_tracker(accounts[0])
     tracker1 = get_tracker(accounts[1])
@@ -801,6 +804,7 @@ def test_undelegate_then_successful_stake(btc_stake, set_candidate):
         btc_stake.undelegate(btc_tx1, block_height, [], index)
 
 
+# distributeReward
 def test_btc_stake_distribute_reward_success(btc_stake, candidate_hub):
     validators = accounts[:3]
     amounts = [1000, 2000, 3000]
@@ -813,6 +817,41 @@ def test_btc_stake_distribute_reward_success(btc_stake, candidate_hub):
     for index, v in enumerate(validators):
         reward = amounts[index] * Utils.BTC_DECIMAL // staked_amounts[index]
         __check_accrued_reward_per_btc(v, round_tag, reward)
+
+@pytest.mark.parametrize("stake_weight", [10000, 10010, 11000,12000])
+def test_btc_stake_distribute_reward_with_stake_weight(btc_stake, candidate_hub, stake_weight):
+    validators = accounts[:3]
+    amounts = [1000, 2000, 3000]
+    staked_amounts = [3000, 5000, 6000]
+    update_system_contract_address(btc_stake, btc_agent=accounts[0])
+    round_tag = get_current_round()
+    for index, v in enumerate(validators):
+        btc_stake.setCandidateMap(v, staked_amounts[index], staked_amounts[index], [round_tag - 1],0)
+    btc_stake.distributeReward(validators, amounts, stake_weight)
+    for index, v in enumerate(validators):
+        reward = amounts[index] * Utils.BTC_DECIMAL* Utils.DENOMINATOR // staked_amounts[index] // stake_weight
+        __check_accrued_reward_per_btc(v, round_tag, reward)
+    btc_stake.distributeReward(validators, amounts, stake_weight)
+    for index, v in enumerate(validators):
+        reward = amounts[index] * Utils.BTC_DECIMAL* Utils.DENOMINATOR // staked_amounts[index] // stake_weight
+        __check_accrued_reward_per_btc(v, round_tag, reward*2)
+
+@pytest.mark.parametrize("undelegate_amount", [1000, 2000, 3000])
+def test_btc_stake_distribute_reward_with_undelegate_amount(btc_stake, candidate_hub, undelegate_amount):
+    stake_weight = Utils.DENOMINATOR+100
+    validators = accounts[:3]
+    amounts = [1000, 2000, 3000]
+    staked_amounts = [3000, 5000, 6000]
+    update_system_contract_address(btc_stake, btc_agent=accounts[0])
+    round_tag = get_current_round()
+    for index, v in enumerate(validators):
+        btc_stake.setCandidateMap(v, staked_amounts[index], staked_amounts[index], [round_tag - 1],undelegate_amount)
+    burn_amount = btc_stake.distributeReward(validators, amounts,stake_weight).return_value
+    burnAmount = 0
+    for index, v in enumerate(validators):
+        burnAmount += amounts[index] * undelegate_amount / staked_amounts[index]
+        assert btc_stake.candidateMap(validators[index])['undelegateAmount'] == 0
+    assert burn_amount == burnAmount
 
 
 def test_distribute_reward_with_new_validator(btc_stake, candidate_hub):
@@ -1376,6 +1415,8 @@ def test_liquidation_dual_staking_multiple_btc_stake(btc_stake, set_candidate, b
     expected_float = dual_float1 + dual_float2 + dual_float3
     __check_delegator_receipt_map_total_reward(accounts[0], expected_reward)
     assert float_reward == expected_float
+
+
 
 
 # calculateRewards
